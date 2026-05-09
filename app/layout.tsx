@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import Link from 'next/link'
 import FreighterConnect from '@/components/FreighterConnect'
+import MobileNav from '@/components/MobileNav'
 
 export const metadata: Metadata = {
   title: 'TxWatch — Soroban Contract Monitoring',
@@ -35,6 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </nav>
 
             <FreighterConnect />
+            <MobileNav />
           </div>
         </header>
 
