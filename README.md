@@ -234,6 +234,18 @@ See [`.github/workflows/ci.yml`](./.github/workflows/ci.yml).
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
+## Reporting issues
+
+When opening a bug report, include:
+
+- a short description of what went wrong
+- steps to reproduce the problem
+- expected and actual behavior
+- browser, wallet, network, and API URL details when relevant
+- screenshots, console errors, or webhook payload examples if they help explain the issue
+
+For feature requests, describe the user workflow, why the change matters, and any Stellar network or wallet assumptions maintainers should consider.
+
 ## License
 
 MIT
