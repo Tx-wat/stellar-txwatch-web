@@ -220,10 +220,19 @@ The `Test` button on the Add Contract form sends a mock payload to your endpoint
 Every push and pull request to `main` runs the full CI pipeline via GitHub Actions:
 
 ```
-Lint  →  Type-check  →  Build
+Lint  →  Type-check  →  Test  →  Build
 ```
 
 See [`.github/workflows/ci.yml`](./.github/workflows/ci.yml).
+
+## Testing
+
+Use Vitest for utility and component tests:
+
+```bash
+npm test
+npm run test:watch
+```
 
 ## Sister repos
 
