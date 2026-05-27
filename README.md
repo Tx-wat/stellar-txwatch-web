@@ -37,6 +37,26 @@ Open [http://localhost:3000](http://localhost:3000).
 
 Install the [Freighter wallet extension](https://www.freighter.app/) to enable contract registration.
 
+## Browser and wallet support
+
+The dashboard is built for current desktop versions of Chromium-based browsers
+and Firefox. Chrome, Brave, Edge, and Firefox are the recommended browsers for
+local development and contract registration flows.
+
+Contract registration requires the Freighter browser extension. Before using
+the Add Contract form:
+
+- Install Freighter from the official site or your browser extension store.
+- Unlock Freighter and select the Stellar network you want to use.
+- Refresh the dashboard after installing or unlocking the extension so the app
+  can detect `window.freighter`.
+
+Safari and mobile browsers can load the dashboard for read-only monitoring, but
+they are not supported for wallet-connected actions unless Freighter exposes a
+compatible browser extension API in that environment. Embedded in-app browsers
+are also not recommended for contract registration because they commonly block
+extension APIs.
+
 ## Project structure
 
 ```
