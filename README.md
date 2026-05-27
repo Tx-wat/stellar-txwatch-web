@@ -72,6 +72,15 @@ types/
 |---|---|
 | `NEXT_PUBLIC_API_URL` | Base URL of the txwatch-core API (optional) |
 
+## Data persistence
+
+The dashboard currently stores watched contracts and alert history in the browser with `localStorage`.
+
+- `txwatch_contracts` stores the saved contract registry used by the dashboard and contract pages
+- `txwatch_alerts` stores alert payloads shown in each contract's webhook log
+
+This keeps local demos simple and does not require a backend account, but the data is scoped to the current browser profile. Clearing site data, switching browsers, or using another device will not carry the saved contracts or alerts with you.
+
 ## Stellar integration
 
 This section documents how the dashboard integrates with the Stellar network and where to extend each layer.
