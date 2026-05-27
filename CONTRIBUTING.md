@@ -35,6 +35,16 @@ fix/<short-description>
 chore/<short-description>
 ```
 
+## Issue labels
+
+When opening or triaging issues, use labels that make scope and priority easy to scan:
+
+- `good first issue` for small, well-contained tasks
+- `bug` for broken behavior or regressions
+- `ui` for layout, styling, and interaction changes
+- `tests` for missing or improved test coverage
+- `wallet` for Freighter or wallet connection work
+
 ## Commit style
 
 Follow [Conventional Commits](https://www.conventionalcommits.org/):
