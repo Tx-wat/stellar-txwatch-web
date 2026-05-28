@@ -148,7 +148,7 @@ export default function NewContractPage() {
               disabled={testStatus === 'sending'}
               className="px-3 py-2.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors disabled:opacity-50 whitespace-nowrap"
             >
-              {testStatus === 'sending' ? 'Sending…' : testStatus === 'ok' ? '✓ Sent' : testStatus === 'error' ? '✗ Failed' : 'Test'}
+              {testStatus === 'sending' ? 'Sending...' : testStatus === 'ok' ? '[OK] Sent' : testStatus === 'error' ? '[FAIL] Failed' : 'Test'}
             </button>
           </div>
           {errors.webhook_url && <p className="mt-1 text-xs text-red-400">{errors.webhook_url}</p>}
@@ -177,7 +177,7 @@ export default function NewContractPage() {
             disabled={saving}
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium text-white transition-colors"
           >
-            {saving ? 'Saving…' : 'Save Contract'}
+            {saving ? 'Saving...' : 'Save Contract'}
           </button>
           <button
             type="button"
