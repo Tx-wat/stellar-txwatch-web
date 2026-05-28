@@ -14,7 +14,38 @@ function load<T>(key: string): T[] {
   }
 }
 
+const STORAGE_QUOTA_BYTES = 5 * 1024 * 1024 // 5MB typical limit
+const ALERTS_RETENTION_DAYS = 90
+
+function getStorageSize(): number {
+  if (typeof window === 'undefined') return 0
+  let size = 0
+  for (const key in localStorage) {
+    if (localStorage.hasOwnProperty(key)) {
+      size += localStorage[key].length + key.length
+    }
+  }
+  return size
+}
+
+function pruneOldAlerts() {
+  const cutoff = Date.now() - ALERTS_RETENTION_DAYS * 24 * 60 * 60 * 1000
+  const alerts = load<AlertPayload>(ALERTS_KEY)
+  const pruned = alerts.filter((a) => a.timestamp >= cutoff)
+  if (pruned.length < alerts.length) {
+    save(ALERTS_KEY, pruned)
+  }
+}
+
 function save<T>(key: string, data: T[]) {
+  pruneOldAlerts()
+  const size = getStorageSize()
+  if (size > STORAGE_QUOTA_BYTES * 0.9) {
+    // Keep only last 30 days if approaching quota
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000
+    const alerts = load<AlertPayload>(ALERTS_KEY)
+    save(ALERTS_KEY, alerts.filter((a) => a.timestamp >= cutoff))
+  }
   localStorage.setItem(key, JSON.stringify(data))
 }
 
