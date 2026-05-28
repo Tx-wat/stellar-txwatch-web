@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import Link from 'next/link'
 import FreighterConnect from '@/components/FreighterConnect'
+import WalletStatusBadge from '@/components/WalletStatusBadge'
 import MobileNav from '@/components/MobileNav'
 
 export const metadata: Metadata = {
@@ -35,7 +36,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </a>
             </nav>
 
-            <FreighterConnect />
+            <div className="flex items-center gap-3">
+              <WalletStatusBadge />
+              <FreighterConnect />
+            </div>
             <MobileNav />
           </div>
         </header>
