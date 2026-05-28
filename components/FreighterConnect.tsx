@@ -1,16 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-
-declare global {
-  interface Window {
-    freighter?: {
-      isConnected: () => Promise<boolean>
-      getPublicKey: () => Promise<string>
-      getNetwork: () => Promise<string>
-    }
-  }
-}
+import { useFreighter } from '@/lib/useFreighter'
 
 interface FreighterConnectProps {
   onConnect?: (publicKey: string) => void
@@ -18,42 +8,7 @@ interface FreighterConnectProps {
 }
 
 export default function FreighterConnect({ onConnect, className = '' }: FreighterConnectProps) {
-  const [publicKey, setPublicKey] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    window.freighter?.isConnected().then(async (connected) => {
-      if (connected) {
-        const key = await window.freighter!.getPublicKey()
-        setPublicKey(key)
-        onConnect?.(key)
-      }
-    })
-  }, [onConnect])
-
-  async function connect() {
-    setLoading(true)
-    setError(null)
-    try {
-      if (!window.freighter) {
-        window.open('https://www.freighter.app/', '_blank')
-        setError('Freighter not installed — install the extension and reload')
-        return
-      }
-      const key = await window.freighter.getPublicKey()
-      setPublicKey(key)
-      onConnect?.(key)
-    } catch {
-      setError('Connection rejected')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  function disconnect() {
-    setPublicKey(null)
-  }
+  const { publicKey, loading, error, connect, disconnect } = useFreighter()
 
   if (publicKey) {
     return (
