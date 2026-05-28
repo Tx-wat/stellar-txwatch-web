@@ -23,13 +23,23 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    window.freighter?.isConnected().then(async (connected) => {
-      if (connected) {
-        const key = await window.freighter!.getPublicKey()
-        setPublicKey(key)
-        onConnect?.(key)
+    const checkConnection = async () => {
+      try {
+        const connected = await window.freighter?.isConnected()
+        if (connected) {
+          const key = await window.freighter!.getPublicKey()
+          const network = await window.freighter!.getNetwork()
+          if (key && network) {
+            setPublicKey(key)
+            onConnect?.(key)
+          }
+        }
+      } catch (err) {
+        console.error('Freighter connection check failed:', err)
+        setError('Failed to check wallet connection')
       }
-    })
+    }
+    checkConnection()
   }, [onConnect])
 
   async function connect() {
@@ -42,10 +52,16 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
         return
       }
       const key = await window.freighter.getPublicKey()
+      const network = await window.freighter.getNetwork()
+      if (!key || !network) {
+        setError('Failed to retrieve wallet information')
+        return
+      }
       setPublicKey(key)
       onConnect?.(key)
-    } catch {
-      setError('Connection rejected')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Connection rejected'
+      setError(message)
     } finally {
       setLoading(false)
     }
