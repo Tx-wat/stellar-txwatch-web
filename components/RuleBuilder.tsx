@@ -148,7 +148,7 @@ export default function RuleBuilder({ rules, onChange }: RuleBuilderProps) {
               <div className="flex items-center gap-2 flex-wrap">
                 <AlertRuleBadge type={rule.type} />
                 {rule.threshold_xlm !== undefined && (
-                  <span className="text-xs text-zinc-400">≥ {rule.threshold_xlm} XLM</span>
+                  <span className="text-xs text-zinc-400">&gt;= {rule.threshold_xlm} XLM</span>
                 )}
                 {rule.function_name && (
                   <span className="text-xs font-mono text-zinc-400">{rule.function_name}</span>
