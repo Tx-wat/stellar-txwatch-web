@@ -21,6 +21,7 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
   const [publicKey, setPublicKey] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isConnecting, setIsConnecting] = useState(false)
 
   useEffect(() => {
     const checkConnection = async () => {
@@ -43,6 +44,8 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
   }, [onConnect])
 
   async function connect() {
+    if (isConnecting) return
+    setIsConnecting(true)
     setLoading(true)
     setError(null)
     try {
@@ -64,6 +67,7 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
       setError(message)
     } finally {
       setLoading(false)
+      setIsConnecting(false)
     }
   }
 
