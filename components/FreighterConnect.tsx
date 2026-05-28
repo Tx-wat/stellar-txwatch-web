@@ -3,11 +3,10 @@
 import { useFreighter } from '@/lib/useFreighter'
 
 interface FreighterConnectProps {
-  onConnect?: (publicKey: string) => void
   className?: string
 }
 
-export default function FreighterConnect({ onConnect, className = '' }: FreighterConnectProps) {
+export default function FreighterConnect({ className = '' }: FreighterConnectProps) {
   const { publicKey, network, loading, error, connect, disconnect } = useFreighter()
 
   if (publicKey) {

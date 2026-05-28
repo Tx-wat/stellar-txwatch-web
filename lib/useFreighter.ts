@@ -38,7 +38,7 @@ export function useFreighter() {
         ])
         setState({ publicKey, network, loading: false, error: null })
       }
-    } catch (err) {
+    } catch {
       setState((prev) => ({ ...prev, error: 'Failed to initialize Freighter' }))
     }
   }, [])
