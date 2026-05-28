@@ -24,6 +24,7 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isConnecting, setIsConnecting] = useState(false)
+  const [isInitializing, setIsInitializing] = useState(true)
 
   useEffect(() => {
     const checkConnection = async () => {
@@ -32,6 +33,7 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
         if (stored) {
           setPublicKey(stored)
           onConnect?.(stored)
+          setIsInitializing(false)
           return
         }
         const connected = await window.freighter?.isConnected()
@@ -47,6 +49,8 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
       } catch (err) {
         console.error('Freighter connection check failed:', err)
         setError('Failed to check wallet connection')
+      } finally {
+        setIsInitializing(false)
       }
     }
     checkConnection()
@@ -99,6 +103,14 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
         >
           Disconnect
         </button>
+      </div>
+    )
+  }
+
+  if (isInitializing) {
+    return (
+      <div className={`flex items-center gap-2 ${className}`}>
+        <div className="w-24 h-9 rounded-lg bg-zinc-800 animate-pulse" />
       </div>
     )
   }
