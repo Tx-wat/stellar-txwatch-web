@@ -9,6 +9,7 @@ declare global {
       getPublicKey: () => Promise<string>
       getNetwork: () => Promise<string>
     }
+    __freighterPublicKey?: string | null
   }
 }
 
@@ -27,6 +28,7 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
       if (connected) {
         const key = await window.freighter!.getPublicKey()
         setPublicKey(key)
+        window.__freighterPublicKey = key
         onConnect?.(key)
       }
     })
@@ -42,6 +44,7 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
       }
       const key = await window.freighter.getPublicKey()
       setPublicKey(key)
+      window.__freighterPublicKey = key
       onConnect?.(key)
     } catch {
       setError('Connection rejected')
@@ -52,6 +55,7 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
 
   function disconnect() {
     setPublicKey(null)
+    window.__freighterPublicKey = null
     setError(null)
   }
 

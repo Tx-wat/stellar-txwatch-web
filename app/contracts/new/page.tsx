@@ -6,6 +6,7 @@ import { AlertRule, Network, WatchedContract } from '@/types'
 import { isValidContractId, isValidUrl } from '@/lib/stellar'
 import { saveContract } from '@/lib/storage'
 import { sendTestWebhook } from '@/lib/api'
+import { useWallet } from '@/lib/useWallet'
 import RuleBuilder from '@/components/RuleBuilder'
 
 interface FormErrors {
@@ -18,6 +19,7 @@ interface FormErrors {
 
 export default function NewContractPage() {
   const router = useRouter()
+  const { publicKey, isConnected } = useWallet()
   const [label, setLabel] = useState('')
   const [contractId, setContractId] = useState('')
   const [network, setNetwork] = useState<Network>('testnet')
@@ -40,8 +42,7 @@ export default function NewContractPage() {
   }
 
   function isWalletConnected(): boolean {
-    // Check if Freighter has a connected key stored in the DOM (set by FreighterConnect)
-    return typeof window !== 'undefined' && !!window.freighter
+    return isConnected && !!publicKey
   }
 
   async function handleSave() {
