@@ -1,6 +1,6 @@
 # stellar-txwatch-web
 
-Web dashboard for Stellar TxWatch — register contracts and manage real-time alert rules.
+Web dashboard for Stellar TxWatch - register contracts and manage real-time alert rules.
 
 Part of the [Tx-wat](https://github.com/Tx-wat) GitHub org.
 
@@ -83,12 +83,12 @@ This section documents how the dashboard integrates with the Stellar network and
 ```ts
 import { HORIZON_URLS, SOROBAN_RPC_URLS } from '@/lib/stellar'
 
-// Horizon REST — account balances, transaction history
+// Horizon REST - account balances, transaction history
 HORIZON_URLS.mainnet    // https://horizon.stellar.org
 HORIZON_URLS.testnet    // https://horizon-testnet.stellar.org
 HORIZON_URLS.futurenet  // https://horizon-futurenet.stellar.org
 
-// Soroban JSON-RPC — contract simulation, ledger entries
+// Soroban JSON-RPC - contract simulation, ledger entries
 SOROBAN_RPC_URLS.testnet  // https://soroban-testnet.stellar.org
 ```
 
@@ -220,15 +220,15 @@ The `Test` button on the Add Contract form sends a mock payload to your endpoint
 Every push and pull request to `main` runs the full CI pipeline via GitHub Actions:
 
 ```
-Lint  →  Type-check  →  Build
+Lint -> Type-check -> Build
 ```
 
 See [`.github/workflows/ci.yml`](./.github/workflows/ci.yml).
 
 ## Sister repos
 
-- [stellar-txwatch-core](https://github.com/Tx-wat/stellar-txwatch-core) — Rust monitoring engine
-- [stellar-txwatch-contracts](https://github.com/Tx-wat/stellar-txwatch-contracts) — Soroban smart contracts
+- [stellar-txwatch-core](https://github.com/Tx-wat/stellar-txwatch-core) - Rust monitoring engine
+- [stellar-txwatch-contracts](https://github.com/Tx-wat/stellar-txwatch-contracts) - Soroban smart contracts
 
 ## Contributing
 

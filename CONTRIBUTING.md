@@ -8,7 +8,7 @@ Thanks for your interest in contributing! This is the web dashboard for the [Tx-
 |------|-------------|
 | [stellar-txwatch-core](https://github.com/Tx-wat/stellar-txwatch-core) | Rust monitoring engine |
 | [stellar-txwatch-contracts](https://github.com/Tx-wat/stellar-txwatch-contracts) | Soroban smart contracts |
-| [stellar-txwatch-web](https://github.com/Tx-wat/stellar-txwatch-web) | This repo — Next.js dashboard |
+| [stellar-txwatch-web](https://github.com/Tx-wat/stellar-txwatch-web) | This repo - Next.js dashboard |
 
 ## Local setup
 
@@ -51,6 +51,6 @@ All types live in `types/index.ts` and must stay in sync with the Rust structs i
 
 ## Pull requests
 
-- Keep PRs focused — one feature or fix per PR
+- Keep PRs focused - one feature or fix per PR
 - All pages must be mobile responsive and dark-mode compatible
-- Run `npm run build` before opening a PR — zero lint errors required
+- Run `npm run build` before opening a PR - zero lint errors required
