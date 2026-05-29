@@ -22,6 +22,7 @@ export interface WatchedContract {
   rules: AlertRule[]
   webhook_url: string
   created_at: number
+  updated_at: number
 }
 
 export interface AlertPayload {

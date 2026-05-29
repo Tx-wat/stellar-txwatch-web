@@ -2,6 +2,8 @@ import { WatchedContract, AlertPayload } from '@/types'
 
 const CONTRACTS_KEY = 'txwatch_contracts'
 const ALERTS_KEY = 'txwatch_alerts'
+const STORAGE_VERSION_KEY = 'txwatch_storage_version'
+const CURRENT_STORAGE_VERSION = 1
 
 function load<T>(key: string): T[] {
   if (typeof window === 'undefined') return []
@@ -12,8 +14,58 @@ function load<T>(key: string): T[] {
   }
 }
 
+const STORAGE_QUOTA_BYTES = 5 * 1024 * 1024 // 5MB typical limit
+const ALERTS_RETENTION_DAYS = 90
+
+function getStorageSize(): number {
+  if (typeof window === 'undefined') return 0
+  let size = 0
+  for (const key in localStorage) {
+    if (localStorage.hasOwnProperty(key)) {
+      size += localStorage[key].length + key.length
+    }
+  }
+  return size
+}
+
+function pruneOldAlerts() {
+  const cutoff = Date.now() - ALERTS_RETENTION_DAYS * 24 * 60 * 60 * 1000
+  const alerts = load<AlertPayload>(ALERTS_KEY)
+  const pruned = alerts.filter((a) => a.timestamp >= cutoff)
+  if (pruned.length < alerts.length) {
+    save(ALERTS_KEY, pruned)
+  }
+}
+
 function save<T>(key: string, data: T[]) {
+  pruneOldAlerts()
+  const size = getStorageSize()
+  if (size > STORAGE_QUOTA_BYTES * 0.9) {
+    // Keep only last 30 days if approaching quota
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000
+    const alerts = load<AlertPayload>(ALERTS_KEY)
+    save(ALERTS_KEY, alerts.filter((a) => a.timestamp >= cutoff))
+  }
   localStorage.setItem(key, JSON.stringify(data))
+}
+
+function getStorageVersion(): number {
+  if (typeof window === 'undefined') return CURRENT_STORAGE_VERSION
+  return parseInt(localStorage.getItem(STORAGE_VERSION_KEY) ?? '0', 10)
+}
+
+function setStorageVersion(version: number) {
+  localStorage.setItem(STORAGE_VERSION_KEY, version.toString())
+}
+
+export function migrateStorage(migrations: Record<number, () => void>) {
+  const currentVersion = getStorageVersion()
+  for (let v = currentVersion + 1; v <= CURRENT_STORAGE_VERSION; v++) {
+    if (migrations[v]) {
+      migrations[v]()
+    }
+  }
+  setStorageVersion(CURRENT_STORAGE_VERSION)
 }
 
 export function getContracts(): WatchedContract[] {
@@ -26,7 +78,8 @@ export function getContract(id: string): WatchedContract | undefined {
 
 export function saveContract(contract: WatchedContract) {
   const contracts = getContracts().filter((c) => c.id !== contract.id)
-  save(CONTRACTS_KEY, [...contracts, contract])
+  const updated = { ...contract, updated_at: Date.now() }
+  save(CONTRACTS_KEY, [...contracts, updated])
 }
 
 export function deleteContract(id: string) {
