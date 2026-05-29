@@ -46,14 +46,14 @@ export default function WebhookLog({ alerts, network }: WebhookLogProps) {
                   rel="noopener noreferrer"
                   className="font-mono text-indigo-400 hover:text-indigo-300 transition-colors"
                 >
-                  {alert.transaction_hash.slice(0, 8)}…{alert.transaction_hash.slice(-8)}
+                  {alert.transaction_hash.slice(0, 8)}...{alert.transaction_hash.slice(-8)}
                 </a>
               </td>
               <td className="py-3 pr-4 font-mono text-zinc-400">
-                {alert.function_name ?? '—'}
+                {alert.function_name ?? '-'}
               </td>
               <td className="py-3 text-zinc-400">
-                {alert.amount !== undefined ? `${alert.amount} XLM` : '—'}
+                {alert.amount !== undefined ? `${alert.amount} XLM` : '-'}
               </td>
             </tr>
           ))}

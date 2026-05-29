@@ -8,7 +8,7 @@ Thanks for your interest in contributing! This is the web dashboard for the [Tx-
 |------|-------------|
 | [stellar-txwatch-core](https://github.com/Tx-wat/stellar-txwatch-core) | Rust monitoring engine |
 | [stellar-txwatch-contracts](https://github.com/Tx-wat/stellar-txwatch-contracts) | Soroban smart contracts |
-| [stellar-txwatch-web](https://github.com/Tx-wat/stellar-txwatch-web) | This repo — Next.js dashboard |
+| [stellar-txwatch-web](https://github.com/Tx-wat/stellar-txwatch-web) | This repo - Next.js dashboard |
 
 ## Local setup
 
@@ -51,21 +51,6 @@ All types live in `types/index.ts` and must stay in sync with the Rust structs i
 
 ## Pull requests
 
-- Keep PRs focused — one feature or fix per PR
+- Keep PRs focused - one feature or fix per PR
 - All pages must be mobile responsive and dark-mode compatible
-- Run `npm run build` before opening a PR — zero lint errors required
-
-## Issue labels
-
-When opening an issue, consider adding one or more of these labels:
-
-| Label | Use case |
-|-------|----------|
-| `good first issue` | Beginner-friendly tasks, great for new contributors |
-| `bug` | Unexpected behavior or defects |
-| `ui` | User interface, styling, or design changes |
-| `tests` | Test coverage, test infrastructure, or test improvements |
-| `wallet` | Freighter integration or wallet-related features |
-| `docs` | Documentation, README, or contributor guides |
-| `area: core` | Core business logic or data handling |
-| `area: stellar` | Stellar integration, Horizon, or Soroban RPC |
+- Run `npm run build` before opening a PR - zero lint errors required

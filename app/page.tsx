@@ -30,7 +30,7 @@ const features = [
 
 const steps = [
   { n: '01', title: 'Register', desc: 'Connect Freighter and add your Soroban contract ID.' },
-  { n: '02', title: 'Configure', desc: 'Define alert rules — thresholds, function names, or catch-all.' },
+  { n: '02', title: 'Configure', desc: 'Define alert rules - thresholds, function names, or catch-all.' },
   { n: '03', title: 'Get Alerted', desc: 'Receive real-time webhook payloads when rules trigger.' },
 ]
 
@@ -51,7 +51,7 @@ export default function LandingPage() {
 
         <p className="text-lg text-zinc-400 max-w-xl mx-auto text-balance">
           Register contracts, configure alert rules, and receive instant webhook
-          notifications — all from one dashboard.
+          notifications - all from one dashboard.
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -107,7 +107,7 @@ export default function LandingPage() {
       {/* Footer CTA */}
       <section className="text-center space-y-4 border-t border-zinc-800 pt-12">
         <p className="text-zinc-500 text-sm">
-          Open source · Part of the{' '}
+          Open source - Part of the{' '}
           <a
             href="https://github.com/Tx-wat"
             target="_blank"
@@ -122,11 +122,11 @@ export default function LandingPage() {
           <a href="https://github.com/Tx-wat/stellar-txwatch-core" target="_blank" rel="noopener noreferrer" className="hover:text-zinc-400 transition-colors">
             txwatch-core
           </a>
-          <span>·</span>
+          <span>|</span>
           <a href="https://github.com/Tx-wat/stellar-txwatch-contracts" target="_blank" rel="noopener noreferrer" className="hover:text-zinc-400 transition-colors">
             txwatch-contracts
           </a>
-          <span>·</span>
+          <span>|</span>
           <a href="https://github.com/Tx-wat/stellar-txwatch-web" target="_blank" rel="noopener noreferrer" className="hover:text-zinc-400 transition-colors">
             txwatch-web
           </a>

@@ -112,7 +112,7 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
               <div key={i} className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2">
                 <AlertRuleBadge type={rule.type} />
                 {rule.threshold_xlm !== undefined && (
-                  <span className="text-xs text-zinc-400">≥ {rule.threshold_xlm} XLM</span>
+                  <span className="text-xs text-zinc-400">&gt;= {rule.threshold_xlm} XLM</span>
                 )}
                 {rule.function_name && (
                   <span className="text-xs font-mono text-zinc-400">{rule.function_name}</span>
