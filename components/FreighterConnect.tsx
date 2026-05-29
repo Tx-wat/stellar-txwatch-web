@@ -23,14 +23,23 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    window.freighter?.isConnected().then(async (connected) => {
+    checkConnection()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function checkConnection() {
+    try {
+      if (!window.freighter) return
+      const connected = await window.freighter.isConnected()
       if (connected) {
-        const key = await window.freighter!.getPublicKey()
+        const key = await window.freighter.getPublicKey()
         setPublicKey(key)
         onConnect?.(key)
       }
-    })
-  }, [onConnect])
+    } catch {
+      // Connection check failed
+    }
+  }
 
   async function connect() {
     setLoading(true)

@@ -68,6 +68,10 @@ export default function RuleBuilder({ rules, onChange }: RuleBuilderProps) {
     })
   }
 
+  function isValidFunctionName(name: string): boolean {
+    return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)
+  }
+
   function addRule() {
     if (draft.type === 'LargeTransfer') {
       if (draft.threshold_xlm === undefined || draft.threshold_xlm === null || isNaN(draft.threshold_xlm)) {
@@ -84,6 +88,10 @@ export default function RuleBuilder({ rules, onChange }: RuleBuilderProps) {
         setError('Enter a function name')
         return
       }
+      if (!isValidFunctionName(draft.function_name.trim())) {
+        setError('Function name must start with a letter or underscore, contain only alphanumeric characters and underscores')
+        return
+      }
     }
     if (draft.type === 'AdminFunctionCalled') {
       if (!draft.function_names?.length) {
@@ -97,10 +105,21 @@ export default function RuleBuilder({ rules, onChange }: RuleBuilderProps) {
       setWarning('This rule already exists')
       return
     }
-    onChange([...rules, draft])
     setDraft(emptyRule())
     setError(null)
     setWarning(null)
+  }
+
+  function startEdit(index: number) {
+    setDraft(rules[index])
+    setEditingIndex(index)
+    setError(null)
+  }
+
+  function cancelEdit() {
+    setDraft(emptyRule())
+    setEditingIndex(null)
+    setError(null)
   }
 
   function removeRule(index: number) {
@@ -177,22 +196,33 @@ export default function RuleBuilder({ rules, onChange }: RuleBuilderProps) {
         {error && <p className="text-xs text-red-400">{error}</p>}
         {warning && <p className="text-xs text-amber-400">{warning}</p>}
 
-        <button
-          type="button"
-          onClick={addRule}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Add Rule
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={addRule}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            {editingIndex !== null ? 'Update Rule' : 'Add Rule'}
+          </button>
+          {editingIndex !== null && (
+            <button
+              type="button"
+              onClick={cancelEdit}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-sm font-medium text-white transition-colors"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
       </div>
 
       {rules.length > 0 && (
         <ul className="space-y-2">
           {rules.map((rule, i) => (
-            <li key={i} className="flex items-center justify-between bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2">
+            <li key={i} className={`flex items-center justify-between rounded-lg px-3 py-2 border ${editingIndex === i ? 'bg-indigo-900/30 border-indigo-600' : 'bg-zinc-900 border-zinc-800'}`}>
               <div className="flex items-center gap-2 flex-wrap">
                 <AlertRuleBadge type={rule.type} />
                 {rule.threshold_xlm !== undefined && (
@@ -205,16 +235,28 @@ export default function RuleBuilder({ rules, onChange }: RuleBuilderProps) {
                   <span className="text-xs font-mono text-zinc-400">{rule.function_names.join(', ')}</span>
                 ) : null}
               </div>
-              <button
-                type="button"
-                onClick={() => removeRule(i)}
-                className="text-zinc-600 hover:text-red-400 transition-colors ml-2"
-                aria-label="Remove rule"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <div className="flex gap-1 ml-2">
+                <button
+                  type="button"
+                  onClick={() => startEdit(i)}
+                  className="text-zinc-600 hover:text-indigo-400 transition-colors"
+                  aria-label="Edit rule"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeRule(i)}
+                  className="text-zinc-600 hover:text-red-400 transition-colors"
+                  aria-label="Remove rule"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </li>
           ))}
         </ul>
