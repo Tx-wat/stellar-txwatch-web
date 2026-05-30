@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { WatchedContract, AlertPayload, AlertRule } from '@/types'
 import { getContract, deleteContract, getAlerts, saveContract } from '@/lib/storage'
 import { truncateId, explorerContractUrl } from '@/lib/stellar'
+import { formatDate } from '@/lib/format'
 import NetworkBadge from '@/components/NetworkBadge'
 import AlertRuleBadge from '@/components/AlertRuleBadge'
 import WebhookLog from '@/components/WebhookLog'
@@ -93,7 +94,7 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
         </div>
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
           <p className="text-xs text-zinc-500 mb-1">Registered</p>
-          <p className="text-sm text-zinc-300">{new Date(contract.created_at).toLocaleDateString()}</p>
+          <p className="text-sm text-zinc-300">{formatDate(contract.created_at)}</p>
         </div>
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
           <p className="text-xs text-zinc-500 mb-1">Total Alerts</p>

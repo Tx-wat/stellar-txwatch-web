@@ -2,6 +2,7 @@ import { AlertPayload } from '@/types'
 import { explorerTxUrl } from '@/lib/stellar'
 import { Network } from '@/types'
 import EmptyState from './EmptyState'
+import { formatId, formatDateTime } from '@/lib/format'
 
 interface WebhookLogProps {
   alerts: AlertPayload[]
@@ -34,7 +35,7 @@ export default function WebhookLog({ alerts, network }: WebhookLogProps) {
           {alerts.map((alert, i) => (
             <tr key={i} className="hover:bg-zinc-800/30 transition-colors">
               <td className="py-3 pr-4 text-zinc-400 whitespace-nowrap">
-                {new Date(alert.timestamp).toLocaleString()}
+                {formatDateTime(alert.timestamp)}
               </td>
               <td className="py-3 pr-4">
                 <span className="text-zinc-300">{alert.rule_triggered}</span>
@@ -46,7 +47,7 @@ export default function WebhookLog({ alerts, network }: WebhookLogProps) {
                   rel="noopener noreferrer"
                   className="font-mono text-indigo-400 hover:text-indigo-300 transition-colors"
                 >
-                  {alert.transaction_hash.slice(0, 8)}...{alert.transaction_hash.slice(-8)}
+                  {formatId(alert.transaction_hash)}
                 </a>
               </td>
               <td className="py-3 pr-4 font-mono text-zinc-400">

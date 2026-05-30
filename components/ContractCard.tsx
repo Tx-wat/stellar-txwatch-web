@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { WatchedContract } from '@/types'
 import NetworkBadge from './NetworkBadge'
 import { truncateId } from '@/lib/stellar'
+import { formatDate } from '@/lib/format'
 
 interface ContractCardProps {
   contract: WatchedContract
@@ -32,7 +33,7 @@ export default function ContractCard({ contract, lastAlertTime }: ContractCardPr
           {contract.rules.length === 1 ? 'rule' : 'rules'} active
         </span>
         {lastAlertTime ? (
-          <span>Last alert {new Date(lastAlertTime).toLocaleDateString()}</span>
+          <span>Last alert {formatDate(lastAlertTime)}</span>
         ) : (
           <span>No alerts yet</span>
         )}
