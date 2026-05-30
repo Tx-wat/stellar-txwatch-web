@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { WatchedContract, AlertPayload, AlertRule } from '@/types'
 import { getContract, deleteContract, getAlerts, saveContract } from '@/lib/storage'
 import { truncateId, explorerContractUrl } from '@/lib/stellar'
-import { formatDate } from '@/lib/format'
+import { formatDate, formatRuleSummary } from '@/lib/format'
 import NetworkBadge from '@/components/NetworkBadge'
 import AlertRuleBadge from '@/components/AlertRuleBadge'
 import WebhookLog from '@/components/WebhookLog'
@@ -112,15 +112,9 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
             {contract.rules.map((rule, i) => (
               <div key={i} className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2">
                 <AlertRuleBadge type={rule.type} />
-                {rule.threshold_xlm !== undefined && (
-                  <span className="text-xs text-zinc-400">&gt;= {rule.threshold_xlm} XLM</span>
+                {formatRuleSummary(rule) && (
+                  <span className="text-xs font-mono text-zinc-400">{formatRuleSummary(rule)}</span>
                 )}
-                {rule.function_name && (
-                  <span className="text-xs font-mono text-zinc-400">{rule.function_name}</span>
-                )}
-                {rule.function_names?.length ? (
-                  <span className="text-xs font-mono text-zinc-400">{rule.function_names.join(', ')}</span>
-                ) : null}
               </div>
             ))}
           </div>

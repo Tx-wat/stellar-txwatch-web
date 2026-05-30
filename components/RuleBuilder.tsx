@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { AlertRule, AlertRuleType } from '@/types'
+import { formatRuleSummary } from '@/lib/format'
 import AlertRuleBadge from './AlertRuleBadge'
 
 const RULE_TYPES: AlertRuleType[] = [
@@ -39,6 +40,7 @@ function rulesEqual(a: AlertRule, b: AlertRule): boolean {
 
 export default function RuleBuilder({ rules, onChange }: RuleBuilderProps) {
   const [draft, setDraft] = useState<AlertRule>(emptyRule())
+  const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [warning, setWarning] = useState<string | null>(null)
 
@@ -101,9 +103,17 @@ export default function RuleBuilder({ rules, onChange }: RuleBuilderProps) {
       // Sort function names for consistency
       draft.function_names = [...draft.function_names].sort()
     }
-    if (isDuplicateLabel(draft)) {
-      setWarning('This rule already exists')
-      return
+    if (editingIndex !== null) {
+      const updated = [...rules]
+      updated[editingIndex] = draft
+      onChange(updated)
+      setEditingIndex(null)
+    } else {
+      if (isDuplicateLabel(draft)) {
+        setWarning('This rule already exists')
+        return
+      }
+      onChange([...rules, draft])
     }
     setDraft(emptyRule())
     setError(null)
@@ -225,15 +235,9 @@ export default function RuleBuilder({ rules, onChange }: RuleBuilderProps) {
             <li key={i} className={`flex items-center justify-between rounded-lg px-3 py-2 border ${editingIndex === i ? 'bg-indigo-900/30 border-indigo-600' : 'bg-zinc-900 border-zinc-800'}`}>
               <div className="flex items-center gap-2 flex-wrap">
                 <AlertRuleBadge type={rule.type} />
-                {rule.threshold_xlm !== undefined && (
-                  <span className="text-xs text-zinc-400">&gt;= {rule.threshold_xlm} XLM</span>
+                {formatRuleSummary(rule) && (
+                  <span className="text-xs font-mono text-zinc-400">{formatRuleSummary(rule)}</span>
                 )}
-                {rule.function_name && (
-                  <span className="text-xs font-mono text-zinc-400">{rule.function_name}</span>
-                )}
-                {rule.function_names?.length ? (
-                  <span className="text-xs font-mono text-zinc-400">{rule.function_names.join(', ')}</span>
-                ) : null}
               </div>
               <div className="flex gap-1 ml-2">
                 <button
