@@ -15,7 +15,11 @@ export async function apiFetch<T>(
   return res.json() as Promise<T>
 }
 
-export async function sendTestWebhook(webhookUrl: string, contractId: string): Promise<void> {
+export async function sendTestWebhook(
+  webhookUrl: string,
+  contractId: string,
+  signal?: AbortSignal
+): Promise<void> {
   const payload = {
     label: 'Test Alert',
     contract_id: contractId,
@@ -29,6 +33,7 @@ export async function sendTestWebhook(webhookUrl: string, contractId: string): P
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
+    signal,
   })
   if (!res.ok) throw new Error(`Webhook returned ${res.status}`)
 }

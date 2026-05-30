@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { AlertRule, Network, WatchedContract } from '@/types'
 import { isValidContractId, isValidUrl } from '@/lib/stellar'
@@ -32,6 +32,9 @@ export default function NewContractPage() {
   const [testStatus, setTestStatus] = useState<'idle' | 'sending' | 'ok' | 'error'>('idle')
   const [testError, setTestError] = useState<string | null>(null)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const testAbortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => () => testAbortRef.current?.abort(), [])
 
   function handleWalletConnect() {
     setErrors((prev) => ({ ...prev, wallet: undefined }))
@@ -129,12 +132,16 @@ export default function NewContractPage() {
       setErrors((e) => ({ ...e, webhook_url: 'Enter a valid URL to test' }))
       return
     }
+    testAbortRef.current?.abort()
+    const controller = new AbortController()
+    testAbortRef.current = controller
     setTestStatus('sending')
     setTestError(null)
     try {
-      await sendTestWebhook(trimmedWebhookUrl, contractId.trim() || 'TEST_CONTRACT')
+      await sendTestWebhook(trimmedWebhookUrl, contractId.trim() || 'TEST_CONTRACT', controller.signal)
       setTestStatus('ok')
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return
       setTestStatus('error')
       setTestError(err instanceof Error ? err.message : 'Request failed')
     }
