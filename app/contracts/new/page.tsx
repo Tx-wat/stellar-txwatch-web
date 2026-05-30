@@ -140,7 +140,7 @@ export default function NewContractPage() {
     setTestError(null)
     setTestStatusCode(null)
     try {
-      const { status, ok } = await sendTestWebhook(trimmedWebhookUrl, contractId.trim() || 'TEST_CONTRACT', controller.signal)
+      const { status, ok } = await sendTestWebhook(trimmedWebhookUrl, contractId.trim() || 'TEST_CONTRACT', network, controller.signal)
       setTestStatusCode(status)
       if (ok) {
         setTestStatus('ok')
