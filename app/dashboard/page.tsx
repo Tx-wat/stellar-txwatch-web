@@ -47,14 +47,14 @@ export default function DashboardPage() {
       {/* Stats bar */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: 'Contracts Watched', value: contracts.length },
-          { label: 'Alerts Today', value: alertsToday },
-          { label: 'Active Webhooks', value: activeWebhooks },
+          { label: 'Contracts Watched', value: contracts.length, href: '/contracts' },
+          { label: 'Alerts Today', value: alertsToday, href: '/contracts?filter=alerts' },
+          { label: 'Active Webhooks', value: activeWebhooks, href: '/contracts?filter=webhooks' },
         ].map((stat) => (
-          <div key={stat.label} className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+          <Link key={stat.label} href={stat.href} className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-600 transition-colors">
             <p className="text-2xl font-bold text-zinc-100">{stat.value}</p>
             <p className="text-xs text-zinc-500 mt-1">{stat.label}</p>
-          </div>
+          </Link>
         ))}
       </div>
 

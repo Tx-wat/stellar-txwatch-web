@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { WatchedContract } from '@/types'
 import { getContracts, getAlerts } from '@/lib/storage'
@@ -10,20 +11,35 @@ import EmptyState from '@/components/EmptyState'
 export default function ContractsPage() {
   const [contracts, setContracts] = useState<WatchedContract[]>([])
   const [mounted, setMounted] = useState(false)
+  const searchParams = useSearchParams()
+  const filter = searchParams.get('filter')
 
   useEffect(() => {
-    setContracts(getContracts())
+    const all = getContracts()
+    if (filter === 'webhooks') {
+      setContracts(all.filter((c) => c.webhook_url))
+    } else if (filter === 'alerts') {
+      const todayStart = new Date().setHours(0, 0, 0, 0)
+      setContracts(all.filter((c) => getAlerts(c.contract_id).some((a) => a.timestamp >= todayStart)))
+    } else {
+      setContracts(all)
+    }
     setMounted(true)
-  }, [])
+  }, [filter])
 
   if (!mounted) return null
+
+  const filterLabel = filter === 'webhooks' ? 'with active webhooks' : filter === 'alerts' ? 'with alerts today' : null
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-zinc-100">Contracts</h1>
-          <p className="text-sm text-zinc-500 mt-1">{contracts.length} registered</p>
+          <p className="text-sm text-zinc-500 mt-1">
+            {contracts.length} {filterLabel ?? 'registered'}
+            {filterLabel && <Link href="/contracts" className="ml-2 text-indigo-400 hover:text-indigo-300">clear filter</Link>}
+          </p>
         </div>
         <Link
           href="/contracts/new"
