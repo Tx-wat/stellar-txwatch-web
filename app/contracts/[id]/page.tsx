@@ -90,7 +90,14 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
       <div className="grid sm:grid-cols-3 gap-4">
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
           <p className="text-xs text-zinc-500 mb-1">Webhook URL</p>
-          <p className="text-sm text-zinc-300 break-all">{contract.webhook_url}</p>
+          <a
+            href={contract.webhook_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors break-all"
+          >
+            {contract.webhook_url}
+          </a>
         </div>
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
           <p className="text-xs text-zinc-500 mb-1">Registered</p>
