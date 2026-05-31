@@ -3,6 +3,7 @@ import { explorerTxUrl } from '@/lib/stellar'
 import { Network } from '@/types'
 import EmptyState from './EmptyState'
 import { formatId, formatDateTime } from '@/lib/format'
+import CopyButton from './CopyButton'
 
 interface WebhookLogProps {
   alerts: AlertPayload[]
@@ -70,14 +71,17 @@ export default function WebhookLog({ alerts, network }: WebhookLogProps) {
                 <span className="text-zinc-300">{alert.rule_triggered}</span>
               </td>
               <td className="py-3 pr-4">
-                <a
-                  href={explorerTxUrl(network, alert.transaction_hash)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-mono text-indigo-400 hover:text-indigo-300 transition-colors"
-                >
-                  {formatId(alert.transaction_hash)}
-                </a>
+                <div className="flex items-center gap-1.5">
+                  <a
+                    href={explorerTxUrl(network, alert.transaction_hash)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-indigo-400 hover:text-indigo-300 transition-colors"
+                  >
+                    {formatId(alert.transaction_hash)}
+                  </a>
+                  <CopyButton text={alert.transaction_hash} />
+                </div>
               </td>
               <td className="py-3 pr-4 font-mono text-zinc-400">
                 {alert.function_name ?? 'N/A'}

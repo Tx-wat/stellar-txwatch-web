@@ -63,4 +63,10 @@ describe('WebhookLog', () => {
     render(<WebhookLog alerts={[baseAlert]} network="testnet" />)
     expect(screen.getByText('Export CSV')).toBeInTheDocument()
   })
+
+  it('renders a copy button for the transaction hash', () => {
+    render(<WebhookLog alerts={[baseAlert]} network="testnet" />)
+    const copyBtn = screen.getByTitle('Copy to clipboard')
+    expect(copyBtn).toBeInTheDocument()
+  })
 })
