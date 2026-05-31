@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { AlertRule, AlertRuleType } from '@/types'
+import { formatRuleSummary } from '@/lib/format'
 import AlertRuleBadge from './AlertRuleBadge'
 
 const RULE_TYPES: AlertRuleType[] = [
@@ -23,6 +24,9 @@ const RULE_EXAMPLES: Record<AlertRuleType, string> = {
 interface RuleBuilderProps {
   rules: AlertRule[]
   onChange: (rules: AlertRule[]) => void
+  /** Optional callback fired whenever a rule is added, updated, or removed.
+   *  Intended as an analytics hook point — no behavior depends on it. */
+  onRulesChanged?: (rules: AlertRule[], action: 'add' | 'update' | 'remove') => void
 }
 
 const emptyRule = (): AlertRule => ({ type: 'AnyTransaction' })
@@ -37,8 +41,9 @@ function rulesEqual(a: AlertRule, b: AlertRule): boolean {
     a.function_names.every((f, i) => f === b.function_names![i])
 }
 
-export default function RuleBuilder({ rules, onChange }: RuleBuilderProps) {
+export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBuilderProps) {
   const [draft, setDraft] = useState<AlertRule>(emptyRule())
+  const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [warning, setWarning] = useState<string | null>(null)
 
@@ -101,9 +106,27 @@ export default function RuleBuilder({ rules, onChange }: RuleBuilderProps) {
       // Sort function names for consistency
       draft.function_names = [...draft.function_names].sort()
     }
-    if (isDuplicateLabel(draft)) {
-      setWarning('This rule already exists')
-      return
+    if (editingIndex !== null) {
+      const updated = [...rules]
+      updated[editingIndex] = draft
+      onChange(updated)
+      setEditingIndex(null)
+    } else {
+      if (isDuplicateLabel(draft)) {
+        setWarning('This rule already exists')
+        return
+      }
+      onChange([...rules, draft])
+    }
+    if (editingIndex !== null) {
+      const updated = rules.map((r, i) => (i === editingIndex ? draft : r))
+      onChange(updated)
+      onRulesChanged?.(updated, 'update')
+      setEditingIndex(null)
+    } else {
+      const updated = [...rules, draft]
+      onChange(updated)
+      onRulesChanged?.(updated, 'add')
     }
     setDraft(emptyRule())
     setError(null)
@@ -123,7 +146,9 @@ export default function RuleBuilder({ rules, onChange }: RuleBuilderProps) {
   }
 
   function removeRule(index: number) {
-    onChange(rules.filter((_, i) => i !== index))
+    const updated = rules.filter((_, i) => i !== index)
+    onChange(updated)
+    onRulesChanged?.(updated, 'remove')
   }
 
   return (
@@ -225,15 +250,9 @@ export default function RuleBuilder({ rules, onChange }: RuleBuilderProps) {
             <li key={i} className={`flex items-center justify-between rounded-lg px-3 py-2 border ${editingIndex === i ? 'bg-indigo-900/30 border-indigo-600' : 'bg-zinc-900 border-zinc-800'}`}>
               <div className="flex items-center gap-2 flex-wrap">
                 <AlertRuleBadge type={rule.type} />
-                {rule.threshold_xlm !== undefined && (
-                  <span className="text-xs text-zinc-400">&gt;= {rule.threshold_xlm} XLM</span>
+                {formatRuleSummary(rule) && (
+                  <span className="text-xs font-mono text-zinc-400">{formatRuleSummary(rule)}</span>
                 )}
-                {rule.function_name && (
-                  <span className="text-xs font-mono text-zinc-400">{rule.function_name}</span>
-                )}
-                {rule.function_names?.length ? (
-                  <span className="text-xs font-mono text-zinc-400">{rule.function_names.join(', ')}</span>
-                ) : null}
               </div>
               <div className="flex gap-1 ml-2">
                 <button

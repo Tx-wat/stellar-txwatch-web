@@ -5,26 +5,34 @@ import { useRouter } from 'next/navigation'
 import { WatchedContract, AlertPayload, AlertRule } from '@/types'
 import { getContract, deleteContract, getAlerts, saveContract } from '@/lib/storage'
 import { truncateId, explorerContractUrl } from '@/lib/stellar'
-import { formatDate } from '@/lib/format'
+import { formatDate, formatRuleSummary } from '@/lib/format'
 import NetworkBadge from '@/components/NetworkBadge'
 import AlertRuleBadge from '@/components/AlertRuleBadge'
 import WebhookLog from '@/components/WebhookLog'
 import RuleBuilder from '@/components/RuleBuilder'
 import CopyButton from '@/components/CopyButton'
+import MetadataSection from '@/components/MetadataSection'
 
 export default function ContractDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter()
+  const { trackEvent } = useAnalytics()
   const [contract, setContract] = useState<WatchedContract | null>(null)
   const [alerts, setAlerts] = useState<AlertPayload[]>([])
   const [mounted, setMounted] = useState(false)
+  const [contractNotFound, setContractNotFound] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
   const [showEditRules, setShowEditRules] = useState(false)
   const [editedRules, setEditedRules] = useState<AlertRule[]>([])
   const [rulesError, setRulesError] = useState<string | null>(null)
+  const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
 
   useEffect(() => {
     const c = getContract(params.id)
-    if (!c) { router.replace('/contracts'); return }
+    if (!c) { 
+      setContractNotFound(true)
+      setMounted(true)
+      return 
+    }
     setContract(c)
     setAlerts(getAlerts(params.id))
     setMounted(true)
@@ -39,6 +47,7 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
     setEditedRules(contract!.rules)
     setRulesError(null)
     setShowEditRules(true)
+    trackEvent('rule_edit_opened', { contractId: params.id, ruleCount: contract!.rules.length })
   }
 
   function saveRules() {
@@ -47,14 +56,61 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
     saveContract(updated)
     setContract(updated)
     setShowEditRules(false)
+    trackEvent('rule_edit_saved', { contractId: params.id, ruleCount: editedRules.length })
   }
 
-  if (!mounted || !contract) return null
+  function hasUnsavedChanges(): boolean {
+    return JSON.stringify(editedRules) !== JSON.stringify(contract?.rules ?? [])
+  }
+
+  function handleCancelEdit() {
+    if (hasUnsavedChanges()) {
+      setShowUnsavedWarning(true)
+    } else {
+      setShowEditRules(false)
+    }
+  }
+
+  function confirmDiscard() {
+    setShowUnsavedWarning(false)
+    setShowEditRules(false)
+  }
+
+  if (!mounted) return null
+
+  if (contractNotFound) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-4 max-w-sm">
+          <div className="flex justify-center">
+            <svg className="w-16 h-16 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-semibold text-zinc-100">Contract Not Found</h2>
+          <p className="text-sm text-zinc-400">
+            The contract you&apos;re looking for doesn&apos;t exist or has been deleted.
+          </p>
+          <button
+            onClick={() => router.push('/contracts')}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back to Contracts
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (!contract) return null
 
   return (
     <div className="space-y-8 max-w-4xl">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div className="space-y-1 min-w-0">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl font-bold text-zinc-100">{contract.label}</h1>
@@ -70,7 +126,7 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
           </a>
           <CopyButton text={contract.contract_id} />
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
           <button
             onClick={openEditRules}
             className="px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
@@ -90,15 +146,30 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
       <div className="grid sm:grid-cols-3 gap-4">
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
           <p className="text-xs text-zinc-500 mb-1">Webhook URL</p>
-          <p className="text-sm text-zinc-300 break-all">{contract.webhook_url}</p>
+          <a
+            href={contract.webhook_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors break-all"
+          >
+            {contract.webhook_url}
+          </a>
         </div>
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
           <p className="text-xs text-zinc-500 mb-1">Registered</p>
           <p className="text-sm text-zinc-300">{formatDate(contract.created_at)}</p>
+          <p className="text-xs text-zinc-500 mt-1">{new Date(contract.created_at).toLocaleTimeString()}</p>
         </div>
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-          <p className="text-xs text-zinc-500 mb-1">Total Alerts</p>
-          <p className="text-sm text-zinc-300">{alerts.length}</p>
+          <p className="text-xs text-zinc-500 mb-1">{alerts.length === 0 ? 'Total Alerts' : 'Last Alert'}</p>
+          {alerts.length === 0 ? (
+            <p className="text-sm text-zinc-300">No alerts yet</p>
+          ) : (
+            <>
+              <p className="text-sm text-zinc-300">{formatDate(alerts[0].timestamp)}</p>
+              <p className="text-xs text-zinc-500 mt-1">{new Date(alerts[0].timestamp).toLocaleTimeString()}</p>
+            </>
+          )}
         </div>
       </div>
 
@@ -112,15 +183,9 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
             {contract.rules.map((rule, i) => (
               <div key={i} className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2">
                 <AlertRuleBadge type={rule.type} />
-                {rule.threshold_xlm !== undefined && (
-                  <span className="text-xs text-zinc-400">&gt;= {rule.threshold_xlm} XLM</span>
+                {formatRuleSummary(rule) && (
+                  <span className="text-xs font-mono text-zinc-400">{formatRuleSummary(rule)}</span>
                 )}
-                {rule.function_name && (
-                  <span className="text-xs font-mono text-zinc-400">{rule.function_name}</span>
-                )}
-                {rule.function_names?.length ? (
-                  <span className="text-xs font-mono text-zinc-400">{rule.function_names.join(', ')}</span>
-                ) : null}
               </div>
             ))}
           </div>
@@ -140,9 +205,18 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
           <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 max-w-sm w-full space-y-4">
             <h3 className="text-lg font-semibold text-zinc-100">Delete Contract?</h3>
-            <p className="text-sm text-zinc-400">
-              This will permanently remove <span className="text-zinc-200 font-medium">{contract.label}</span> and all its alert history. This cannot be undone.
-            </p>
+            <div className="space-y-2 text-sm text-zinc-400">
+              <p>
+                This will permanently remove <span className="text-zinc-200 font-medium">{contract.label}</span> and cannot be undone.
+              </p>
+              <p className="text-xs text-zinc-500">
+                Deleted data:
+              </p>
+              <ul className="text-xs text-zinc-500 list-disc list-inside space-y-1">
+                <li>Contract configuration and alert rules</li>
+                <li>All {alerts.length} alert {alerts.length === 1 ? 'record' : 'records'}</li>
+              </ul>
+            </div>
             <div className="flex gap-3">
               <button
                 onClick={handleDelete}
@@ -166,7 +240,16 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
           <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 max-w-lg w-full space-y-4 max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-semibold text-zinc-100">Edit Alert Rules</h3>
-            <RuleBuilder rules={editedRules} onChange={setEditedRules} />
+            <RuleBuilder
+              rules={editedRules}
+              onChange={setEditedRules}
+              onRulesChanged={(rules, action) =>
+                trackEvent(action === 'remove' ? 'rule_removed' : 'rule_added', {
+                  contractId: params.id,
+                  ruleCount: rules.length,
+                })
+              }
+            />
             {rulesError && <p className="text-xs text-red-400">{rulesError}</p>}
             <div className="flex gap-3 pt-2">
               <button
@@ -176,10 +259,36 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
                 Save Rules
               </button>
               <button
-                onClick={() => setShowEditRules(false)}
+                onClick={handleCancelEdit}
                 className="flex-1 px-4 py-2 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unsaved Changes Warning Modal */}
+      {showUnsavedWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 max-w-sm w-full space-y-4">
+            <h3 className="text-lg font-semibold text-zinc-100">Discard Changes?</h3>
+            <p className="text-sm text-zinc-400">
+              You have unsaved changes to your alert rules. Are you sure you want to discard them?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={confirmDiscard}
+                className="flex-1 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-sm font-medium text-white transition-colors"
+              >
+                Discard
+              </button>
+              <button
+                onClick={() => setShowUnsavedWarning(false)}
+                className="flex-1 px-4 py-2 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
+              >
+                Keep Editing
               </button>
             </div>
           </div>

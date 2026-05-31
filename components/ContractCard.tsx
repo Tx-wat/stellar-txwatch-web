@@ -10,6 +10,8 @@ interface ContractCardProps {
 }
 
 export default function ContractCard({ contract, lastAlertTime }: ContractCardProps) {
+  const hasWebhook = Boolean(contract.webhook_url)
+
   return (
     <Link
       href={`/contracts/${contract.id}`}
@@ -26,6 +28,16 @@ export default function ContractCard({ contract, lastAlertTime }: ContractCardPr
         </div>
         <NetworkBadge network={contract.network} />
       </div>
+
+      {/* Webhook status indicator */}
+      {!hasWebhook && (
+        <div className="mb-3 flex items-center gap-1.5 text-xs px-2 py-1 rounded-md bg-amber-500/15 text-amber-400 border border-amber-500/20">
+          <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>No webhook configured</span>
+        </div>
+      )}
 
       <div className="flex items-center justify-between text-xs text-zinc-500">
         <span>
