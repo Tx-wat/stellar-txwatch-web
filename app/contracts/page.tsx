@@ -21,9 +21,17 @@ export default function ContractsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('flat')
 
   useEffect(() => {
-    setContracts(getContracts())
+    const all = getContracts()
+    if (filter === 'webhooks') {
+      setContracts(all.filter((c) => c.webhook_url))
+    } else if (filter === 'alerts') {
+      const todayStart = new Date().setHours(0, 0, 0, 0)
+      setContracts(all.filter((c) => getAlerts(c.contract_id).some((a) => a.timestamp >= todayStart)))
+    } else {
+      setContracts(all)
+    }
     setMounted(true)
-  }, [])
+  }, [filter])
 
   const grouped = useMemo(() => {
     const groups: Record<Network, WatchedContract[]> = {
@@ -41,12 +49,17 @@ export default function ContractsPage() {
 
   if (!mounted) return null
 
+  const filterLabel = filter === 'webhooks' ? 'with active webhooks' : filter === 'alerts' ? 'with alerts today' : null
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-zinc-100">Contracts</h1>
-          <p className="text-sm text-zinc-500 mt-1">{contracts.length} registered</p>
+          <p className="text-sm text-zinc-500 mt-1">
+            {contracts.length} {filterLabel ?? 'registered'}
+            {filterLabel && <Link href="/contracts" className="ml-2 text-indigo-400 hover:text-indigo-300">clear filter</Link>}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           {/* View mode toggle */}
