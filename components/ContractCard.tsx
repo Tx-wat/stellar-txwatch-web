@@ -7,15 +7,18 @@ import { formatDate } from '@/lib/format'
 interface ContractCardProps {
   contract: WatchedContract
   lastAlertTime?: number
+  highlight?: boolean
 }
 
-export default function ContractCard({ contract, lastAlertTime }: ContractCardProps) {
+export default function ContractCard({ contract, lastAlertTime, highlight }: ContractCardProps) {
   const hasWebhook = Boolean(contract.webhook_url)
 
   return (
     <Link
       href={`/contracts/${contract.id}`}
-      className="block bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-600 hover:bg-zinc-800/60 transition-all group"
+      className={`block bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-600 hover:bg-zinc-800/60 transition-all group ${
+        highlight ? 'ring-2 ring-indigo-500/40 animate-pulse' : ''
+      }`}
     >
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="min-w-0">
