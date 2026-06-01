@@ -9,7 +9,6 @@ import EmptyState from '@/components/EmptyState'
 
 type ViewMode = 'flat' | 'grouped'
 type NetworkFilter = 'all' | Network
-type SortOption = 'newest' | 'oldest' | 'label' | 'recent-alert'
 
 const NETWORK_LABELS: Record<Network, string> = {
   mainnet: 'Mainnet',
@@ -22,13 +21,6 @@ const NETWORK_FILTERS: { value: NetworkFilter; label: string }[] = [
   { value: 'mainnet', label: 'Mainnet' },
   { value: 'testnet', label: 'Testnet' },
   { value: 'futurenet', label: 'Futurenet' },
-]
-
-const SORT_OPTIONS: { value: SortOption; label: string }[] = [
-  { value: 'newest', label: 'Newest First' },
-  { value: 'oldest', label: 'Oldest First' },
-  { value: 'label', label: 'Label (A-Z)' },
-  { value: 'recent-alert', label: 'Recent Alert' },
 ]
 
 export default function ContractsPage() {
@@ -51,44 +43,19 @@ export default function ContractsPage() {
     return allContracts.filter((c) => c.network === networkFilter)
   }, [allContracts, networkFilter])
 
-  const sorted = useMemo(() => {
-    const contractsWithAlerts = filtered.map((c) => {
-      const alerts = getAlerts(c.id)
-      const lastAlertTime = alerts.length > 0 ? alerts[0]?.timestamp : 0
-      return { contract: c, lastAlertTime }
-    })
-
-    const sortedWithAlerts = [...contractsWithAlerts].sort((a, b) => {
-      switch (sortBy) {
-        case 'newest':
-          return b.contract.created_at - a.contract.created_at
-        case 'oldest':
-          return a.contract.created_at - b.contract.created_at
-        case 'label':
-          return a.contract.label.toLowerCase().localeCompare(b.contract.label.toLowerCase())
-        case 'recent-alert':
-          return b.lastAlertTime - a.lastAlertTime
-        default:
-          return 0
-      }
-    })
-
-    return sortedWithAlerts.map((item) => item.contract)
-  }, [filtered, sortBy])
-
   const grouped = useMemo(() => {
     const groups: Record<Network, WatchedContract[]> = {
       mainnet: [],
       testnet: [],
       futurenet: [],
     }
-    for (const c of sorted) {
+    for (const c of filtered) {
       if (groups[c.network]) {
         groups[c.network].push(c)
       }
     }
     return groups
-  }, [sorted])
+  }, [filtered])
 
   if (!mounted) return null
 
