@@ -6,6 +6,8 @@ import { useContracts } from '@/lib/useContracts'
 import { getTodayAlertCount, getAlerts } from '@/lib/storage'
 import ContractCard from '@/components/ContractCard'
 import EmptyState from '@/components/EmptyState'
+import NetworkBadge from '@/components/NetworkBadge'
+import { Network } from '@/types'
 
 export default function DashboardPage() {
   const { contracts } = useContracts()
@@ -18,6 +20,13 @@ export default function DashboardPage() {
   }, [])
 
   const activeWebhooks = contracts.filter((c) => c.webhook_url).length
+  const networkCounts = contracts.reduce<Record<Network, number>>((counts, contract) => {
+    counts[contract.network] = (counts[contract.network] ?? 0) + 1
+    return counts
+  }, {} as Record<Network, number>)
+  const networkSummary = (['mainnet', 'testnet', 'futurenet'] as Network[])
+    .filter((network) => networkCounts[network])
+    .map((network) => ({ network, count: networkCounts[network] }))
 
   function lastAlertTime(contractId: string): number | undefined {
     const alerts = getAlerts(contractId)
@@ -45,7 +54,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats bar */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         {[
           { label: 'Contracts Watched', value: contracts.length, href: '/contracts' },
           { label: 'Alerts Today', value: alertsToday, href: '/contracts?filter=alerts' },
@@ -56,6 +65,26 @@ export default function DashboardPage() {
             <p className="text-xs text-zinc-500 mt-1">{stat.label}</p>
           </Link>
         ))}
+
+        <Link href="/contracts" className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-600 transition-colors">
+          <p className="text-2xl font-bold text-zinc-100">{Object.keys(networkCounts).length}</p>
+          <p className="text-xs text-zinc-500 mt-1">Networks in use</p>
+          <div className="mt-4 space-y-2">
+            {networkSummary.length > 0 ? (
+              networkSummary.map(({ network, count }) => (
+                <div key={network} className="flex items-center justify-between rounded-full bg-zinc-950/70 px-3 py-2 text-sm text-zinc-300">
+                  <span className="inline-flex items-center gap-2">
+                    <NetworkBadge network={network} />
+                    {network.charAt(0).toUpperCase() + network.slice(1)}
+                  </span>
+                  <span className="font-semibold text-zinc-100">{count}</span>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-zinc-500 mt-2">No networks configured yet.</p>
+            )}
+          </div>
+        </Link>
       </div>
 
       {/* Contract list */}

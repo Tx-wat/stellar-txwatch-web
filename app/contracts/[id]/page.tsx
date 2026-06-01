@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { WatchedContract, AlertPayload, AlertRule } from '@/types'
 import { getContract, deleteContract, getAlerts, saveContract } from '@/lib/storage'
-import { truncateId, explorerContractUrl } from '@/lib/stellar'
+import { truncateId, explorerContractUrl, isValidUrl } from '@/lib/stellar'
 import { formatDate, formatRuleSummary } from '@/lib/format'
+import { useAnalytics } from '@/lib/useAnalytics'
 import NetworkBadge from '@/components/NetworkBadge'
 import AlertRuleBadge from '@/components/AlertRuleBadge'
 import WebhookLog from '@/components/WebhookLog'
@@ -25,6 +26,12 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
   const [editedRules, setEditedRules] = useState<AlertRule[]>([])
   const [rulesError, setRulesError] = useState<string | null>(null)
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
+  
+  // Metadata editing state
+  const [showEditMetadata, setShowEditMetadata] = useState(false)
+  const [editedLabel, setEditedLabel] = useState('')
+  const [editedWebhookUrl, setEditedWebhookUrl] = useState('')
+  const [metadataError, setMetadataError] = useState<string | null>(null)
 
   useEffect(() => {
     const c = getContract(params.id)
@@ -76,6 +83,66 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
     setShowEditRules(false)
   }
 
+  // Metadata editing functions
+  function openEditMetadata() {
+    setEditedLabel(contract!.label)
+    setEditedWebhookUrl(contract!.webhook_url)
+    setMetadataError(null)
+    setShowEditMetadata(true)
+    trackEvent('metadata_edit_opened', { contractId: params.id })
+  }
+
+  function saveMetadata() {
+    // Validation
+    const trimmedLabel = editedLabel.trim()
+    const trimmedWebhookUrl = editedWebhookUrl.trim()
+
+    if (!trimmedLabel) {
+      setMetadataError('Label is required')
+      return
+    }
+
+    if (trimmedLabel.length > 100) {
+      setMetadataError('Label must be 100 characters or less')
+      return
+    }
+
+    if (!trimmedWebhookUrl) {
+      setMetadataError('Webhook URL is required')
+      return
+    }
+
+    if (!isValidUrl(trimmedWebhookUrl)) {
+      setMetadataError('Please enter a valid HTTP or HTTPS URL')
+      return
+    }
+
+    // Save changes
+    const updated = { 
+      ...contract!, 
+      label: trimmedLabel,
+      webhook_url: trimmedWebhookUrl
+    }
+    saveContract(updated)
+    setContract(updated)
+    setShowEditMetadata(false)
+    trackEvent('metadata_edit_saved', { contractId: params.id })
+  }
+
+  function hasMetadataChanges(): boolean {
+    return editedLabel !== contract?.label || editedWebhookUrl !== contract?.webhook_url
+  }
+
+  function handleCancelMetadataEdit() {
+    if (hasMetadataChanges()) {
+      if (confirm('You have unsaved changes. Are you sure you want to discard them?')) {
+        setShowEditMetadata(false)
+      }
+    } else {
+      setShowEditMetadata(false)
+    }
+  }
+
   if (!mounted) return null
 
   if (contractNotFound) {
@@ -116,17 +183,25 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
             <h1 className="text-2xl font-bold text-zinc-100">{contract.label}</h1>
             <NetworkBadge network={contract.network} />
           </div>
-          <a
-            href={explorerContractUrl(contract.network, contract.contract_id)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm font-mono text-indigo-400 hover:text-indigo-300 transition-colors break-all"
-          >
-            {truncateId(contract.contract_id, 12)}
-          </a>
-          <CopyButton text={contract.contract_id} />
+          <div className="flex items-center gap-2">
+            <a
+              href={explorerContractUrl(contract.network, contract.contract_id)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-mono text-indigo-400 hover:text-indigo-300 transition-colors break-all"
+            >
+              {truncateId(contract.contract_id, 12)}
+            </a>
+            <CopyButton text={contract.contract_id} />
+          </div>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+          <button
+            onClick={openEditMetadata}
+            className="px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
+          >
+            Edit Details
+          </button>
           <button
             onClick={openEditRules}
             className="px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
@@ -145,7 +220,10 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
       {/* Metadata */}
       <div className="grid sm:grid-cols-3 gap-4">
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-          <p className="text-xs text-zinc-500 mb-1">Webhook URL</p>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs text-zinc-500">Webhook URL</p>
+            <CopyButton text={contract.webhook_url} />
+          </div>
           <a
             href={contract.webhook_url}
             target="_blank"
@@ -199,6 +277,75 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
           <WebhookLog alerts={alerts} network={contract.network} />
         </div>
       </div>
+
+      {/* Edit Metadata Modal */}
+      {showEditMetadata && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 max-w-lg w-full space-y-4">
+            <h3 className="text-lg font-semibold text-zinc-100">Edit Contract Details</h3>
+            
+            <div className="space-y-4">
+              {/* Label field */}
+              <div>
+                <label htmlFor="edit-label" className="block text-sm font-medium text-zinc-300 mb-2">
+                  Label
+                </label>
+                <input
+                  id="edit-label"
+                  type="text"
+                  value={editedLabel}
+                  onChange={(e) => setEditedLabel(e.target.value)}
+                  placeholder="My Contract"
+                  maxLength={100}
+                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                />
+                <p className="text-xs text-zinc-500 mt-1">
+                  {editedLabel.length}/100 characters
+                </p>
+              </div>
+
+              {/* Webhook URL field */}
+              <div>
+                <label htmlFor="edit-webhook" className="block text-sm font-medium text-zinc-300 mb-2">
+                  Webhook URL
+                </label>
+                <input
+                  id="edit-webhook"
+                  type="url"
+                  value={editedWebhookUrl}
+                  onChange={(e) => setEditedWebhookUrl(e.target.value)}
+                  placeholder="https://example.com/webhook"
+                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                />
+                <p className="text-xs text-zinc-500 mt-1">
+                  Must be a valid HTTP or HTTPS URL
+                </p>
+              </div>
+            </div>
+
+            {metadataError && (
+              <div className="bg-red-900/20 border border-red-800 rounded-lg p-3">
+                <p className="text-xs text-red-400">{metadataError}</p>
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={saveMetadata}
+                className="flex-1 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white transition-colors"
+              >
+                Save Changes
+              </button>
+              <button
+                onClick={handleCancelMetadataEdit}
+                className="flex-1 px-4 py-2 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete Modal */}
       {showDelete && (

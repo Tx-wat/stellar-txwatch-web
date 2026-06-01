@@ -6,6 +6,7 @@ import {
   getTodayAlertCount,
   addAlert,
   getAlerts,
+  getNetworkDistribution,
 } from '../storage'
 import { WatchedContract, AlertPayload } from '@/types'
 
@@ -116,6 +117,19 @@ describe('dashboard stats — contracts count', () => {
     expect(getContracts().length).toBe(1)
     saveContract(makeContract({ id: 'c2' }))
     expect(getContracts().length).toBe(2)
+  })
+})
+
+describe('dashboard stats — network distribution', () => {
+  it('counts contracts by network', () => {
+    saveContract(makeContract({ id: 'c1', network: 'mainnet' }))
+    saveContract(makeContract({ id: 'c2', network: 'testnet' }))
+    saveContract(makeContract({ id: 'c3', network: 'testnet' }))
+
+    expect(getNetworkDistribution()).toEqual({
+      mainnet: 1,
+      testnet: 2,
+    })
   })
 })
 

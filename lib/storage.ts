@@ -77,6 +77,13 @@ export function getContract(id: string): WatchedContract | undefined {
   return getContracts().find((c) => c.id === id)
 }
 
+export function getNetworkDistribution(): Record<Network, number> {
+  return getContracts().reduce((counts, contract) => {
+    counts[contract.network] = (counts[contract.network] ?? 0) + 1
+    return counts
+  }, {} as Record<Network, number>)
+}
+
 export function getContractByIdAndNetwork(
   contractId: string,
   network: string
