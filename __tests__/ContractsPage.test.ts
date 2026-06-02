@@ -93,3 +93,39 @@ describe('contracts page — network filter (issue #81)', () => {
     expect(applyFilter([], 'mainnet')).toHaveLength(0)
   })
 })
+
+describe('contracts page — search', () => {
+  type ContractItem = { label: string; contract_id: string }
+  const items: ContractItem[] = [
+    { label: 'Escrow Manager', contract_id: 'ABC123' },
+    { label: 'Payment Router', contract_id: 'DEF456' },
+    { label: 'token service', contract_id: 'ghi789' },
+  ]
+
+  function applySearch(list: ContractItem[], query: string): ContractItem[] {
+    const normalized = query.trim().toLowerCase()
+    if (!normalized) return list
+    return list.filter((item) => {
+      return (
+        item.label.toLowerCase().includes(normalized) ||
+        item.contract_id.toLowerCase().includes(normalized)
+      )
+    })
+  }
+
+  it('returns all contracts when search is empty', () => {
+    expect(applySearch(items, '')).toHaveLength(3)
+  })
+
+  it('searches by label case-insensitively', () => {
+    expect(applySearch(items, 'ESCROW')).toEqual([{ label: 'Escrow Manager', contract_id: 'ABC123' }])
+  })
+
+  it('searches by contract id substring', () => {
+    expect(applySearch(items, '456')).toEqual([{ label: 'Payment Router', contract_id: 'DEF456' }])
+  })
+
+  it('returns no matches when search does not match any contract', () => {
+    expect(applySearch(items, 'missing')).toHaveLength(0)
+  })
+})

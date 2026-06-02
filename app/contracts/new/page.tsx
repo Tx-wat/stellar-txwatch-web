@@ -121,6 +121,11 @@ export default function NewContractPage() {
       created_at: Date.now(),
     }
     saveContract(contract)
+    try {
+      sessionStorage.setItem('txwatch_last_created_contract', contract.id)
+    } catch {
+      // ignore storage errors
+    }
     setToast({ message: `Contract "${contract.label}" saved successfully!`, type: 'success' })
     setTimeout(() => {
       router.push(`/contracts/${contract.id}`)
