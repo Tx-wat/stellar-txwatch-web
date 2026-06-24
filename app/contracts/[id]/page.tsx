@@ -12,8 +12,6 @@ import AlertRuleBadge from '@/components/AlertRuleBadge'
 import WebhookLog from '@/components/WebhookLog'
 import RuleBuilder from '@/components/RuleBuilder'
 import CopyButton from '@/components/CopyButton'
-import MetadataSection from '@/components/MetadataSection'
-
 export default function ContractDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const { trackEvent } = useAnalytics()

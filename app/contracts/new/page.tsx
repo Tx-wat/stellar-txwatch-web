@@ -9,6 +9,7 @@ import { sendTestWebhook } from '@/lib/api'
 import { useFreighterConnection } from '@/lib/useFreighterConnection'
 import RuleBuilder from '@/components/RuleBuilder'
 import FreighterConnect from '@/components/FreighterConnect'
+import Toast from '@/components/Toast'
 
 interface FormErrors {
   label?: string
@@ -21,7 +22,7 @@ interface FormErrors {
 
 export default function NewContractPage() {
   const router = useRouter()
-  const { isConnected, publicKey } = useFreighterConnection()
+  const { isConnected } = useFreighterConnection()
   const [networkWarning, setNetworkWarning] = useState<string | null>(null)
   const [label, setLabel] = useState('')
   const [contractId, setContractId] = useState('')
@@ -76,10 +77,6 @@ export default function NewContractPage() {
     )
   }
 
-  function isWalletConnected(): boolean {
-    return isConnected && !!publicKey
-  }
-
   async function checkNetworkMismatch(selectedNetwork: Network) {
     if (!window.freighter) return
     try {
@@ -120,6 +117,7 @@ export default function NewContractPage() {
       rules,
       webhook_url: webhookUrl.trim(),
       created_at: Date.now(),
+      updated_at: Date.now(),
     }
     saveContract(contract)
     try {

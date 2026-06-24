@@ -15,6 +15,7 @@ export default function CopyButton({ text, className = '' }: { text: string; cla
     <button
       onClick={copy}
       title="Copy to clipboard"
+      aria-label={copied ? 'Copied to clipboard' : 'Copy to clipboard'}
       className={`text-zinc-500 hover:text-zinc-300 transition-colors ${className}`}
     >
       {copied ? (

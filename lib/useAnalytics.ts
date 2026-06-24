@@ -16,6 +16,8 @@ export type AnalyticsEventName =
   | 'rule_edit_cancelled'
   | 'rule_added'
   | 'rule_removed'
+  | 'metadata_edit_opened'
+  | 'metadata_edit_saved'
 
 export interface AnalyticsEventProperties {
   contractId?: string
@@ -26,7 +28,9 @@ export interface AnalyticsEventProperties {
 
 // Stub: replace this function body to integrate a real analytics provider.
 function trackEventStub(
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _event: AnalyticsEventName,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _properties?: AnalyticsEventProperties,
 ): void {
   // no-op — intentionally empty until a provider is configured
