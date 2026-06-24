@@ -13,10 +13,20 @@ export default function DashboardPage() {
   const { contracts } = useContracts()
   const [alertsToday, setAlertsToday] = useState(0)
   const [mounted, setMounted] = useState(false)
+  const [highlightId, setHighlightId] = useState<string | null>(null)
 
   useEffect(() => {
     setAlertsToday(getTodayAlertCount())
     setMounted(true)
+    try {
+      const id = sessionStorage.getItem('txwatch_last_created_contract')
+      if (id) {
+        setHighlightId(id)
+        sessionStorage.removeItem('txwatch_last_created_contract')
+      }
+    } catch {
+      // ignore storage errors
+    }
   }, [])
 
   const activeWebhooks = contracts.filter((c) => c.webhook_url).length
@@ -104,7 +114,7 @@ export default function DashboardPage() {
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {contracts.map((c) => (
-            <ContractCard key={c.id} contract={c} lastAlertTime={lastAlertTime(c.id)} />
+            <ContractCard key={c.id} contract={c} lastAlertTime={lastAlertTime(c.id)} highlight={c.id === highlightId} />
           ))}
         </div>
       )}
