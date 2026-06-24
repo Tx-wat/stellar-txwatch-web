@@ -8,6 +8,7 @@ import { truncateId } from '@/lib/stellar'
 import { formatDateTime } from '@/lib/format'
 import { useState } from 'react'
 import AlertRuleBadge from './AlertRuleBadge'
+import CopyButton from './CopyButton'
 
 interface WebhookLogProps {
   alerts: AlertPayload[]
@@ -45,6 +46,7 @@ function exportCSV(alerts: AlertPayload[]) {
 
 export default function WebhookLog({ alerts, network }: WebhookLogProps) {
   const [selectedFilter, setSelectedFilter] = useState<AlertRuleType | null>(null)
+  const [expandedRow, setExpandedRow] = useState<number | null>(null)
 
   const filteredAlerts = selectedFilter
     ? alerts.filter((a) => a.rule_triggered === selectedFilter)
@@ -112,35 +114,69 @@ export default function WebhookLog({ alerts, network }: WebhookLogProps) {
                 <th className="pb-3 pr-4 text-xs font-medium text-zinc-500 uppercase tracking-wider">Tx Hash</th>
                 <th className="pb-3 pr-4 text-xs font-medium text-zinc-500 uppercase tracking-wider">Function</th>
                 <th className="pb-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Amount</th>
+                <th className="pb-3 w-6" />
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/50">
-              {filteredAlerts.map((alert, i) => (
-                <tr key={i} className="hover:bg-zinc-800/30 transition-colors">
-                  <td className="py-3 pr-4 text-zinc-400 whitespace-nowrap">
-                    {formatDateTime(alert.timestamp)}
-                  </td>
-                  <td className="py-3 pr-4">
-                    <AlertRuleBadge type={alert.rule_triggered as AlertRuleType} />
-                  </td>
-                  <td className="py-3 pr-4">
-                    <a
-                      href={explorerTxUrl(network, alert.transaction_hash)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-mono text-indigo-400 hover:text-indigo-300 transition-colors"
+              {filteredAlerts.map((alert, i) => {
+                const isExpanded = expandedRow === i
+                const json = JSON.stringify(alert, null, 2)
+                return (
+                  <>
+                    <tr
+                      key={i}
+                      onClick={() => setExpandedRow(isExpanded ? null : i)}
+                      className="hover:bg-zinc-800/30 transition-colors cursor-pointer select-none"
                     >
-                      {truncateId(alert.transaction_hash)}
-                    </a>
-                  </td>
-                  <td className="py-3 pr-4 font-mono text-zinc-400">
-                    {alert.function_name ?? 'N/A'}
-                  </td>
-                  <td className="py-3 text-zinc-400">
-                    {alert.amount !== undefined ? `${alert.amount} XLM` : 'N/A'}
-                  </td>
-                </tr>
-              ))}
+                      <td className="py-3 pr-4 text-zinc-400 whitespace-nowrap">
+                        {formatDateTime(alert.timestamp)}
+                      </td>
+                      <td className="py-3 pr-4">
+                        <AlertRuleBadge type={alert.rule_triggered as AlertRuleType} />
+                      </td>
+                      <td className="py-3 pr-4">
+                        <a
+                          href={explorerTxUrl(network, alert.transaction_hash)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-mono text-indigo-400 hover:text-indigo-300 transition-colors"
+                        >
+                          {truncateId(alert.transaction_hash)}
+                        </a>
+                      </td>
+                      <td className="py-3 pr-4 font-mono text-zinc-400">
+                        {alert.function_name ?? 'N/A'}
+                      </td>
+                      <td className="py-3 text-zinc-400">
+                        {alert.amount !== undefined ? `${alert.amount} XLM` : 'N/A'}
+                      </td>
+                      <td className="py-3 pl-2 text-zinc-600">
+                        <svg
+                          className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                          fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr key={`${i}-expanded`} className="bg-zinc-900/60">
+                        <td colSpan={6} className="px-4 py-3">
+                          <div className="relative">
+                            <div className="absolute top-2 right-2">
+                              <CopyButton text={json} />
+                            </div>
+                            <pre className="text-xs font-mono text-zinc-300 bg-zinc-950 rounded-lg p-4 pr-8 overflow-x-auto whitespace-pre-wrap break-all">
+                              {json}
+                            </pre>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                )
+              })}
             </tbody>
           </table>
         )}
