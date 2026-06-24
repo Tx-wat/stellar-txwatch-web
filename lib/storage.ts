@@ -116,6 +116,14 @@ export function getAlerts(contractId: string): AlertPayload[] {
   )
 }
 
+function deterministicSuffix(contractId: string, sequence: number): string {
+  let h = sequence * 2654435761
+  for (let i = 0; i < contractId.length; i++) {
+    h = Math.imul(h ^ contractId.charCodeAt(i), 2246822519)
+  }
+  return (h >>> 0).toString(16).padStart(8, '0').repeat(2)
+}
+
 export function seedMockAlerts(
   contractId: string,
   network: Network,
@@ -133,7 +141,7 @@ export function seedMockAlerts(
       contract_id: contractId,
       network,
       rule_triggered: 'AnyTransaction',
-      transaction_hash: `${hash}-${Math.random().toString(16).slice(2, 18)}`,
+      transaction_hash: `${hash}-${deterministicSuffix(contractId, sequence)}`,
       amount: 10 + index * 5,
       timestamp: now - index * 15 * 60 * 1000,
       horizon_link: `https://${horizonHost}/transactions/${hash}`,
