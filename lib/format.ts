@@ -1,14 +1,9 @@
 import { AlertRule } from '@/types'
 
 /**
- * Shared formatting helpers for IDs and dates used across the app.
+ * Shared formatting helpers for dates used across the app.
+ * For ID truncation use truncateId() from @/lib/stellar.
  */
-
-/** Truncates a long ID (contract ID, tx hash, etc.) for display. */
-export function formatId(id: string, chars = 8): string {
-  if (id.length <= chars * 2 + 3) return id
-  return `${id.slice(0, chars)}...${id.slice(-chars)}`
-}
 
 /** Formats a Unix ms timestamp as a locale date string (e.g. "5/29/2026"). */
 export function formatDate(timestamp: number): string {

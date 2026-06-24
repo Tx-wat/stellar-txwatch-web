@@ -1,3 +1,6 @@
+import { HORIZON_URLS } from '@/lib/stellar'
+import type { Network } from '@/types'
+
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? ''
 
 function getAuthHeaders(): Record<string, string> {
@@ -40,6 +43,7 @@ export async function apiFetch<T>(
 export async function sendTestWebhook(
   webhookUrl: string,
   contractId: string,
+  network: Network = 'testnet',
   timeoutMs = 10000
 ): Promise<void> {
   const payload = {

@@ -4,7 +4,8 @@ import { AlertPayload, AlertRuleType } from '@/types'
 import { explorerTxUrl } from '@/lib/stellar'
 import { Network } from '@/types'
 import EmptyState from './EmptyState'
-import { formatId, formatDateTime } from '@/lib/format'
+import { truncateId } from '@/lib/stellar'
+import { formatDateTime } from '@/lib/format'
 import { useState } from 'react'
 import AlertRuleBadge from './AlertRuleBadge'
 
@@ -129,7 +130,7 @@ export default function WebhookLog({ alerts, network }: WebhookLogProps) {
                       rel="noopener noreferrer"
                       className="font-mono text-indigo-400 hover:text-indigo-300 transition-colors"
                     >
-                      {formatId(alert.transaction_hash)}
+                      {truncateId(alert.transaction_hash)}
                     </a>
                   </td>
                   <td className="py-3 pr-4 font-mono text-zinc-400">

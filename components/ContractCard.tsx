@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
 import { WatchedContract } from '@/types'
 import NetworkBadge from './NetworkBadge'
 import { truncateId } from '@/lib/stellar'
@@ -12,12 +13,20 @@ interface ContractCardProps {
 
 export default function ContractCard({ contract, lastAlertTime, highlight }: ContractCardProps) {
   const hasWebhook = Boolean(contract.webhook_url)
+  const [active, setActive] = useState(highlight)
+
+  useEffect(() => {
+    if (!highlight) return
+    setActive(true)
+    const id = setTimeout(() => setActive(false), 2500)
+    return () => clearTimeout(id)
+  }, [highlight])
 
   return (
     <Link
       href={`/contracts/${contract.id}`}
       className={`block bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-600 hover:bg-zinc-800/60 transition-all group ${
-        highlight ? 'ring-2 ring-indigo-500/40 animate-pulse' : ''
+        active ? 'ring-2 ring-indigo-500/40 animate-pulse' : ''
       }`}
     >
       <div className="flex items-start justify-between gap-3 mb-3">

@@ -31,16 +31,6 @@ interface RuleBuilderProps {
 
 const emptyRule = (): AlertRule => ({ type: 'AnyTransaction' })
 
-function rulesEqual(a: AlertRule, b: AlertRule): boolean {
-  if (a.type !== b.type) return false
-  if (a.threshold_xlm !== b.threshold_xlm) return false
-  if (a.function_name !== b.function_name) return false
-  if (!a.function_names && !b.function_names) return true
-  if (!a.function_names || !b.function_names) return false
-  return a.function_names.length === b.function_names.length &&
-    a.function_names.every((f, i) => f === b.function_names![i])
-}
-
 export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBuilderProps) {
   const [draft, setDraft] = useState<AlertRule>(emptyRule())
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
@@ -106,25 +96,19 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
       // Sort function names for consistency
       draft.function_names = [...draft.function_names].sort()
     }
+    const newRule = { ...draft }
     if (editingIndex !== null) {
       const updated = [...rules]
-      updated[editingIndex] = draft
-      onChange(updated)
-      setEditingIndex(null)
-    } else {
-      if (isDuplicateLabel(draft)) {
-        setWarning('This rule already exists')
-        return
-      }
-      onChange([...rules, draft])
-    }
-    if (editingIndex !== null) {
-      const updated = rules.map((r, i) => (i === editingIndex ? draft : r))
+      updated[editingIndex] = newRule
       onChange(updated)
       onRulesChanged?.(updated, 'update')
       setEditingIndex(null)
     } else {
-      const updated = [...rules, draft]
+      if (isDuplicateLabel(newRule)) {
+        setWarning('This rule already exists')
+        return
+      }
+      const updated = [...rules, newRule]
       onChange(updated)
       onRulesChanged?.(updated, 'add')
     }

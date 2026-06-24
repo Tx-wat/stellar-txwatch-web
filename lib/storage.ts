@@ -5,10 +5,16 @@ const ALERTS_KEY = 'txwatch_alerts'
 const STORAGE_VERSION_KEY = 'txwatch_storage_version'
 const CURRENT_STORAGE_VERSION = 1
 
+function getStorage(): Storage | undefined {
+  if (typeof window !== 'undefined') return window.localStorage
+  return (globalThis as unknown as { localStorage?: Storage }).localStorage
+}
+
 function load<T>(key: string): T[] {
-  if (typeof window === 'undefined') return []
+  const storage = getStorage()
+  if (!storage) return []
   try {
-    return JSON.parse(localStorage.getItem(key) ?? '[]')
+    return JSON.parse(storage.getItem(key) ?? '[]')
   } catch {
     return []
   }
@@ -19,44 +25,78 @@ const MAX_ALERTS_PER_CONTRACT = 500
 const ALERTS_RETENTION_DAYS = 90
 
 function getStorageSize(): number {
-  if (typeof window === 'undefined') return 0
+  const storage = getStorage()
+  if (!storage) return 0
   let size = 0
-  for (const key in localStorage) {
-    if (localStorage.hasOwnProperty(key)) {
-      size += localStorage[key].length + key.length
+  for (let i = 0; i < storage.length; i++) {
+    const key = storage.key(i)
+    if (!key) continue
+    const value = storage.getItem(key)
+    if (value !== null) {
+      size += value.length + key.length
     }
   }
   return size
 }
 
 function pruneOldAlerts() {
+  const storage = getStorage()
+  if (!storage) return
   const cutoff = Date.now() - ALERTS_RETENTION_DAYS * 24 * 60 * 60 * 1000
   const alerts = load<AlertPayload>(ALERTS_KEY)
   const pruned = alerts.filter((a) => a.timestamp >= cutoff)
   if (pruned.length < alerts.length) {
-    save(ALERTS_KEY, pruned)
+    storage.setItem(ALERTS_KEY, JSON.stringify(pruned))
+  }
+}
+
+function trimAlertsToCutoff(cutoff: number) {
+  const storage = getStorage()
+  if (!storage) return
+  const alerts = load<AlertPayload>(ALERTS_KEY)
+  const trimmed = alerts.filter((a) => a.timestamp >= cutoff)
+  if (trimmed.length < alerts.length) {
+    storage.setItem(ALERTS_KEY, JSON.stringify(trimmed))
   }
 }
 
 function save<T>(key: string, data: T[]) {
-  pruneOldAlerts()
+  const storage = getStorage()
+  if (!storage) return
+
+  if (key !== ALERTS_KEY) {
+    pruneOldAlerts()
+  }
+
+  if (key === ALERTS_KEY) {
+    const size = getStorageSize()
+    if (size > STORAGE_QUOTA_BYTES * 0.9) {
+      const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000
+      data = (data as AlertPayload[]).filter((a) => a.timestamp >= cutoff) as unknown as T[]
+    }
+    storage.setItem(key, JSON.stringify(data))
+    return
+  }
+
+  storage.setItem(key, JSON.stringify(data))
+
   const size = getStorageSize()
   if (size > STORAGE_QUOTA_BYTES * 0.9) {
-    // Keep only last 30 days if approaching quota
     const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000
-    const alerts = load<AlertPayload>(ALERTS_KEY)
-    save(ALERTS_KEY, alerts.filter((a) => a.timestamp >= cutoff))
+    trimAlertsToCutoff(cutoff)
   }
-  localStorage.setItem(key, JSON.stringify(data))
 }
 
 function getStorageVersion(): number {
-  if (typeof window === 'undefined') return CURRENT_STORAGE_VERSION
-  return parseInt(localStorage.getItem(STORAGE_VERSION_KEY) ?? '0', 10)
+  const storage = getStorage()
+  if (!storage) return CURRENT_STORAGE_VERSION
+  return parseInt(storage.getItem(STORAGE_VERSION_KEY) ?? '0', 10)
 }
 
 function setStorageVersion(version: number) {
-  localStorage.setItem(STORAGE_VERSION_KEY, version.toString())
+  const storage = getStorage()
+  if (!storage) return
+  storage.setItem(STORAGE_VERSION_KEY, version.toString())
 }
 
 export function migrateStorage(migrations: Record<number, () => void>) {
@@ -110,6 +150,11 @@ export function deleteAlerts(contractId: string) {
   save(ALERTS_KEY, alerts.filter((a) => a.contract_id !== contractId))
 }
 
+export function deleteAlert(alertId: string) {
+  const alerts = load<AlertPayload & { id?: string }>(ALERTS_KEY)
+  save(ALERTS_KEY, alerts.filter((a) => a.id !== alertId))
+}
+
 export function getAlerts(contractId: string): AlertPayload[] {
   return load<AlertPayload>(ALERTS_KEY).filter(
     (a) => a.contract_id === contractId
@@ -121,7 +166,8 @@ export function seedMockAlerts(
   network: Network,
   count = 5
 ): void {
-  if (typeof window === 'undefined') return
+  const storage = getStorage()
+  if (!storage) return
 
   const now = Date.now()
   const alerts = Array.from({ length: count }, (_, index) => {
@@ -143,19 +189,25 @@ export function seedMockAlerts(
   save(ALERTS_KEY, [...alerts, ...load<AlertPayload>(ALERTS_KEY)])
 }
 
-export function addAlert(alert: AlertPayload) {
-  const all = [alert, ...load<AlertPayload>(ALERTS_KEY)]
-  const byContract: Record<string, AlertPayload[]> = {}
-  for (const a of all) {
-    ;(byContract[a.contract_id] ??= []).push(a)
+export function addAlert(alert: AlertPayload | (AlertPayload & { contractId?: string; id?: string })) {
+  const normalizedAlert = {
+    ...alert,
+    contract_id: alert.contract_id ?? (alert as { contractId?: string }).contractId,
   }
-  save(ALERTS_KEY, Object.values(byContract).flatMap((alerts) => alerts.slice(0, MAX_ALERTS_PER_CONTRACT)))
+  const all = [...load<AlertPayload>(ALERTS_KEY), normalizedAlert]
+  const counts: Record<string, number> = {}
+  save(ALERTS_KEY, all.filter((a) => {
+    counts[a.contract_id] = (counts[a.contract_id] ?? 0) + 1
+    return counts[a.contract_id] <= MAX_ALERTS_PER_CONTRACT
+  }))
 }
 
 export function deleteAlertsByContractId(contractId: string) {
   const alerts = load<AlertPayload>(ALERTS_KEY)
   save(ALERTS_KEY, alerts.filter((a) => a.contract_id !== contractId))
 }
+
+export const saveAlert = addAlert
 
 export function getTodayAlertCount(): number {
   const start = new Date().setHours(0, 0, 0, 0)

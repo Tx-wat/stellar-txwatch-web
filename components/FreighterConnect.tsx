@@ -17,6 +17,7 @@ const WALLET_STORAGE_KEY = 'freighter_public_key'
 
 interface FreighterConnectProps {
   className?: string
+  onConnect?: (publicKey: string) => void
 }
 
 export default function FreighterConnect({ onConnect, className = '' }: FreighterConnectProps) {
@@ -33,7 +34,10 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
 
   async function checkConnection() {
     try {
-      if (!window.freighter) return
+      if (!window.freighter) {
+        return
+      }
+
       const connected = await window.freighter.isConnected()
       if (connected) {
         const key = await window.freighter.getPublicKey()
@@ -43,6 +47,8 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
       }
     } catch {
       // Connection check failed
+    } finally {
+      setIsInitializing(false)
     }
   }
 
@@ -51,19 +57,24 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
     setIsConnecting(true)
     setLoading(true)
     setError(null)
+
     try {
       if (!window.freighter) {
         window.open('https://www.freighter.app/', '_blank')
         setError('Freighter not installed - install the extension and reload')
         return
       }
+
       const key = await window.freighter.getPublicKey()
       const network = await window.freighter.getNetwork()
+
       if (!key || !network) {
         setError('Failed to retrieve wallet information')
         return
       }
+
       setPublicKey(key)
+      window.__freighterPublicKey = key
       localStorage.setItem(WALLET_STORAGE_KEY, key)
       onConnect?.(key)
     } catch (err) {
@@ -80,6 +91,14 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
     localStorage.removeItem(WALLET_STORAGE_KEY)
   }
 
+  if (isInitializing) {
+    return (
+      <div className={`flex items-center gap-2 ${className}`}>
+        <div className="w-24 h-9 rounded-lg bg-zinc-800 animate-pulse" />
+      </div>
+    )
+  }
+
   if (publicKey) {
     return (
       <div className={`flex items-center gap-2 ${className}`}>
@@ -93,14 +112,6 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
         >
           Disconnect
         </button>
-      </div>
-    )
-  }
-
-  if (isInitializing) {
-    return (
-      <div className={`flex items-center gap-2 ${className}`}>
-        <div className="w-24 h-9 rounded-lg bg-zinc-800 animate-pulse" />
       </div>
     )
   }
@@ -125,6 +136,9 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
         )}
         Connect Freighter
       </button>
+      {error ? (
+        <p className="mt-2 text-xs text-red-400" role="alert">{error}</p>
+      ) : null}
     </div>
   )
 }

@@ -6,7 +6,7 @@ import { AlertRule, Network, WatchedContract } from '@/types'
 import { isValidContractId, isValidUrl } from '@/lib/stellar'
 import { saveContract, getContracts } from '@/lib/storage'
 import { sendTestWebhook } from '@/lib/api'
-import { useWallet } from '@/lib/useWallet'
+import { useFreighterConnection } from '@/lib/useFreighterConnection'
 import RuleBuilder from '@/components/RuleBuilder'
 import FreighterConnect from '@/components/FreighterConnect'
 
@@ -21,7 +21,8 @@ interface FormErrors {
 
 export default function NewContractPage() {
   const router = useRouter()
-  const { isConnected } = useFreighterConnection()
+  const { isConnected, publicKey } = useFreighterConnection()
+  const [networkWarning, setNetworkWarning] = useState<string | null>(null)
   const [label, setLabel] = useState('')
   const [contractId, setContractId] = useState('')
   const [network, setNetwork] = useState<Network>('testnet')
