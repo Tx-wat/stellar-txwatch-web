@@ -145,11 +145,11 @@ export function seedMockAlerts(
 
 export function addAlert(alert: AlertPayload) {
   const all = [alert, ...load<AlertPayload>(ALERTS_KEY)]
-  const counts: Record<string, number> = {}
-  save(ALERTS_KEY, all.filter((a) => {
-    counts[a.contract_id] = (counts[a.contract_id] ?? 0) + 1
-    return counts[a.contract_id] <= MAX_ALERTS_PER_CONTRACT
-  }))
+  const byContract: Record<string, AlertPayload[]> = {}
+  for (const a of all) {
+    ;(byContract[a.contract_id] ??= []).push(a)
+  }
+  save(ALERTS_KEY, Object.values(byContract).flatMap((alerts) => alerts.slice(0, MAX_ALERTS_PER_CONTRACT)))
 }
 
 export function deleteAlertsByContractId(contractId: string) {
