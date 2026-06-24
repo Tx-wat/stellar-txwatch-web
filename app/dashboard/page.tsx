@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useContracts } from '@/lib/useContracts'
-import { getTodayAlertCount, getAlerts } from '@/lib/storage'
+import { getTodayAlertCount, getAlerts, getLastAlertTimestamp } from '@/lib/storage'
+import { timeAgo } from '@/lib/format'
 import ContractCard from '@/components/ContractCard'
 import EmptyState from '@/components/EmptyState'
 import NetworkBadge from '@/components/NetworkBadge'
@@ -12,10 +13,12 @@ import { Network } from '@/types'
 export default function DashboardPage() {
   const { contracts } = useContracts()
   const [alertsToday, setAlertsToday] = useState(0)
+  const [lastAlertTs, setLastAlertTs] = useState<number | undefined>(undefined)
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     setAlertsToday(getTodayAlertCount())
+    setLastAlertTs(getLastAlertTimestamp())
     setMounted(true)
   }, [])
 
@@ -54,7 +57,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats bar */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
         {[
           { label: 'Contracts Watched', value: contracts.length, href: '/contracts' },
           { label: 'Alerts Today', value: alertsToday, href: '/contracts?filter=alerts' },
@@ -65,6 +68,11 @@ export default function DashboardPage() {
             <p className="text-xs text-zinc-500 mt-1">{stat.label}</p>
           </Link>
         ))}
+
+        <Link href="/contracts?filter=alerts" className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-600 transition-colors">
+          <p className="text-2xl font-bold text-zinc-100 truncate">{timeAgo(lastAlertTs) ?? 'No alerts yet'}</p>
+          <p className="text-xs text-zinc-500 mt-1">Last Alert</p>
+        </Link>
 
         <Link href="/contracts" className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-600 transition-colors">
           <p className="text-2xl font-bold text-zinc-100">{Object.keys(networkCounts).length}</p>
