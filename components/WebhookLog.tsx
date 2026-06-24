@@ -40,7 +40,7 @@ function exportCSV(alerts: AlertPayload[]) {
   a.href = url
   a.download = 'alerts.csv'
   a.click()
-  URL.revokeObjectURL(url)
+  setTimeout(() => URL.revokeObjectURL(url), 100)
 }
 
 export default function WebhookLog({ alerts, network }: WebhookLogProps) {
