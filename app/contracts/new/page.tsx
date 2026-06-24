@@ -112,25 +112,29 @@ export default function NewContractPage() {
     }
 
     setSaving(true)
-    const contract: WatchedContract = {
-      id: crypto.randomUUID(),
-      label: label.trim(),
-      contract_id: contractId.trim(),
-      network,
-      rules,
-      webhook_url: webhookUrl.trim(),
-      created_at: Date.now(),
-    }
-    saveContract(contract)
     try {
-      sessionStorage.setItem('txwatch_last_created_contract', contract.id)
-    } catch {
-      // ignore storage errors
+      const contract: WatchedContract = {
+        id: crypto.randomUUID(),
+        label: label.trim(),
+        contract_id: contractId.trim(),
+        network,
+        rules,
+        webhook_url: webhookUrl.trim(),
+        created_at: Date.now(),
+      }
+      saveContract(contract)
+      try {
+        sessionStorage.setItem('txwatch_last_created_contract', contract.id)
+      } catch {
+        // ignore storage errors
+      }
+      setToast({ message: `Contract "${contract.label}" saved successfully!`, type: 'success' })
+      setTimeout(() => {
+        router.push(`/contracts/${contract.id}`)
+      }, 1500)
+    } finally {
+      setSaving(false)
     }
-    setToast({ message: `Contract "${contract.label}" saved successfully!`, type: 'success' })
-    setTimeout(() => {
-      router.push(`/contracts/${contract.id}`)
-    }, 1500)
   }
 
   async function handleTestWebhook() {
