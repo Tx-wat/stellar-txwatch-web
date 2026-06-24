@@ -19,11 +19,17 @@ const config: Config = {
       },
       animation: {
         "fade-in": "fadeIn 0.2s ease-in-out",
+        "fade-out": "fadeOut 1.5s ease-in-out forwards",
       },
       keyframes: {
         fadeIn: {
           "0%": { opacity: "0", transform: "translateY(4px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        fadeOut: {
+          "0%": { opacity: "1" },
+          "60%": { opacity: "1" },
+          "100%": { opacity: "0" },
         },
       },
     },

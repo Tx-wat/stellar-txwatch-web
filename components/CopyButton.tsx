@@ -14,9 +14,15 @@ export default function CopyButton({ text, className = '' }: { text: string; cla
   return (
     <button
       onClick={copy}
-      title="Copy to clipboard"
-      className={`text-zinc-500 hover:text-zinc-300 transition-colors ${className}`}
+      title={copied ? 'Copied!' : 'Copy to clipboard'}
+      aria-label={copied ? 'Copied!' : 'Copy to clipboard'}
+      className={`relative text-zinc-500 hover:text-zinc-300 transition-colors ${className}`}
     >
+      {copied && (
+        <span className="pointer-events-none absolute -top-7 left-1/2 -translate-x-1/2 rounded bg-zinc-700 px-2 py-0.5 text-xs text-white animate-fade-out whitespace-nowrap">
+          Copied!
+        </span>
+      )}
       {copied ? (
         <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
