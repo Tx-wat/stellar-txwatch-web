@@ -40,6 +40,10 @@ export async function apiFetch<T>(
   return res.json() as Promise<T>
 }
 
+export async function getHealthStatus(): Promise<import('@/types').HealthStatus> {
+  return apiFetch<import('@/types').HealthStatus>('/api/health')
+}
+
 export async function sendTestWebhook(
   webhookUrl: string,
   contractId: string,

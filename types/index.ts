@@ -25,6 +25,17 @@ export interface WatchedContract {
   updated_at: number
 }
 
+export type DependencyStatus = 'ok' | 'error' | 'unknown'
+
+export interface HealthStatus {
+  status: 'healthy' | 'degraded' | 'unhealthy'
+  timestamp: string
+  dependencies: {
+    db: { status: DependencyStatus; latencyMs?: number; error?: string }
+    redis: { status: DependencyStatus; latencyMs?: number; error?: string }
+  }
+}
+
 export interface AlertPayload {
   label: string
   contract_id: string
