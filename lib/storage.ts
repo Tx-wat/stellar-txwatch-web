@@ -209,6 +209,14 @@ export function deleteAlertsByContractId(contractId: string) {
 
 export const saveAlert = addAlert
 
+export function getLastAlertTimestamp(): number | undefined {
+  const alerts = load<AlertPayload>(ALERTS_KEY)
+  return alerts.reduce<number | undefined>(
+    (max, a) => (max == null || a.timestamp > max ? a.timestamp : max),
+    undefined
+  )
+}
+
 export function getTodayAlertCount(): number {
   const start = new Date().setHours(0, 0, 0, 0)
   return load<AlertPayload>(ALERTS_KEY).filter((a) => a.timestamp >= start).length
