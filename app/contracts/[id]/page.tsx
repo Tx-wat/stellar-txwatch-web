@@ -32,6 +32,7 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
   const [editedLabel, setEditedLabel] = useState('')
   const [editedWebhookUrl, setEditedWebhookUrl] = useState('')
   const [metadataError, setMetadataError] = useState<string | null>(null)
+  const [showFullWebhookUrl, setShowFullWebhookUrl] = useState(false)
 
   useEffect(() => {
     const c = getContract(params.id)
@@ -222,16 +223,30 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
           <div className="flex items-center justify-between mb-1">
             <p className="text-xs text-zinc-500">Webhook URL</p>
-            <CopyButton text={contract.webhook_url} />
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowFullWebhookUrl((v) => !v)}
+                className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+              >
+                {showFullWebhookUrl ? 'hide' : 'show full URL'}
+              </button>
+              <CopyButton text={contract.webhook_url} />
+            </div>
           </div>
-          <a
-            href={contract.webhook_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors break-all"
-          >
-            {contract.webhook_url}
-          </a>
+          {showFullWebhookUrl ? (
+            <a
+              href={contract.webhook_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors break-all"
+            >
+              {contract.webhook_url}
+            </a>
+          ) : (
+            <p className="text-sm text-zinc-300 break-all">
+              {(() => { try { return new URL(contract.webhook_url).hostname } catch { return contract.webhook_url } })()}
+            </p>
+          )}
         </div>
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
           <p className="text-xs text-zinc-500 mb-1">Registered</p>
