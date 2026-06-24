@@ -258,14 +258,18 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
           <p className="text-sm text-zinc-500">No rules configured.</p>
         ) : (
           <div className="flex flex-wrap gap-2">
-            {contract.rules.map((rule, i) => (
-              <div key={i} className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2">
-                <AlertRuleBadge type={rule.type} />
-                {formatRuleSummary(rule) && (
-                  <span className="text-xs font-mono text-zinc-400">{formatRuleSummary(rule)}</span>
-                )}
-              </div>
-            ))}
+            {contract.rules.map((rule, i) => {
+              const count = alerts.filter((a) => a.rule_triggered === rule.type).length
+              return (
+                <div key={i} className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2">
+                  <AlertRuleBadge type={rule.type} />
+                  {formatRuleSummary(rule) && (
+                    <span className="text-xs font-mono text-zinc-400">{formatRuleSummary(rule)}</span>
+                  )}
+                  <span className="text-xs font-medium text-zinc-500">×{count}</span>
+                </div>
+              )
+            })}
           </div>
         )}
       </div>
