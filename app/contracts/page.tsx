@@ -12,7 +12,7 @@ type ViewMode = 'flat' | 'grouped'
 type NetworkFilter = 'all' | Network
 type SortOption = 'newest' | 'oldest' | 'label-asc' | 'label-desc'
 
-const PAGE_SIZE = 12
+const PAGE_SIZE_OPTIONS = [20, 50, 100]
 
 const NETWORK_LABELS: Record<Network, string> = {
   mainnet: 'Mainnet',
@@ -58,6 +58,7 @@ export default function ContractsPage() {
   const [mounted, setMounted] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('flat')
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -83,7 +84,7 @@ export default function ContractsPage() {
 
   useEffect(() => {
     setPage(1)
-  }, [networkFilter, search])
+  }, [networkFilter, search, sortBy, pageSize])
 
   const networkFiltered = useMemo(() => {
     if (networkFilter === 'all') {
@@ -105,10 +106,10 @@ export default function ContractsPage() {
   }, [networkFiltered, search])
 
   const sorted = useMemo(() => sortContracts(filtered, sortBy), [filtered, sortBy])
-  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize))
   const paginated = useMemo(
-    () => sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [page, sorted]
+    () => sorted.slice((page - 1) * pageSize, page * pageSize),
+    [page, pageSize, sorted]
   )
 
   useEffect(() => {
@@ -325,8 +326,27 @@ export default function ContractsPage() {
           </div>
 
           {totalPages > 1 && (
-            <div className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-300">
-              <span>Page {page} of {totalPages}</span>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-300">
+              <div className="flex items-center gap-3">
+                <span>
+                  Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, sorted.length)} of {sorted.length}
+                </span>
+                <div className="relative">
+                  <select
+                    value={pageSize}
+                    onChange={(e) => setPageSize(Number(e.target.value))}
+                    className="appearance-none pl-2 pr-6 py-1 rounded bg-zinc-800 border border-zinc-700 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                    aria-label="Contracts per page"
+                  >
+                    {PAGE_SIZE_OPTIONS.map((n) => (
+                      <option key={n} value={n}>{n} per page</option>
+                    ))}
+                  </select>
+                  <svg className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
