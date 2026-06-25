@@ -5,12 +5,13 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { WatchedContract, Network } from '@/types'
 import { getContracts, getAlerts } from '@/lib/storage'
+import { sortByLastAlert } from '@/lib/contractSort'
 import ContractCard from '@/components/ContractCard'
 import EmptyState from '@/components/EmptyState'
 
 type ViewMode = 'flat' | 'grouped'
 type NetworkFilter = 'all' | Network
-type SortOption = 'newest' | 'oldest' | 'label-asc' | 'label-desc'
+type SortOption = 'last-alert' | 'newest' | 'oldest' | 'label-asc' | 'label-desc'
 
 const PAGE_SIZE = 12
 
@@ -28,6 +29,7 @@ const NETWORK_FILTERS: { value: NetworkFilter; label: string }[] = [
 ]
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: 'last-alert', label: 'Last alert' },
   { value: 'newest', label: 'Newest first' },
   { value: 'oldest', label: 'Oldest first' },
   { value: 'label-asc', label: 'Label A–Z' },
@@ -37,6 +39,8 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
 function sortContracts(contracts: WatchedContract[], sortBy: SortOption) {
   const sorted = [...contracts]
   switch (sortBy) {
+    case 'last-alert':
+      return sortByLastAlert(sorted, (contractId) => getAlerts(contractId)[0]?.timestamp)
     case 'oldest':
       return sorted.sort((a, b) => a.created_at - b.created_at)
     case 'label-asc':
@@ -59,7 +63,7 @@ export default function ContractsPage() {
     const n = searchParams?.get('network') as Network
     return VALID_NETWORKS.includes(n) ? n : 'all'
   })
-  const [sortBy, setSortBy] = useState<SortOption>('newest')
+  const [sortBy, setSortBy] = useState<SortOption>('last-alert')
   const [search, setSearch] = useState(() => searchParams?.get('q') ?? '')
   const [mounted, setMounted] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('flat')
