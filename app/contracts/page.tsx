@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { WatchedContract, Network } from '@/types'
 import { getContracts, getAlerts } from '@/lib/storage'
@@ -49,10 +49,16 @@ function sortContracts(contracts: WatchedContract[], sortBy: SortOption) {
   }
 }
 
+const VALID_NETWORKS: Network[] = ['mainnet', 'testnet', 'futurenet']
+
 export default function ContractsPage() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const [allContracts, setAllContracts] = useState<WatchedContract[]>([])
-  const [networkFilter, setNetworkFilter] = useState<NetworkFilter>('all')
+  const [networkFilter, setNetworkFilter] = useState<NetworkFilter>(() => {
+    const n = searchParams?.get('network') as Network
+    return VALID_NETWORKS.includes(n) ? n : 'all'
+  })
   const [sortBy, setSortBy] = useState<SortOption>('newest')
   const [search, setSearch] = useState(() => searchParams?.get('q') ?? '')
   const [mounted, setMounted] = useState(false)
@@ -129,6 +135,18 @@ export default function ContractsPage() {
     return groups
   }, [sorted])
 
+  function handleNetworkChange(value: NetworkFilter) {
+    setNetworkFilter(value)
+    const params = new URLSearchParams(searchParams?.toString() ?? '')
+    if (value === 'all') {
+      params.delete('network')
+    } else {
+      params.set('network', value)
+    }
+    const qs = params.toString()
+    router.replace(qs ? `/contracts?${qs}` : '/contracts', { scroll: false })
+  }
+
   if (!mounted) return null
 
   const hasAnyContracts = allContracts.length > 0
@@ -182,7 +200,7 @@ export default function ContractsPage() {
             return (
               <button
                 key={value}
-                onClick={() => setNetworkFilter(value)}
+                onClick={() => handleNetworkChange(value)}
                 aria-pressed={isActive}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                   isActive
