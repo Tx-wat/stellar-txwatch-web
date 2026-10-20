@@ -131,3 +131,25 @@ Most changes flow from types → logic → components → pages. When adding a f
 2. Add logic to `lib/stellar.ts` or `lib/api.ts`
 3. Create/update components in `/components`
 4. Wire into pages in `/app`
+
+## Architecture overview — sequence diagram
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Dashboard
+    participant RuleBuilder
+    participant CoreEngine
+
+    User->>Dashboard: Connect wallet (Freighter)
+    Dashboard->>RuleBuilder: Open rule configuration
+    RuleBuilder->>RuleBuilder: Configure alert rules
+    RuleBuilder-->>Dashboard: Save contract to localStorage
+
+    CoreEngine->>Core Engine: Detect new transaction
+    CoreEngine->>Core Engine: Match rule conditions
+    CoreEngine->>Dashboard: POST /webhook (alert payload)
+    Dashboard->>Dashboard: Poll for new alerts
+    Dashboard->>addAlert: Add alert to localStorage
+    Dashboard->>WebhookLog: Render updated history
+```
