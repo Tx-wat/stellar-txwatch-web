@@ -1,4 +1,9 @@
 import { WatchedContract, AlertPayload, Network } from '@/types'
+import {
+  STORAGE_QUOTA_BYTES,
+  MAX_ALERTS_PER_CONTRACT,
+  ALERTS_RETENTION_DAYS,
+} from './constants'
 
 const CONTRACTS_KEY = 'txwatch_contracts'
 const ALERTS_KEY = 'txwatch_alerts'
@@ -19,11 +24,6 @@ function load<T>(key: string): T[] {
     return []
   }
 }
-
-const STORAGE_QUOTA_BYTES = 5 * 1024 * 1024 // 5MB typical limit
-const MAX_ALERTS_PER_CONTRACT = 500
-const ALERTS_RETENTION_DAYS = 90
-
 function getStorageSize(): number {
   const storage = getStorage()
   if (!storage) return 0
@@ -166,6 +166,9 @@ export function seedMockAlerts(
   network: Network,
   count = 5
 ): void {
+  if (process.env.NODE_ENV === 'production') return
+  if (typeof window === 'undefined') return
+
   const storage = getStorage()
   if (!storage) return
 
