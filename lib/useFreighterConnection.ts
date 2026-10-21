@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-export function useFreighterConnection() {
+export function useFreighterConnection(): { isConnected: boolean; publicKey: string | null; loading: boolean } {
   const [isConnected, setIsConnected] = useState(false)
   const [publicKey, setPublicKey] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -16,10 +16,10 @@ export function useFreighterConnection() {
         setLoading(false)
         return
       }
-      const connected = await window.freighter.isConnected()
+      const connected = await window.freighter?.isConnected()
       if (connected) {
-        const key = await window.freighter.getPublicKey()
-        setPublicKey(key)
+        const key = await window.freighter?.getPublicKey()
+        setPublicKey(key ?? null)
         setIsConnected(true)
       } else {
         setIsConnected(false)

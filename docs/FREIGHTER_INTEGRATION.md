@@ -70,21 +70,138 @@ const network = await window.freighter.getNetwork()
 // e.g. "TESTNET", "PUBLIC", "FUTURENET"
 ```
 
-## Signing Transactions
+## Network Passphrases
 
-To sign a transaction:
+When building and signing transactions, you must pass the exact network passphrase for the target Stellar network. `@stellar/stellar-sdk` provides standard constants:
+
+| Network | Network Constant | Passphrase String |
+|---|---|---|
+| Mainnet (`mainnet` / `PUBLIC`) | `Networks.PUBLIC` | `Public Global Stellar Network ; September 2015` |
+| Testnet (`testnet` / `TESTNET`) | `Networks.TESTNET` | `Test SDF Network ; September 2015` |
+| Futurenet (`futurenet` / `FUTURENET`) | `Networks.FUTURENET` | `Test SDF Future Network ; October 2022` |
+
+Helper to resolve passphrase by network name:
 
 ```ts
-import { Transaction, Networks } from '@stellar/stellar-sdk'
+import { Networks } from '@stellar/stellar-sdk'
+import { Network } from '@/types'
 
-// Build your transaction XDR
-const tx = new Transaction(...)
-const txXdr = tx.toEnvelope().toXDR('base64')
+export function getNetworkPassphrase(network: Network): string {
+  switch (network) {
+    case 'mainnet':
+      return Networks.PUBLIC
+    case 'testnet':
+      return Networks.TESTNET
+    case 'futurenet':
+      return Networks.FUTURENET
+    default:
+      return Networks.TESTNET
+  }
+}
+```
 
-// Sign with Freighter
-const signedXdr = await window.freighter.signTransaction(txXdr, {
-  networkPassphrase: Networks.TESTNET_NETWORK_PASSPHRASE,
-})
+## Signing and Submitting Transactions
+
+Here is a complete, end-to-end example demonstrating how to construct a transaction, request a signature through Freighter, and submit the signed envelope via `Horizon.Server.submitTransaction`:
+
+```ts
+import {
+  Horizon,
+  TransactionBuilder,
+  Networks,
+  Operation,
+  Asset,
+} from '@stellar/stellar-sdk'
+import { HORIZON_URLS } from '@/lib/stellar'
+import { Network } from '@/types'
+
+export async function buildSignAndSubmitTransaction({
+  network = 'testnet',
+  destination,
+  amount,
+}: {
+  network: Network
+  destination: string
+  amount: string
+}) {
+  const horizonUrl = HORIZON_URLS[network]
+  const server = new Horizon.Server(horizonUrl)
+
+  // 1. Resolve network passphrase
+  const networkPassphrase =
+    network === 'mainnet'
+      ? Networks.PUBLIC
+      : network === 'futurenet'
+      ? Networks.FUTURENET
+      : Networks.TESTNET
+
+  // 2. Validate wallet presence
+  if (typeof window === 'undefined' || !window.freighter) {
+    throw new Error('Freighter extension is not installed.')
+  }
+
+  const isConnected = await window.freighter.isConnected()
+  if (!isConnected) {
+    throw new Error('Freighter wallet is not connected.')
+  }
+
+  // 3. Retrieve user public key & load account state from Horizon
+  const publicKey = await window.freighter.getPublicKey()
+  let sourceAccount
+  try {
+    sourceAccount = await server.loadAccount(publicKey)
+  } catch (err: any) {
+    if (err.response?.status === 404) {
+      throw new Error('Source account does not exist or is unfunded on this network.')
+    }
+    throw new Error(`Failed to load account from Horizon: ${err.message}`)
+  }
+
+  // 4. Build transaction XDR
+  const tx = new TransactionBuilder(sourceAccount, {
+    fee: '100000', // 0.01 XLM base fee in stroops
+    networkPassphrase,
+  })
+    .addOperation(
+      Operation.payment({
+        destination,
+        asset: Asset.native(),
+        amount,
+      })
+    )
+    .setTimeout(30)
+    .build()
+
+  const txXdr = tx.toEnvelope().toXDR('base64')
+
+  // 5. Request Freighter signature with error handling for user cancellation
+  let signedXdr: string
+  try {
+    signedXdr = await window.freighter.signTransaction(txXdr, {
+      networkPassphrase,
+    })
+  } catch (err: any) {
+    // User rejected the signing request in the Freighter modal
+    console.error('Freighter signTransaction rejected:', err)
+    throw new Error('Transaction signing was rejected or dismissed by user.')
+  }
+
+  // 6. Decode signed XDR and submit to Horizon
+  try {
+    const signedTx = TransactionBuilder.fromXDR(signedXdr, networkPassphrase)
+    const result = await server.submitTransaction(signedTx)
+    console.log('Transaction successfully confirmed:', result.hash)
+    return result
+  } catch (err: any) {
+    // Check for Horizon transaction submission failure details
+    const resultCodes = err.response?.data?.extras?.result_codes
+    if (resultCodes) {
+      console.error('Horizon transaction error codes:', resultCodes)
+      throw new Error(`Transaction failed: ${resultCodes.transaction} (${resultCodes.operations?.join(', ') ?? ''})`)
+    }
+    throw new Error(`Network submission failed: ${err.message || err}`)
+  }
+}
 ```
 
 ## Implementation in the Dashboard
@@ -149,7 +266,9 @@ Common error scenarios:
 | Extension not installed | `window.freighter` is undefined | Prompt to install |
 | User rejects connection | Promise rejects | Show "Connection rejected" message |
 | Network mismatch | `getNetwork()` returns different value | Warn user to switch networks |
-| Transaction signing fails | Promise rejects | Show error message to user |
+| User rejects signing | `signTransaction` Promise rejects | Show "Signing cancelled" notification |
+| Horizon transaction error | `submitTransaction` rejects with `result_codes` | Parse `extras.result_codes` and display reason |
+| Network timeout | Server timeout | Retry or check transaction hash on explorer |
 
 ## Testing
 

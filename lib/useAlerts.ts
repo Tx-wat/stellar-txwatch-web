@@ -17,7 +17,7 @@ export function useAlerts(contractId: string) {
     return unsubscribe
   }, [refresh])
 
-  function add(alert: AlertPayload) {
+  function add(alert: AlertPayload): void {
     addAlert(alert)
     refresh()
   }

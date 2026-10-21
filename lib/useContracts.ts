@@ -17,17 +17,17 @@ export function useContracts() {
     return unsubscribe
   }, [refresh])
 
-  function add(contract: WatchedContract) {
+  function add(contract: WatchedContract): void {
     saveContract(contract)
     refresh()
   }
 
-  function remove(id: string) {
+  function remove(id: string): void {
     deleteContract(id)
     refresh()
   }
 
-  function update(contract: WatchedContract) {
+  function update(contract: WatchedContract): void {
     saveContract(contract)
     refresh()
   }

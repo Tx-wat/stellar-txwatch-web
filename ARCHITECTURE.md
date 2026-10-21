@@ -131,3 +131,57 @@ Most changes flow from types → logic → components → pages. When adding a f
 2. Add logic to `lib/stellar.ts` or `lib/api.ts`
 3. Create/update components in `/components`
 4. Wire into pages in `/app`
+
+## LocalStorage Schema & Persistence (`lib/storage.ts`)
+
+The web client persists user data in the browser's `localStorage`. All keys are prefixed with `txwatch_` to avoid collisions with other applications on the same origin.
+
+### Storage Keys
+
+| Key | TypeScript Type | Description |
+|---|---|---|
+| `txwatch_contracts` | `WatchedContract[]` | Monitored smart contracts including contract ID, network, alert rules, and webhook endpoint. |
+| `txwatch_alerts` | `AlertPayload[]` | Historical and simulated alert events across all monitored contracts. |
+| `txwatch_storage_version` | `number` (serialized string) | Tracks the active schema version of the stored data for forward migrations. |
+
+### Schema Versioning & `CURRENT_STORAGE_VERSION`
+
+The schema version is managed via `CURRENT_STORAGE_VERSION` in `lib/storage.ts` (currently `1`).
+
+- **Version retrieval**: `getStorageVersion()` reads `txwatch_storage_version` from `localStorage` (defaults to `0` if uninitialized).
+- **When to increment**: Increment `CURRENT_STORAGE_VERSION` whenever a breaking schema change is introduced (e.g., renaming fields, restructuring nested alert rules, or migrating stored keys).
+- **Running migrations**: `migrateStorage(migrations)` takes a dictionary mapping target version numbers to migration handlers. It iterates from `currentVersion + 1` up to `CURRENT_STORAGE_VERSION`, executing each handler in order, and then updates `txwatch_storage_version`.
+
+### How to Write a New Migration Function
+
+When modifying persistent data structures:
+
+1. Increment `CURRENT_STORAGE_VERSION` in `lib/storage.ts`:
+   ```ts
+   const CURRENT_STORAGE_VERSION = 2
+   ```
+
+2. Implement a migration step that loads, transforms, and saves the data:
+   ```ts
+   migrateStorage({
+     2: () => {
+       const contracts = load<any>('txwatch_contracts')
+       const migrated = contracts.map((c) => ({
+         ...c,
+         new_field: c.old_field ?? 'default_value',
+       }))
+       save('txwatch_contracts', migrated)
+     },
+   })
+   ```
+
+3. Call `migrateStorage` during application startup or within the root provider to ensure stored records match the expected schema before UI components read them.
+
+### Retention & Quota Policies
+
+To prevent exceeding browser storage quotas (~5MB standard limit), `lib/storage.ts` enforces the following constraints:
+
+- **Storage Quota Limit (`STORAGE_QUOTA_BYTES`)**: Set to `5 * 1024 * 1024` (5MB). The utility calculates the combined character length of all keys and values via `getStorageSize()`.
+- **Per-Contract Alert Cap (`MAX_ALERTS_PER_CONTRACT`)**: Capped at `500` alerts per contract. When `addAlert()` adds a new record, older alerts exceeding this limit for that contract ID are dropped.
+- **Alert Retention Window (`ALERTS_RETENTION_DAYS`)**: Alerts older than `90` days are automatically purged by `pruneOldAlerts()` whenever contracts are saved.
+- **Emergency Quota Trimming**: If total storage usage exceeds 90% of `STORAGE_QUOTA_BYTES` (4.5MB), `save()` trims `txwatch_alerts` to keep only entries from the last 30 days (`Date.now() - 30 * 24 * 60 * 60 * 1000`).

@@ -27,6 +27,8 @@ export default function NewContractPage() {
   const [contractId, setContractId] = useState('')
   const [network, setNetwork] = useState<Network>('testnet')
   const [webhookUrl, setWebhookUrl] = useState('')
+  const [webhookSecret, setWebhookSecret] = useState('')
+  const [showSecret, setShowSecret] = useState(false)
   const [rules, setRules] = useState<AlertRule[]>([])
   const [errors, setErrors] = useState<FormErrors>({})
   const [saving, setSaving] = useState(false)
@@ -83,7 +85,7 @@ export default function NewContractPage() {
   async function checkNetworkMismatch(selectedNetwork: Network) {
     if (!window.freighter) return
     try {
-      const walletNetwork = await window.freighter.getNetwork()
+      const walletNetwork = await window.freighter?.getNetwork()
       const networkMap: Record<string, string> = {
         testnet: 'TESTNET',
         mainnet: 'PUBLIC',
@@ -119,7 +121,9 @@ export default function NewContractPage() {
       network,
       rules,
       webhook_url: webhookUrl.trim(),
+      webhook_secret: webhookSecret.trim() || undefined,
       created_at: Date.now(),
+      updated_at: Date.now(),
     }
     saveContract(contract)
     try {
@@ -256,6 +260,28 @@ export default function NewContractPage() {
           {errors.webhook_url && <p className="mt-1 text-xs text-red-400">{errors.webhook_url}</p>}
           {testStatus === 'error' && testError && <p className="mt-1 text-xs text-red-400">{testError}</p>}
           {testStatus === 'ok' && <p className="mt-1 text-xs text-emerald-400">Test payload delivered — {testStatusCode} received</p>}
+        </div>
+
+        {/* Webhook Secret */}
+        <div>
+          <label className="block text-sm font-medium text-zinc-300 mb-1.5">Webhook Secret (Optional)</label>
+          <div className="flex gap-2">
+            <input
+              type={showSecret ? 'text' : 'password'}
+              placeholder="Your HMAC secret key"
+              value={webhookSecret}
+              onChange={(e) => { setWebhookSecret(e.target.value); setErrors((prev) => ({ ...prev, webhook_secret: undefined })) }}
+              className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
+            />
+            <button
+              type="button"
+              onClick={() => setShowSecret(!showSecret)}
+              className="px-3 py-2.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors whitespace-nowrap"
+            >
+              {showSecret ? 'Hide' : 'Show'}
+            </button>
+          </div>
+          <p className="mt-1.5 text-xs text-zinc-400">Used to sign payloads with HMAC-SHA256. Receivers can verify the X-TxWatch-Signature header.</p>
         </div>
 
         {/* Alert Rules */}
