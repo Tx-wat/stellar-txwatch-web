@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { Networks } from '@stellar/stellar-sdk'
 
 declare global {
   interface Window {
@@ -8,8 +9,26 @@ declare global {
       isConnected: () => Promise<boolean>
       getPublicKey: () => Promise<string>
       getNetwork: () => Promise<string>
+      getNetworkDetails: () => Promise<{ networkPassphrase: string }>
       signTransaction: (xdr: string, options: { networkPassphrase: string }) => Promise<string>
     }
+    /** Globally cached public key set by FreighterConnect after connection. */
+    __freighterPublicKey?: string | null
+  }
+}
+
+export type KnownNetwork = 'PUBLIC' | 'TESTNET' | 'FUTURENET' | 'custom'
+
+export function getNetworkFromPassphrase(passphrase: string): KnownNetwork {
+  switch (passphrase) {
+    case Networks.PUBLIC:
+      return 'PUBLIC'
+    case Networks.TESTNET:
+      return 'TESTNET'
+    case Networks.FUTURENET:
+      return 'FUTURENET'
+    default:
+      return 'custom'
   }
 }
 
@@ -30,13 +49,30 @@ export function useFreighter() {
 
   const initialize = useCallback(async () => {
     try {
-      const connected = await window.freighter?.isConnected()
+      const { isConnected: connected, error: connectedError } = await isConnected()
+      if (connectedError) {
+        setState((prev) => ({ ...prev, error: 'Freighter not installed' }))
+        return
+      }
       if (connected) {
-        const [publicKey, network] = await Promise.all([
-          window.freighter!.getPublicKey(),
-          window.freighter!.getNetwork(),
+        const [keyResult, networkResult] = await Promise.all([
+          getPublicKey(),
+          getNetworkDetails(),
         ])
-        setState({ publicKey, network, loading: false, error: null })
+        if (keyResult.error) {
+          setState((prev) => ({ ...prev, error: 'Connection rejected' }))
+          return
+        }
+        if (networkResult.error) {
+          setState((prev) => ({ ...prev, error: 'Failed to initialize Freighter' }))
+          return
+        }
+        setState({
+          publicKey: keyResult.address,
+          network: networkResult.network,
+          loading: false,
+          error: null,
+        })
       }
     } catch {
       setState((prev) => ({ ...prev, error: 'Failed to initialize Freighter' }))
@@ -50,20 +86,48 @@ export function useFreighter() {
   const connect = useCallback(async () => {
     setState((prev) => ({ ...prev, loading: true, error: null }))
     try {
-      if (!window.freighter) {
+      const { isConnected: connected, error: connectedError } = await isConnected()
+      if (connectedError || !connected) {
         window.open('https://www.freighter.app/', '_blank')
         setState((prev) => ({
           ...prev,
           loading: false,
-          error: 'Freighter not installed — install the extension and reload',
+          error: 'Freighter not installed',
         }))
         return
       }
-      const [publicKey, network] = await Promise.all([
-        window.freighter.getPublicKey(),
-        window.freighter.getNetwork(),
+
+      const accessResult = await requestAccess()
+      if (accessResult.error) {
+        const message = accessResult.error.message ?? ''
+        const isLocked = /lock/i.test(message)
+        setState((prev) => ({
+          ...prev,
+          loading: false,
+          error: isLocked ? 'Freighter is locked' : 'Connection rejected',
+        }))
+        return
+      }
+
+      const [keyResult, networkResult] = await Promise.all([
+        getPublicKey(),
+        getNetworkDetails(),
       ])
-      setState({ publicKey, network, loading: false, error: null })
+      if (keyResult.error) {
+        setState((prev) => ({ ...prev, loading: false, error: 'Connection rejected' }))
+        return
+      }
+      if (networkResult.error) {
+        setState((prev) => ({ ...prev, loading: false, error: 'Failed to initialize Freighter' }))
+        return
+      }
+
+      setState({
+        publicKey: keyResult.address,
+        network: networkResult.network,
+        loading: false,
+        error: null,
+      })
     } catch {
       setState((prev) => ({ ...prev, loading: false, error: 'Connection rejected' }))
     }

@@ -1,0 +1,54 @@
+name: Feature request
+description: Suggest a new feature or an improvement to an existing one
+title: "[Feature]: "
+labels: ["type: enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have a question or an early-stage idea? Consider starting a [Discussion](https://github.com/Tx-wat/stellar-txwatch-web/discussions) first.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What problem does this solve? Who is it for?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe the functionality you'd like to see.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - UI / UX
+        - Wallet (Freighter)
+        - Alert rules
+        - Webhooks
+        - Storage
+        - Backend integration (stellar-txwatch-core)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I'd like to work on this feature

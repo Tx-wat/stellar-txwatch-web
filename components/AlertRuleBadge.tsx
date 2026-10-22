@@ -3,6 +3,12 @@
 import { AlertRuleType } from '@/types'
 import { useState } from 'react'
 
+interface AlertRuleBadgeProps {
+  type: AlertRuleType
+  /** Optional token (SAC/token contract ID) for token-denominated LargeTransfer thresholds */
+  asset?: string
+}
+
 const styles: Record<AlertRuleType, string> = {
   LargeTransfer: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
   AdminFunctionCalled: 'bg-red-500/20 text-red-400 border-red-500/30',
@@ -27,8 +33,13 @@ const descriptions: Record<AlertRuleType, string> = {
   TransactionFailed: 'Alert when a transaction fails',
 }
 
-export default function AlertRuleBadge({ type }: { type: AlertRuleType }) {
+export default function AlertRuleBadge({ type, asset }: AlertRuleBadgeProps) {
   const [showTooltip, setShowTooltip] = useState(false)
+
+  const description =
+    type === 'LargeTransfer' && asset
+      ? 'Alert when a transfer exceeds the specified token threshold'
+      : descriptions[type]
 
   return (
     <div className="relative inline-block">
@@ -41,7 +52,7 @@ export default function AlertRuleBadge({ type }: { type: AlertRuleType }) {
       </span>
       {showTooltip && (
         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200 whitespace-nowrap z-10 pointer-events-none">
-          {descriptions[type]}
+          {description}
         </div>
       )}
     </div>
