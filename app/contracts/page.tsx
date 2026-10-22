@@ -11,7 +11,7 @@ import { checkContractExistence } from '@/lib/hooks/useContracts'
 
 type ViewMode = 'flat' | 'grouped'
 type NetworkFilter = 'all' | Network
-type SortOption = 'newest' | 'oldest' | 'label-asc' | 'label-desc'
+type SortOption = 'last-alert' | 'newest' | 'oldest' | 'label-asc' | 'label-desc'
 
 const PAGE_SIZE = 12
 const UNDO_WINDOW_MS = 8000
@@ -30,6 +30,7 @@ const NETWORK_FILTERS: { value: NetworkFilter; label: string }[] = [
 ]
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: 'last-alert', label: 'Last alert' },
   { value: 'newest', label: 'Newest first' },
   { value: 'oldest', label: 'Oldest first' },
   { value: 'label-asc', label: 'Label A–Z' },
@@ -39,6 +40,8 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
 function sortContracts(contracts: WatchedContract[], sortBy: SortOption) {
   const sorted = [...contracts]
   switch (sortBy) {
+    case 'last-alert':
+      return sortByLastAlert(sorted, (contractId) => getAlerts(contractId)[0]?.timestamp)
     case 'oldest':
       return sorted.sort((a, b) => a.created_at - b.created_at)
     case 'label-asc':
@@ -50,6 +53,8 @@ function sortContracts(contracts: WatchedContract[], sortBy: SortOption) {
       return sorted.sort((a, b) => b.created_at - a.created_at)
   }
 }
+
+const VALID_NETWORKS: Network[] = ['mainnet', 'testnet', 'futurenet']
 
 export default function ContractsPage() {
   const searchParams = useSearchParams()
@@ -261,7 +266,7 @@ export default function ContractsPage() {
             return (
               <button
                 key={value}
-                onClick={() => setNetworkFilter(value)}
+                onClick={() => handleNetworkChange(value)}
                 aria-pressed={isActive}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                   isActive
@@ -404,7 +409,7 @@ export default function ContractsPage() {
         />
       ) : !hasFilteredContracts ? (
         <EmptyState
-          title="No contracts found"
+          title={search.trim() ? 'No contracts match your search' : 'No contracts found'}
           description="No contracts match the active search or network filter. Try clearing the search or selecting a different network."
           action={
             <button
