@@ -105,6 +105,64 @@ All React hooks live in `hooks/`. Non-hook helpers belong in `lib/`.
 **Secondary**: `app/contracts/[id]/page.tsx` (rule management)  
 **Related**: `components/AlertRuleBadge.tsx` (display)
 
+### Alert Rules — RuleBuilder API Reference
+
+`components/RuleBuilder.tsx` is the most complex component in the project. It lets users configure alert rules for a watched contract.
+
+#### Props
+
+| Prop | Type | Required | Description |
+|------|------|----------|-------------|
+| `rules` | `AlertRule[]` | Yes | The current list of alert rules for the contract. |
+| `onChange` | `(rules: AlertRule[]) => void` | Yes | Callback fired whenever a rule is added, updated, or removed. Receives the full updated rules array. |
+| `onRulesChanged?` | `(rules: AlertRule[], action: 'add' \| 'update' \| 'remove') => void` | No | Optional analytics hook fired after a rule add/update/remove. No behavior depends on it. |
+
+#### AlertRule type (`types/index.ts`)
+
+```ts
+export type AlertRuleType =
+  | 'LargeTransfer'
+  | 'AdminFunctionCalled'
+  | 'AnyTransaction'
+  | 'FunctionCalled'
+  | 'TransactionFailed'
+
+export interface AlertRule {
+  type: AlertRuleType
+  threshold_xlm?: number   // LargeTransfer
+  function_names?: string[] // AdminFunctionCalled
+  function_name?: string    // FunctionCalled
+}
+```
+
+#### How to add a new AlertRuleType
+
+1. `types/index.ts` — Add the new type to the `AlertRuleType` union and any new fields to `AlertRule`.
+2. `components/RuleBuilder.tsx` — Add the type to `RULE_TYPES` and `RULE_EXAMPLES`; add a validation block in `addRule()` and a form input branch in the render.
+3. `components/AlertRuleBadge.tsx` — Add the type to `styles`, `labels`, and `descriptions` records.
+
+#### Validation rules per type (what makes a rule invalid)
+
+| Type | Invalid when |
+|------|--------------|
+| `LargeTransfer` | `threshold_xlm` is undefined/null/NaN, or `<= 0` |
+| `FunctionCalled` | `function_name` is empty, or doesn't match `/^[a-zA-Z_][a-zA-Z0-9_]*$/` |
+| `AdminFunctionCalled` | `function_names` is empty |
+| `AnyTransaction` | Always valid |
+| `TransactionFailed` | Always valid |
+
+Invalid rules show an error message and are not added.
+
+#### Duplicate detection logic
+
+`isDuplicateLabel()` compares a draft against existing rules of the same type:
+- `LargeTransfer` — duplicate if `threshold_xlm` matches.
+- `FunctionCalled` — duplicate if `function_name` matches.
+- `AdminFunctionCalled` — duplicate if the sorted `function_names` lists match.
+- `AnyTransaction` / `TransactionFailed` — any two rules of these types are considered duplicates (returns `true`).
+
+A duplicate shows a warning and is not added.
+
 ### Webhook Delivery
 
 **Primary**: `components/WebhookLog.tsx` (history display), `lib/api.ts` (test webhook)  
