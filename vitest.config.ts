@@ -1,14 +1,12 @@
 import { defineConfig } from 'vitest/config'
+import react from '@vitejs/plugin-react'
 import path from 'path'
 
 export default defineConfig({
-  // Use the automatic JSX runtime so .tsx components that do not import React
-  // (the Next.js/SWC convention) can be rendered under Vitest.
-  esbuild: {
-    jsx: 'automatic',
-  },
+  plugins: [react()],
   test: {
-    environment: 'node',
+    environment: 'jsdom',
+    setupFiles: ['./vitest.setup.ts'],
     globals: true,
   },
   resolve: {

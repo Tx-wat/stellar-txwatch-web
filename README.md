@@ -20,8 +20,8 @@ Part of the [Tx-wat](https://github.com/Tx-wat) GitHub org.
 | Framework | Next.js 14 (App Router) |
 | Language | TypeScript |
 | Styling | Tailwind CSS |
-| Wallet | Freighter (Stellar identity) |
-| Blockchain | `@stellar/stellar-sdk` + Horizon API |
+| Wallet | `@stellar/freighter-api` (Stellar identity) |
+| Blockchain | `@stellar/stellar-sdk` (StrKey, Horizon, Soroban RPC, contract spec) |
 
 ## Getting started
 
@@ -46,31 +46,79 @@ Open [http://localhost:3000](http://localhost:3000).
 ## Project structure
 
 ```
+.github/
+  workflows/ci.yml            # Lint, type-check and build on every push/PR to main
+  ISSUE_TEMPLATE/             # Bug report, feature request and docs issue forms
+  pull_request_template.md    # PR summary, linked issue and test checklist
+  CODEOWNERS                  # Area-based review routing
 app/
-  page.tsx                  # Landing page
-  dashboard/page.tsx        # Stats + contract grid
+  layout.tsx                  # Root layout: nav, wallet status, global styles
+  page.tsx                    # Landing page
+  not-found.tsx               # 404 page
+  globals.css                 # Tailwind base styles
+  dashboard/
+    page.tsx                  # Stats + contract grid
+    loading.tsx               # Dashboard loading skeleton
   contracts/
-    page.tsx                # Contract list
-    new/page.tsx            # Add contract form
-    [id]/page.tsx           # Contract detail + alert history
+    page.tsx                  # Contract list with search and pagination
+    loading.tsx               # Contract list loading skeleton
+    new/page.tsx              # Add contract form + webhook test
+    [id]/page.tsx             # Contract detail + alert history
 components/
-  ContractCard.tsx          # Contract summary card
-  RuleBuilder.tsx           # Alert rule configuration UI
-  WebhookLog.tsx            # Webhook delivery history table
-  NetworkBadge.tsx          # Mainnet/Testnet/Futurenet badge
-  AlertRuleBadge.tsx        # Rule type display badge
-  FreighterConnect.tsx      # Wallet connection button
-  CopyButton.tsx            # Clipboard copy utility
-  MobileNav.tsx             # Mobile navigation drawer
-  EmptyState.tsx            # Empty list placeholder
+  ActiveRulesList.tsx         # Active alert rules on the detail page
+  AlertHeatmap.tsx            # Contract activity heatmap
+  AlertRuleBadge.tsx          # Rule type display badge
+  BulkActionBar.tsx           # Contract list bulk actions
+  ContractCard.tsx            # Contract summary card
+  ContractListToolbar.tsx     # Contract list search/filter/sort controls
+  CopyButton.tsx              # Clipboard copy button
+  EmptyState.tsx              # Empty list placeholder
+  FreighterConnect.tsx        # Wallet connection button
+  MetadataSection.tsx         # Labelled metadata tile on the detail page
+  MobileNav.tsx               # Mobile navigation drawer
+  NetworkBadge.tsx            # Mainnet/Testnet/Futurenet badge
+  NetworkEditField.tsx        # Inline network selector with save/cancel
+  RuleBuilder.tsx             # Alert rule configuration UI
+  SortToggle.tsx              # Asc/desc sort direction toggle
+  Toast.tsx                   # Auto-dismissing success/error notification
+  WalletStatusBadge.tsx       # Freighter connected/disconnected indicator
+  WebhookLog.tsx              # Webhook delivery history table
+  WebhookLogCard.tsx          # Single webhook delivery entry card
+  ui/
+    Button.tsx                # Shared button with variants
+docs/
+  FREIGHTER_INTEGRATION.md    # Freighter wallet integration guide
+  MOCK_API_STRATEGY.md        # Mock vs. real API mode strategy
+  images/                     # README screenshots and demo GIF
+hooks/
+  useAlerts.ts                # Alert history per contract, today count, last alert times
+  useAlertsWebSocket.ts       # Live alert stream into storage
+  useAnalytics.ts             # No-op analytics hook (trackEvent stub)
+  useContractListState.ts     # Contract list search/filter/sort/pagination/selection
+  useContracts.ts             # Contract state
+  useFreighter.ts             # Freighter connection state + actions
+  useFreighterConnection.ts   # Freighter connection check with loading state
+  useNewContractForm.ts       # Add-contract form state and submission
+  useSortedLog.ts             # Sort log entries by timestamp with a toggle
+  useWallet.ts                # Minimal connected wallet public key hook
+  useWebSocket.ts             # Reconnecting WebSocket wrapper
 lib/
-  stellar.ts                # Horizon + Soroban RPC helpers
-  storage.ts                # localStorage contract registry
-  api.ts                    # Fetch wrapper + test webhook
-  useContracts.ts           # React hook for contract state
+  api.ts                      # Fetch wrapper + test webhook
+  contractSort.ts             # Deterministic contract ordering (network, label, id)
+  exportStorage.ts            # Export/import contracts as a JSON snapshot
+  format.ts                   # Date and rule summary formatters
+  formatAmount.ts             # Asset amount formatting (XLM, USDC, stroops)
+  stellar.ts                  # Horizon/Soroban URLs, validation, explorer links
+  storage.ts                  # localStorage contract and alert registry
+  storageKeys.ts              # All browser storage key names
+  storageLogger.ts            # Safe JSON parsing with storage error hooks
+  __tests__/                  # Unit tests for lib modules
 types/
-  index.ts                  # Shared types (mirrors core Rust structs)
+  index.ts                    # Shared types (mirrors core Rust structs)
+__tests__/                    # Component, page and integration tests (Vitest)
 ```
+
+> Keep this tree in sync when adding, moving or removing files — the PR checklist asks you to confirm it.
 
 ## Architecture overview
 
@@ -102,9 +150,23 @@ See [Stellar integration](#stellar-integration) for implementation details.
 
 ## Environment variables
 
-| Variable | Description |
-|---|---|
-| `NEXT_PUBLIC_API_URL` | Base URL of the txwatch-core API (optional) |
+Copy `.env.example` to `.env.local` and fill in the values you need. Every variable is optional; with none set, the dashboard runs in localStorage-only mode against the public Stellar endpoints.
+
+| Variable | Required | Default | Example | Scope | Description |
+|---|---|---|---|---|---|
+| `NEXT_PUBLIC_API_URL` | No | `''` (empty, localStorage-only mode) | `http://localhost:8000` | Build-time | Base URL of the [stellar-txwatch-core](https://github.com/Tx-wat/stellar-txwatch-core) API. Prepended to every `apiFetch` call in `lib/api.ts`. |
+| `NEXT_PUBLIC_HORIZON_URL` | No | Official Horizon URL for the selected network (see `HORIZON_URLS` in `lib/stellar.ts`) | `https://horizon-testnet.stellar.org` | Build-time | Override for the Horizon REST endpoint. |
+| `NEXT_PUBLIC_SOROBAN_RPC_URL` | No | Official Soroban RPC URL for the selected network (see `SOROBAN_RPC_URLS` in `lib/stellar.ts`) | `https://soroban-testnet.stellar.org` | Build-time | Override for the Soroban RPC endpoint. |
+| `WEBHOOK_TEST_URL` | No | Unset | `http://localhost:3001/webhooks` | Runtime | Local endpoint for testing webhook delivery, for example one of the receivers in [`examples/`](./examples). |
+| `DEBUG_STORAGE` | No | `false` | `true` | Runtime | When `true`, `lib/storageLogger.ts` logs localStorage parse errors even when `NODE_ENV` is `production` (they are always logged in development). Because it is not a `NEXT_PUBLIC_*` variable, it only applies in Node contexts such as tests, not in the browser bundle. |
+| `NODE_ENV` | No (set by Next.js) | `development` for `npm run dev`, `production` for `npm run build` / `npm start` | `production` | Runtime | Standard Node/Next.js environment flag. Do not set it manually in `.env.local`. |
+
+### Build-time vs runtime
+
+- **Build-time (`NEXT_PUBLIC_*`)**: Next.js inlines these values into the client JavaScript bundle when you run `npm run build`. Changing them requires a rebuild; restarting the server is not enough. They are visible to anyone who loads the page, so never put secrets in a `NEXT_PUBLIC_*` variable.
+- **Runtime (everything else)**: read from `process.env` on the server when the code runs, and never exposed to the browser bundle. Changing them only requires restarting the process.
+
+> **Note:** `NEXT_PUBLIC_HORIZON_URL`, `NEXT_PUBLIC_SOROBAN_RPC_URL` and `WEBHOOK_TEST_URL` are documented in `.env.example` but not yet read by the application code. The endpoints are currently taken from the constants in `lib/stellar.ts`.
 
 ## Stellar integration
 
@@ -123,8 +185,22 @@ HORIZON_URLS.testnet    // https://horizon-testnet.stellar.org
 HORIZON_URLS.futurenet  // https://horizon-futurenet.stellar.org
 
 // Soroban JSON-RPC - contract simulation, ledger entries
+SOROBAN_RPC_URLS.mainnet  // https://mainnet.stellar.validationcloud.io/v1/<key>
 SOROBAN_RPC_URLS.testnet  // https://soroban-testnet.stellar.org
 ```
+
+### Stellar SDK usage
+
+`@stellar/stellar-sdk` is a real runtime dependency (not just documentation). It is used for:
+
+- **StrKey validation** — `StrKey.isValidContract` / `StrKey.isValidEd25519PublicKey` back `isValidContractId` in `lib/stellar.ts`
+- **Horizon queries** — `Horizon.Server` for account balances and transaction history
+- **Soroban RPC** — `SorobanRpc.Server` for contract simulation and ledger entry reads
+- **Contract spec parsing** — `contract.Spec` parses the contract WASM spec so `RuleBuilder` can autocomplete exported function names for `FunctionCalled` / `AdminFunctionCalled` rules
+
+Imports are named (e.g. `import { StrKey, Horizon } from '@stellar/stellar-sdk'`) so the bundler can tree-shake unused modules; only the modules listed above ship to the client.
+
+**Bundle size:** before this change the dependency was unused and contributed ~0 KB to the client bundle (it was still installed). After wiring it up, the client bundle grew by **~X KB gzipped** (measured with `npm run build` before/after). The SDK is only imported from `lib/stellar.ts` and the `RuleBuilder` spec loader, both of which are client-side; the spec loader is dynamically imported so it is not part of the initial bundle.
 
 ### Querying Horizon
 
@@ -179,35 +255,51 @@ export async function getContractData(
 
 ### Freighter wallet
 
-`components/FreighterConnect.tsx` wraps the `window.freighter` browser extension API. To get the connected public key anywhere in the app:
+`components/FreighterConnect.tsx` uses the official [`@stellar/freighter-api`](https://www.npmjs.com/package/@stellar/freighter-api) package rather than reaching into `window.freighter` directly. The package handles extension detection, permission requests, and network details. To get the connected public key anywhere in the app:
 
 ```ts
-// Read the key after connection (stored by FreighterConnect via onConnect callback)
-const publicKey = await window.freighter?.getPublicKey()
-const network   = await window.freighter?.getNetwork()   // e.g. "TESTNET"
+import { isConnected, isAllowed, getPublicKey, getNetworkDetails } from '@stellar/freighter-api'
+
+// Distinguish the three failure states explicitly
+const { isConnected: installed } = await isConnected()   // extension not installed
+if (!installed) { /* show "Install Freighter" */ }
+
+const { isAllowed: allowed } = await isAllowed()         // permission not granted
+if (!allowed) { /* show "Connect" prompt */ }
+
+// getPublicKey rejects with a "locked" error when the wallet is locked
+const { publicKey } = await getPublicKey()
+const { network, networkPassphrase } = await getNetworkDetails() // e.g. "TESTNET"
 ```
 
 To sign and submit a transaction:
 
 ```ts
-import { Transaction, Networks } from '@stellar/stellar-sdk'
+import { signTransaction } from '@stellar/freighter-api'
+import { Networks } from '@stellar/stellar-sdk'
 
 // Build your XDR transaction, then:
-const signed = await window.freighter?.signTransaction(txXdr, {
+const { signedTxXdr, error } = await signTransaction(txXdr, {
   networkPassphrase: Networks.TESTNET,
 })
 ```
 
+See [`docs/FREIGHTER_INTEGRATION.md`](./docs/FREIGHTER_INTEGRATION.md) for the full state machine (not installed / not allowed / locked / connected) and the network mismatch check.
+
 ### Contract ID validation
 
-All contract IDs are validated against the Soroban address format before saving:
+All contract IDs are validated against the Soroban address format before saving, using `StrKey` from `@stellar/stellar-sdk`:
 
 ```ts
 import { isValidContractId } from '@/lib/stellar'
 
-isValidContractId('CAAAA...') // true — starts with C, 56 base-32 chars
+isValidContractId('CAAAA...') // true — valid StrKey contract address
 isValidContractId('GAAAA...') // false — that's a Stellar account address
 ```
+
+### Function name autocomplete
+
+`RuleBuilder` fetches the contract WASM via Soroban RPC and parses its spec with `contract.Spec` to list exported functions. `FunctionCalled` and `AdminFunctionCalled` inputs offer a datalist of those names and warn when the entered name isn't in the spec. If the spec can't be loaded (contract not found, RPC error), the inputs fall back to free text.
 
 ### Stellar Expert links
 
@@ -249,6 +341,17 @@ When a rule fires, the core engine POSTs this JSON to the registered webhook URL
 
 The `Test` button on the Add Contract form sends a mock payload to your endpoint so you can verify delivery before going live.
 
+## Error tracking (Sentry)
+
+Client-side errors — such as localStorage parse failures and Freighter
+exceptions — are reported to [Sentry](https://sentry.io) when
+`NEXT_PUBLIC_SENTRY_DSN` is set. If the variable is unset, error tracking is
+completely disabled and the app behaves as before.
+
+- The `storageLogger` error handler forwards localStorage parse errors to Sentry
+- Public keys and webhook URLs are scrubbed from events before they are sent (PII scrubbing)
+- Source maps are uploaded in CI only when the `SENTRY_AUTH_TOKEN` secret is present
+
 ## CI
 
 Every push and pull request to `main` runs the full CI pipeline via GitHub Actions:
@@ -258,6 +361,15 @@ Lint -> Type-check -> Build
 ```
 
 See [`.github/workflows/ci.yml`](./.github/workflows/ci.yml).
+
+### Bundle size
+
+Pull requests also run a **Bundle size** job that builds the app, comments the first-load JS diff against `main` on the PR, and fails if any route exceeds its budget in [`.size-limit.cjs`](./.size-limit.cjs).
+
+```bash
+npm run analyze   # ANALYZE=true next build — opens the bundle analyzer report
+npm run build && npm run size   # check budgets locally
+```
 
 ## Roadmap
 
@@ -313,24 +425,31 @@ The dashboard currently operates in two modes:
 
 ## Screenshots
 
-### Landing Page
-The landing page introduces the dashboard and provides quick access to wallet connection and contract registration.
+> All captures use the default dark theme. See [`docs/images/README.md`](./docs/images/README.md) for how to capture and optimise new images.
+
+### Demo
+
+Registering a contract and sending a test webhook:
+
+![Demo: registering a contract and testing a webhook](./docs/images/demo.gif)
 
 ### Dashboard
-The dashboard displays registered contracts in a grid layout with summary cards showing contract ID, network, and alert rule count.
+
+Registered contracts in a grid with summary cards showing contract ID, network and alert rule count.
+
+![Dashboard](./docs/images/dashboard.png)
+
+### Add Contract
+
+Enter a contract ID (validated against the Soroban address format), pick a network, configure alert rules and test webhook delivery before going live.
+
+![Add contract form](./docs/images/add-contract.png)
 
 ### Contract Detail
-The contract detail page shows:
-- Contract metadata (ID, network, registration date)
-- Configured alert rules with type badges
-- Webhook delivery history with transaction links to Stellar Expert
 
-### Add Contract Form
-The form allows users to:
-- Enter a contract ID (validated against Soroban address format)
-- Select the network (Mainnet, Testnet, Futurenet)
-- Configure alert rules (large transfers, function calls, admin actions, failed transactions)
-- Test webhook delivery before going live
+Contract metadata, configured alert rules with type badges, and webhook delivery history with transaction links to Stellar Expert.
+
+![Contract detail](./docs/images/contract-detail.png)
 
 ## Bug Reports & Feature Requests
 
