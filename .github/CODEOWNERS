@@ -1,0 +1,41 @@
+# Code owners for stellar-txwatch-web
+#
+# GitHub automatically requests a review from the listed owners when a PR
+# touches a matching path. Later rules take precedence over earlier ones,
+# so keep the catch-all at the top and the most specific paths at the bottom.
+#
+# Areas mirror the ownership map in ARCHITECTURE.md. Replace individual
+# maintainers with @Tx-wat/<team> handles once org teams are set up.
+
+# Default owners for everything not matched below
+*                               @habiba-d-coder @chriz-cloud
+
+# Pages & routing (ARCHITECTURE.md: /app)
+/app/                           @habiba-d-coder
+
+# Reusable UI components (ARCHITECTURE.md: /components)
+/components/                    @habiba-d-coder
+/hooks/                         @habiba-d-coder
+
+# Business logic & utilities (ARCHITECTURE.md: /lib)
+/lib/                           @habiba-d-coder @chriz-cloud
+
+# Contract management: persistence layer
+/lib/storage*                   @chriz-cloud @habiba-d-coder
+/lib/exportStorage.ts           @chriz-cloud @habiba-d-coder
+/lib/__tests__/storage*         @chriz-cloud @habiba-d-coder
+/lib/__tests__/exportStorage*   @chriz-cloud @habiba-d-coder
+
+# Stellar network integration & backend API
+/lib/stellar.ts                 @chriz-cloud @habiba-d-coder
+/lib/api.ts                     @chriz-cloud @habiba-d-coder
+
+# Shared types: must stay in sync with stellar-txwatch-core
+/types/                         @chriz-cloud @habiba-d-coder
+
+# Repo setup: CI, templates, code owners
+/.github/                       @habiba-d-coder @chriz-cloud
+
+# Documentation
+*.md                            @habiba-d-coder @chriz-cloud
+/docs/                          @habiba-d-coder @chriz-cloud

@@ -129,3 +129,70 @@ describe('contracts page — search', () => {
     expect(applySearch(items, 'missing')).toHaveLength(0)
   })
 })
+
+describe('contracts page — missing contract detection (issue #411)', () => {
+  type ContractItem = { contract_id: string; network: string }
+
+  const RESETTABLE_NETWORKS = ['testnet', 'futurenet']
+
+  function isResettableNetwork(network: string): boolean {
+    return RESETTABLE_NETWORKS.includes(network)
+  }
+
+  function findMissingContractIds(
+    list: ContractItem[],
+    existence: Record<string, boolean>,
+  ): string[] {
+    return list
+      .filter((c) => isResettableNetwork(c.network) && existence[c.contract_id] === false)
+      .map((c) => c.contract_id)
+  }
+
+  function removeMissingContracts(
+    list: ContractItem[],
+    existence: Record<string, boolean>,
+  ): ContractItem[] {
+    const missing = new Set(findMissingContractIds(list, existence))
+    return list.filter((c) => !missing.has(c.contract_id))
+  }
+
+  const items: ContractItem[] = [
+    { contract_id: 'MAIN1', network: 'mainnet' },
+    { contract_id: 'TEST1', network: 'testnet' },
+    { contract_id: 'TEST2', network: 'testnet' },
+    { contract_id: 'FUT1', network: 'futurenet' },
+  ]
+
+  it('flags testnet/futurenet contracts reported as missing', () => {
+    const existence = { MAIN1: true, TEST1: false, TEST2: true, FUT1: false }
+    expect(findMissingContractIds(items, existence).sort()).toEqual(['FUT1', 'TEST1'])
+  })
+
+  it('does not flag contracts whose existence is unknown or true', () => {
+    const existence = { TEST1: true }
+    expect(findMissingContractIds(items, existence)).toEqual([])
+  })
+
+  it('never flags mainnet contracts even when reported missing', () => {
+    const existence = { MAIN1: false, TEST1: false, TEST2: false, FUT1: false }
+    const missing = findMissingContractIds(items, existence)
+    expect(missing).not.toContain('MAIN1')
+    expect(missing.sort()).toEqual(['FUT1', 'TEST1', 'TEST2'])
+  })
+
+  it('returns empty array when there are no resettable contracts', () => {
+    const mainnetOnly: ContractItem[] = [{ contract_id: 'MAIN1', network: 'mainnet' }]
+    expect(findMissingContractIds(mainnetOnly, { MAIN1: false })).toEqual([])
+  })
+
+  it('remove missing contracts filters flagged items out of the list', () => {
+    const existence = { MAIN1: false, TEST1: false, TEST2: true, FUT1: false }
+    const result = removeMissingContracts(items, existence)
+    expect(result.map((c) => c.contract_id).sort()).toEqual(['MAIN1', 'TEST2'])
+  })
+
+  it('remove missing contracts keeps the list intact when nothing is missing', () => {
+    const existence = { MAIN1: true, TEST1: true, TEST2: true, FUT1: true }
+    expect(removeMissingContracts(items, existence)).toEqual(items)
+  })
+})

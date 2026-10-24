@@ -5,6 +5,12 @@ import {
   StorageErrorContext,
 } from '../storageLogger';
 
+const captureExceptionMock = jest.fn();
+
+jest.mock('@sentry/nextjs', () => ({
+  captureException: (...args: unknown[]) => captureExceptionMock(...args),
+}));
+
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
   return {
@@ -19,6 +25,8 @@ Object.defineProperty(global, 'localStorage', { value: localStorageMock });
 beforeEach(() => {
   localStorageMock.clear();
   clearStorageErrorHandlers();
+  captureExceptionMock.mockClear();
+  delete process.env.NEXT_PUBLIC_SENTRY_DSN;
 });
 
 describe('safeParseStorage', () => {
@@ -58,5 +66,35 @@ describe('safeParseStorage', () => {
     onStorageError(() => { throw new Error('handler crash'); });
     localStorage.setItem('bad3', 'bad');
     expect(() => safeParseStorage('bad3', null)).not.toThrow();
+  });
+});
+
+describe('safeParseStorage Sentry forwarding', () => {
+  it('forwards parse errors to Sentry when DSN is set', () => {
+    process.env.NEXT_PUBLIC_SENTRY_DSN = 'https://example.ingest.sentry.io/1';
+    localStorage.setItem('sentry-bad', '{not valid json}');
+    safeParseStorage('sentry-bad', null);
+    expect(captureExceptionMock).toHaveBeenCalledTimes(1);
+    const [error, context] = captureExceptionMock.mock.calls[0];
+    expect(error).toBeInstanceOf(Error);
+    expect((context as { extra?: { key?: string } }).extra?.key).toBe('sentry-bad');
+  });
+
+  it('truncates the raw value forwarded to Sentry', () => {
+    process.env.NEXT_PUBLIC_SENTRY_DSN = 'https://example.ingest.sentry.io/1';
+    const longValue = 'x'.repeat(5000);
+    localStorage.setItem('sentry-long', longValue);
+    safeParseStorage('sentry-long', null);
+    expect(captureExceptionMock).toHaveBeenCalledTimes(1);
+    const [, context] = captureExceptionMock.mock.calls[0];
+    const rawValue = (context as { extra?: { rawValue?: string } }).extra?.rawValue;
+    expect(typeof rawValue).toBe('string');
+    expect((rawValue as string).length).toBeLessThan(longValue.length);
+  });
+
+  it('does not call Sentry when DSN is not set', () => {
+    localStorage.setItem('sentry-off', 'not json');
+    safeParseStorage('sentry-off', null);
+    expect(captureExceptionMock).not.toHaveBeenCalled();
   });
 });

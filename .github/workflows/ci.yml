@@ -30,7 +30,45 @@ jobs:
       - name: Type-check
         run: npx tsc --noEmit
 
+      - name: Cache Next.js build
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.next/cache
+          # Exact hit when neither dependencies nor sources changed
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('package-lock.json') }}-${{ hashFiles('**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx', '**/*.css', '!node_modules/**', '!.next/**') }}
+          # Fall back to a cache from the same lockfile so unchanged modules are reused
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('package-lock.json') }}-
+
       - name: Build
         run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: ""
+
+  size:
+    name: Bundle size
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # Builds this branch and the base branch, comments the size diff on the
+      # PR and fails the job when any .size-limit.cjs budget is exceeded
+      - name: Check bundle size budgets
+        uses: andresz1/size-limit-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          build_script: build
         env:
           NEXT_PUBLIC_API_URL: ""

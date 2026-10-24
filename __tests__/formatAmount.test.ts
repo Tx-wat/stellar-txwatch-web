@@ -37,11 +37,39 @@ describe('formatAmount', () => {
   it('accepts numeric input', () => {
     expect(formatAmount(2.5, 'XLM')).toBe('2.5000000 XLM');
   });
+
+  it('formats a 6-decimal custom token with explicit decimals', () => {
+    expect(formatAmount('1', 'MYTOKEN', false, 6)).toBe('1.000000 MYTOKEN');
+  });
+
+  it('formats a 6-decimal token amount with fractional part', () => {
+    expect(formatAmount('123.456789', 'MYTOKEN', false, 6)).toBe('123.456789 MYTOKEN');
+  });
+
+  it('formats a 6-decimal token from base units', () => {
+    expect(formatAmount('1500000', 'MYTOKEN', true, 6)).toBe('1.500000 MYTOKEN');
+  });
+
+  it('formats a 0-decimal token', () => {
+    expect(formatAmount('42', 'NFT', false, 0)).toBe('42 NFT');
+  });
+
+  it('still formats XLM with explicit 7 decimals', () => {
+    expect(formatAmount('1', 'XLM', false, 7)).toBe('1.0000000 XLM');
+  });
+
+  it('still formats USDC with explicit 2 decimals', () => {
+    expect(formatAmount('150.5', 'USDC', false, 2)).toBe('150.50 USDC');
+  });
 });
 
 describe('formatAmountValue', () => {
   it('omits asset label', () => {
     expect(formatAmountValue('1', 'XLM')).toBe('1.0000000');
+  });
+
+  it('honours explicit decimals for token amounts', () => {
+    expect(formatAmountValue('1', 'MYTOKEN', false, 6)).toBe('1.000000');
   });
 });
 
@@ -67,5 +95,9 @@ describe('formatAmountCompact', () => {
 
   it('converts stroops in compact mode', () => {
     expect(formatAmountCompact('10000000000000', 'XLM', true)).toBe('1.00M XLM');
+  });
+
+  it('formats compact token amounts with explicit decimals', () => {
+    expect(formatAmountCompact('2500000', 'MYTOKEN', true, 6)).toBe('2.50 MYTOKEN');
   });
 });
