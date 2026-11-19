@@ -52,7 +52,7 @@ function exportCSV(alerts: AlertPayload[]) {
   a.href = url
   a.download = 'alerts.csv'
   a.click()
-  URL.revokeObjectURL(url)
+  setTimeout(() => URL.revokeObjectURL(url), 100)
 }
 
 // Fixed row height in px — keep in sync with the row className below.

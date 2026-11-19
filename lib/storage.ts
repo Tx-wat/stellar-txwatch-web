@@ -320,6 +320,14 @@ export function getAlerts(contractId: string): AlertPayload[] {
     (a) => a.contract_id === contractId
   )
 }
+are 
+function deterministicSuffix(contractId: string, sequence: number): string {
+  let h = sequence * 2654435761
+  for (let i = 0; i < contractId.length; i++) {
+    h = Math.imul(h ^ contractId.charCodeAt(i), 2246822519)
+  }
+  return (h >>> 0).toString(16).padStart(8, '0').repeat(2)
+}
 
 function deterministicSuffix(contractId: string, sequence: number): string {
   let h = sequence * 2654435761
