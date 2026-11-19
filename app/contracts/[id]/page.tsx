@@ -4,7 +4,13 @@ import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { WatchedContract, AlertPayload, AlertRule } from '@/types'
 import { getContract, deleteContract, getAlerts, saveContract } from '@/lib/storage'
-import { useAnalytics } from '@/lib/useAnalytics'
+import { truncateId, explorerContractUrl, isValidUrl } from '@/lib/stellar'
+import { formatDate, formatRuleSummary } from '@/lib/format'
+import { useAnalytics } from '@/hooks/useAnalytics'
+import NetworkBadge from '@/components/NetworkBadge'
+import AlertRuleBadge from '@/components/AlertRuleBadge'
+import CopyButton from '@/components/CopyButton'
+import Button from '@/components/ui/Button'
 import WebhookLog from '@/components/WebhookLog'
 import ContractHeader from '@/components/ContractHeader'
 import ContractMetadataCards from '@/components/ContractMetadataCards'
@@ -413,37 +419,37 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
             <CopyButton text={contract.contract_id} />
           </div>
         </div>
-        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-          <button
-            onClick={handleToggleEnabled}
-            className="px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
-          >
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+          <Button onClick={handleToggleEnabled} variant="secondary" size="sm">
             {isPaused ? 'Resume' : 'Pause'}
-          </button>
-          <button
-            onClick={handleDuplicate}
-            className="px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
-          >
+          </Button>
+          <Button onClick={handleDuplicate} variant="secondary" size="sm">
             Duplicate
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={openEditMetadata}
-            className="flex-1 sm:flex-none px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
+            variant="secondary"
+            size="sm"
+            className="flex-1 sm:flex-none"
           >
             Edit Details
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={openEditRules}
-            className="flex-1 sm:flex-none px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
+            variant="secondary"
+            size="sm"
+            className="flex-1 sm:flex-none"
           >
             Edit Rules
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={() => setShowDelete(true)}
-            className="flex-1 sm:flex-none px-3 py-1.5 rounded-lg border border-red-800 hover:border-red-600 text-sm text-red-400 hover:text-red-300 transition-colors"
+            variant="danger"
+            size="sm"
+            className="flex-1 sm:flex-none"
           >
             Delete
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -885,19 +891,23 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
               </div>
             )}
             <div className="flex gap-3">
-              <button
+              <Button
                 onClick={handleDelete}
                 disabled={!canDelete}
-                className="flex-1 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-sm font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-600"
+                variant="danger"
+                size="md"
+                className="flex-1"
               >
                 Delete
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={() => { setShowDelete(false); setDeleteConfirmText('') }}
-                className="flex-1 px-4 py-2 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
+                variant="secondary"
+                size="md"
+                className="flex-1"
               >
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         </div>

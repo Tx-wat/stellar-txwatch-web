@@ -1,4 +1,5 @@
 import { AlertRule } from '@/types'
+export { truncateId as formatId } from '@/lib/stellar'
 
 /**
  * Shared formatting helpers for dates used across the app.

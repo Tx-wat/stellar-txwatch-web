@@ -13,6 +13,11 @@ import ContractCard from '@/components/ContractCard'
 import { WatchedContract } from '@/types'
 
 // next/link needs the App Router context; render a plain anchor instead.
+const mockPush = vi.fn()
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: mockPush, replace: vi.fn() }),
+}))
+
 vi.mock('next/link', () => ({
   default: ({
     href,
@@ -110,5 +115,18 @@ describe('ContractCard', () => {
   it('shows "No alerts yet" when lastAlertTime is undefined', () => {
     render(<ContractCard contract={baseContract} />)
     expect(screen.getByText('No alerts yet')).toBeInTheDocument()
+  })
+
+  it('opens context menu with Compare action and navigates to comparison page', async () => {
+    const { fireEvent } = await import('@testing-library/react')
+    mockPush.mockClear()
+    render(<ContractCard contract={baseContract} />)
+
+    fireEvent.contextMenu(screen.getByText('Treasury Vault'))
+    const compareBtn = screen.getByRole('menuitem', { name: /Compare/i })
+    expect(compareBtn).toBeInTheDocument()
+
+    fireEvent.click(compareBtn)
+    expect(mockPush).toHaveBeenCalledWith('/contracts/compare?a=contract-1')
   })
 })

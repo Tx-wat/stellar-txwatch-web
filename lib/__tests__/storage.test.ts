@@ -371,3 +371,62 @@ describe('pruneOldAlerts', () => {
     expect(alerts).toHaveLength(1);
   });
 });
+
+describe('migrateStorage', () => {
+  it('does not call migration functions when already at current version', () => {
+    localStorageMock.setItem(STORAGE_VERSION_KEY, CURRENT_STORAGE_VERSION.toString());
+    const migration1 = vi.fn();
+    const migration2 = vi.fn();
+    migrateStorage({ 1: migration1, 2: migration2 });
+
+    expect(migration1).not.toHaveBeenCalled();
+    expect(migration2).not.toHaveBeenCalled();
+  });
+
+  it('calls migration for that version exactly once when one migration is needed', () => {
+    localStorageMock.setItem(STORAGE_VERSION_KEY, '0');
+    const migration1 = vi.fn();
+    migrateStorage({ 1: migration1 }, 1);
+
+    expect(migration1).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs multiple migrations in ascending version order', () => {
+    localStorageMock.setItem(STORAGE_VERSION_KEY, '0');
+    const callOrder: number[] = [];
+    const migrations: Record<number, () => void> = {
+      2: vi.fn(() => callOrder.push(2)),
+      1: vi.fn(() => callOrder.push(1)),
+      3: vi.fn(() => callOrder.push(3)),
+    };
+
+    migrateStorage(migrations, 3);
+
+    expect(callOrder).toEqual([1, 2, 3]);
+    expect(migrations[1]).toHaveBeenCalledTimes(1);
+    expect(migrations[2]).toHaveBeenCalledTimes(1);
+    expect(migrations[3]).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips missing migration for a version gracefully', () => {
+    localStorageMock.setItem(STORAGE_VERSION_KEY, '0');
+    const callOrder: number[] = [];
+    const migrations: Record<number, () => void> = {
+      1: vi.fn(() => callOrder.push(1)),
+      // version 2 is missing
+      3: vi.fn(() => callOrder.push(3)),
+    };
+
+    expect(() => migrateStorage(migrations, 3)).not.toThrow();
+    expect(callOrder).toEqual([1, 3]);
+  });
+
+  it('sets storage version to CURRENT_STORAGE_VERSION after migration', () => {
+    localStorageMock.setItem(STORAGE_VERSION_KEY, '0');
+    const migration1 = vi.fn();
+    migrateStorage({ 1: migration1 });
+
+    expect(localStorageMock.getItem(STORAGE_VERSION_KEY)).toBe(CURRENT_STORAGE_VERSION.toString());
+  });
+});
+

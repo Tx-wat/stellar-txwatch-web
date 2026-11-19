@@ -1,6 +1,6 @@
 'use client'
 
-import { useContracts } from '@/lib/useContracts'
+import { useContracts } from '@/hooks/useContracts'
 import SyncIndicator from '@/components/SyncIndicator'
 
 /**

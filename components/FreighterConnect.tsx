@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Networks } from '@stellar/stellar-sdk'
+import { STORAGE_KEYS } from '@/lib/storageKeys'
 
 declare global {
   interface Window {
@@ -25,6 +26,8 @@ declare global {
   }
   return { state: 'unknown', message: raw || 'Connection rejected' }
 }
+
+const WALLET_STORAGE_KEY = STORAGE_KEYS.FREIGHTER_PUBLIC_KEY
 
 interface FreighterConnectProps {
   className?: string

@@ -1,6 +1,6 @@
 'use client'
 
-import { SyncStatus } from '@/lib/useContracts'
+import { SyncStatus } from '@/hooks/useContracts'
 
 interface SyncIndicatorProps {
   status: SyncStatus

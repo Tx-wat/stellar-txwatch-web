@@ -2,13 +2,14 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import Link from 'next/link'
-import { useContracts } from '@/lib/useContracts'
+import { useContracts } from '@/hooks/useContracts'
 import { getAlerts, getContracts, getContracts as getAllContracts, onAlertsChange } from '@/lib/storage'
 import { WatchedContract, AlertPayload } from '@/types'
 import { formatDate, formatAmount } from '@/lib/format'
 import { truncateId, explorerTxUrl } from '@/lib/stellar'
 import { Network } from '@/types'
 import NetworkBadge from '@/components/NetworkBadge'
+import { STORAGE_KEYS } from '@/lib/storageKeys'
 
 export default function GlobalAlertsPage() {
   const { contracts } = useContracts()
@@ -246,7 +247,7 @@ export default function GlobalAlertsPage() {
 function loadAllAlerts(): AlertPayload[] {
   if (typeof window === 'undefined') return []
   try {
-    return JSON.parse(window.localStorage.getItem('txwatch_alerts') ?? '[]')
+    return JSON.parse(window.localStorage.getItem(STORAGE_KEYS.ALERTS) ?? '[]')
   } catch {
     return []
   }

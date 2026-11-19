@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { AlertRule, AlertRuleType } from '@/types'
 import { formatRuleSummary } from '@/lib/format'
 import { HORIZON_URLS } from '@/lib/stellar'
+import { STORAGE_KEYS } from '@/lib/storageKeys'
 import AlertRuleBadge from './AlertRuleBadge'
 import {
   getRuleTemplates,
@@ -28,7 +29,7 @@ const RULE_EXAMPLES: Record<AlertRuleType, string> = {
   'TransactionFailed': 'Alert on failed transactions',
 }
 
-const TEMPLATE_STORAGE_KEY = 'txwatch_rule_templates'
+const TEMPLATE_STORAGE_KEY = STORAGE_KEYS.RULE_TEMPLATES
 
 interface RuleTemplate {
   id: string

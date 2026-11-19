@@ -1,7 +1,15 @@
 import type { WatchedContract } from '@/types'
+import { STORAGE_KEYS } from '@/lib/storageKeys';
 
 /** The snapshot file format version. Increment when the schema changes. */
 const SNAPSHOT_VERSION = 1 as const
+
+export interface ContractExportSnapshot {
+  version: typeof SNAPSHOT_VERSION;
+  exportedAt: string;
+  count: number;
+  contracts: StoredContractExport[];
+}
 
 export interface StoredContractExport {
   id: string;
@@ -44,7 +52,7 @@ function readContractsFromStorage(storageKey: string): StoredContractExport[] {
 }
 
 export function buildContractSnapshot(
-  storageKey = CONTRACTS_STORAGE_KEY,
+  storageKey: string = STORAGE_KEYS.CONTRACTS,
 ): ContractExportSnapshot {
   const contracts = readContractsFromStorage(storageKey).map(normalizeContract);
   return {

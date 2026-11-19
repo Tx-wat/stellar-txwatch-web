@@ -7,9 +7,21 @@ export async function apiFetch<T>(
   path: string,
   options?: RequestInit
 ): Promise<T> {
-  const headers = new Headers(options?.headers)
-  if (!headers.has('content-type')) {
-    headers.set('Content-Type', 'application/json')
+  const headersRecord: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+  if (options?.headers) {
+    if (options.headers instanceof Headers) {
+      options.headers.forEach((value, key) => {
+        headersRecord[key] = value
+      })
+    } else if (Array.isArray(options.headers)) {
+      options.headers.forEach(([key, value]) => {
+        headersRecord[key] = value
+      })
+    } else {
+      Object.assign(headersRecord, options.headers)
+    }
   }
   for (const [name, value] of Object.entries(getAuthHeaders())) {
     headers.set(name, value)
@@ -17,7 +29,7 @@ export async function apiFetch<T>(
 
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
-    headers,
+    headers: headersRecord,
   })
 
   if (!res.ok) {

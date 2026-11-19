@@ -5,6 +5,7 @@ import {
   validateSnapshotContracts,
   restoreContractSnapshot,
 } from '../exportStorage';
+import { STORAGE_KEYS } from '../storageKeys';
 
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
@@ -17,8 +18,7 @@ const localStorageMock = (() => {
 })();
 Object.defineProperty(global, 'localStorage', { value: localStorageMock });
 
-// Use the real contracts key (same as storage.ts)
-const KEY = 'txwatch_contracts';
+const KEY = STORAGE_KEYS.CONTRACTS;
 const sample = [
   {
     id: 'c1',

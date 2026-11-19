@@ -23,7 +23,7 @@ describe('isValidContractId', () => {
   })
 
   it('rejects wrong prefix', () => {
-    expect(isValidContractId('GBCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVWXYZ2345')).toBe(
+    expect(isValidContractId('GBCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVWX')).toBe(
       false
     )
   })

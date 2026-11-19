@@ -1,10 +1,19 @@
 'use client'
 
+import { useState, useRef, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { AlertRule, Network, WatchedContract } from '@/types'
+import { isValidContractId, isValidUrl, isValidAccountId } from '@/lib/stellar'
+import { saveContract, getContracts } from '@/lib/storage'
+import { STORAGE_KEYS } from '@/lib/storageKeys'
+import { sendTestWebhook } from '@/lib/api'
+import { useFreighterConnection } from '@/hooks/useFreighterConnection'
 import RuleBuilder from '@/components/RuleBuilder'
 import FreighterConnect from '@/components/FreighterConnect'
 import Toast from '@/components/Toast'
+import Button from '@/components/ui/Button'
 
-const DRAFT_STORAGE_KEY = 'txwatch_new_contract_draft'
+const DRAFT_STORAGE_KEY = STORAGE_KEYS.NEW_CONTRACT_DRAFT
 
 interface ContractDraft {
   label: string
@@ -12,6 +21,7 @@ interface ContractDraft {
   network: Network
   webhookUrl: string
   rules: AlertRule[]
+  group?: string
 }
 
 interface FormErrors {
@@ -25,10 +35,56 @@ interface FormErrors {
   signers?: string
 }
 
-const STELLAR_PUBLIC_KEY_REGEX = /^G[A-Z2-7]{55}$/
+const STELLAR_PUBLIC_KEY_FORMAT_REGEX = /^G[A-Z2-7]{55}$/
 
-function isValidPublicKey(key: string): boolean {
-  return STELLAR_PUBLIC_KEY_REGEX.test(key)
+function validateSignerPublicKey(key: string): string | null {
+  if (!STELLAR_PUBLIC_KEY_FORMAT_REGEX.test(key)) {
+    return 'Must be a valid Stellar public key (starts with G, 56 chars)'
+  }
+  if (!isValidAccountId(key)) {
+    return 'Invalid Stellar public key: checksum does not verify'
+  }
+  return null
+}
+
+interface ImportRowError {
+  line: number
+  message: string
+}
+
+interface ImportSummary {
+  imported: number
+  skipped: number
+  errors: ImportRowError[]
+}
+
+const VALID_NETWORKS: Network[] = ['testnet', 'mainnet', 'futurenet']
+const CSV_HEADER = ['contract_id', 'label', 'network', 'webhook_url']
+
+function parseCsvLine(line: string): string[] {
+  const cells: string[] = []
+  let current = ''
+  let inQuotes = false
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (inQuotes) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') { current += '"'; i++ }
+        else inQuotes = false
+      } else {
+        current += ch
+      }
+    } else if (ch === '"') {
+      inQuotes = true
+    } else if (ch === ',') {
+      cells.push(current)
+      current = ''
+    } else {
+      current += ch
+    }
+  }
+  cells.push(current)
+  return cells.map((c) => c.trim())
 }
 
 export default function NewContractPage() {
@@ -38,6 +94,7 @@ export default function NewContractPage() {
   const { contracts, add: addContract } = useContracts()
   const [networkWarning, setNetworkWarning] = useState<string | null>(null)
   const [label, setLabel] = useState('')
+  const [group, setGroup] = useState('')
   const [contractId, setContractId] = useState('')
   const [network, setNetwork] = useState<Network>('testnet')
   const [webhookUrl, setWebhookUrl] = useState('')
@@ -86,6 +143,7 @@ export default function NewContractPage() {
       if (raw) {
         const draft = JSON.parse(raw) as Partial<ContractDraft>
         if (typeof draft.label === 'string') setLabel(draft.label)
+        if (typeof draft.group === 'string') setGroup(draft.group)
         if (typeof draft.contractId === 'string') setContractId(draft.contractId)
         if (draft.network === 'testnet' || draft.network === 'mainnet' || draft.network === 'futurenet') {
           setNetwork(draft.network)
@@ -108,7 +166,7 @@ export default function NewContractPage() {
       try {
         sessionStorage.setItem(
           DRAFT_STORAGE_KEY,
-          JSON.stringify({ label, contractId, network, webhookUrl, rules })
+          JSON.stringify({ label, group, contractId, network, webhookUrl, rules })
         )
       } catch {
         // ignore storage errors
@@ -117,7 +175,7 @@ export default function NewContractPage() {
     return () => {
       if (draftTimerRef.current) clearTimeout(draftTimerRef.current)
     }
-  }, [label, contractId, network, webhookUrl, rules])
+  }, [label, group, contractId, network, webhookUrl, rules])
 
   function clearDraft() {
     if (draftTimerRef.current) clearTimeout(draftTimerRef.current)
@@ -131,6 +189,7 @@ export default function NewContractPage() {
   function handleDiscardDraft() {
     clearDraft()
     setLabel('')
+    setGroup('')
     setContractId('')
     setNetwork('testnet')
     setWebhookUrl('')
@@ -158,8 +217,9 @@ export default function NewContractPage() {
   function addSigner() {
     const trimmed = signerInput.trim()
     if (!trimmed) return
-    if (!isValidPublicKey(trimmed)) {
-      setErrors((prev) => ({ ...prev, signers: 'Must be a valid Stellar public key (starts with G, 56 chars)' }))
+    const signerError = validateSignerPublicKey(trimmed)
+    if (signerError) {
+      setErrors((prev) => ({ ...prev, signers: signerError }))
       return
     }
     if (signers.includes(trimmed)) {
@@ -237,6 +297,7 @@ export default function NewContractPage() {
     const contract: WatchedContract = {
       id: crypto.randomUUID(),
       label: label.trim(),
+      group: group.trim() || undefined,
       contract_id: contractId.trim(),
       network,
       rules,
@@ -247,7 +308,7 @@ export default function NewContractPage() {
     }
     await addContract(contract)
     try {
-      sessionStorage.setItem('txwatch_last_created_contract', contract.id)
+      sessionStorage.setItem(STORAGE_KEYS.LAST_CREATED_CONTRACT, contract.id)
     } catch {
       // ignore storage errors
     }
@@ -294,6 +355,103 @@ export default function NewContractPage() {
       if (err instanceof Error && err.name === 'AbortError') return
       setTestStatus('error')
       setTestError(err instanceof Error ? err.message : 'Request failed')
+    }
+  }
+
+  function handleImportClick() {
+    setImportSummary(null)
+    fileInputRef.current?.click()
+  }
+
+  async function handleCsvFile(file: File) {
+    if (!isConnected) {
+      setErrors((prev) => ({ ...prev, wallet: 'Connect your Freighter wallet to import contracts' }))
+      return
+    }
+    setImporting(true)
+    setImportSummary(null)
+    try {
+      const text = await file.text()
+      const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0)
+      const rowErrors: ImportRowError[] = []
+      let imported = 0
+      let skipped = 0
+
+      if (lines.length === 0) {
+        setImportSummary({ imported: 0, skipped: 0, errors: [{ line: 0, message: 'CSV file is empty' }] })
+        return
+      }
+
+      const header = parseCsvLine(lines[0]).map((h) => h.toLowerCase())
+      const hasHeader = CSV_HEADER.every((col) => header.includes(col))
+      const colIndex: Record<string, number> = {}
+      if (hasHeader) {
+        CSV_HEADER.forEach((col) => { colIndex[col] = header.indexOf(col) })
+      } else {
+        CSV_HEADER.forEach((col, i) => { colIndex[col] = i })
+      }
+
+      const existing = getContracts()
+      const seen = new Set(existing.map((c) => `${c.contract_id}:${c.network}`))
+      const dataLines = hasHeader ? lines.slice(1) : lines
+
+      dataLines.forEach((line, idx) => {
+        const lineNumber = hasHeader ? idx + 2 : idx + 1
+        const cells = parseCsvLine(line)
+        const get = (col: string) => (cells[colIndex[col]] ?? '').trim()
+        const rowContractId = get('contract_id')
+        const rowLabel = get('label')
+        const rowNetwork = get('network').toLowerCase()
+        const rowWebhookUrl = get('webhook_url')
+
+        const rowIssues: string[] = []
+        if (!rowContractId) rowIssues.push('contract_id is required')
+        else if (!isValidContractId(rowContractId)) rowIssues.push('invalid contract_id')
+        if (!rowLabel) rowIssues.push('label is required')
+        if (!rowNetwork) rowIssues.push('network is required')
+        else if (!VALID_NETWORKS.includes(rowNetwork as Network)) rowIssues.push(`invalid network "${rowNetwork}"`)
+        if (!rowWebhookUrl) rowIssues.push('webhook_url is required')
+        else if (!isValidUrl(rowWebhookUrl)) rowIssues.push('invalid webhook_url')
+
+        if (rowIssues.length === 0) {
+          const key = `${rowContractId}:${rowNetwork}`
+          if (seen.has(key)) rowIssues.push('duplicate contract already registered')
+        }
+
+        if (rowIssues.length > 0) {
+          skipped++
+          rowErrors.push({ line: lineNumber, message: rowIssues.join('; ') })
+          return
+        }
+
+        const contract: WatchedContract = {
+          id: crypto.randomUUID(),
+          label: rowLabel,
+          contract_id: rowContractId,
+          network: rowNetwork as Network,
+          rules: [],
+          webhook_url: rowWebhookUrl,
+          created_at: Date.now(),
+        }
+        saveContract(contract)
+        seen.add(`${rowContractId}:${rowNetwork}`)
+        imported++
+      })
+
+      setImportSummary({ imported, skipped, errors: rowErrors })
+      setToast({
+        message: `${imported} contract${imported === 1 ? '' : 's'} imported, ${skipped} skipped`,
+        type: skipped > 0 ? 'error' : 'success',
+      })
+    } catch (err) {
+      setImportSummary({
+        imported: 0,
+        skipped: 0,
+        errors: [{ line: 0, message: err instanceof Error ? err.message : 'Failed to read CSV file' }],
+      })
+    } finally {
+      setImporting(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
@@ -359,6 +517,26 @@ export default function NewContractPage() {
           </div>
         </div>
 
+        {/* Group */}
+        <div>
+          <label className="block text-sm font-medium text-zinc-300 mb-1.5">Group (Optional)</label>
+          <input
+            type="text"
+            list="contract-group-options"
+            placeholder="e.g. Production"
+            value={group}
+            onChange={(e) => setGroup(e.target.value)}
+            maxLength={50}
+            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
+          />
+          <datalist id="contract-group-options">
+            {existingGroups.map((g) => (
+              <option key={g} value={g} />
+            ))}
+          </datalist>
+          <p className="mt-1.5 text-xs text-zinc-400">Organise contracts into named groups. Existing groups are suggested.</p>
+        </div>
+
         {/* Contract ID */}
         <div>
           <label className="block text-sm font-medium text-zinc-300 mb-1.5">Contract ID</label>
@@ -420,20 +598,15 @@ export default function NewContractPage() {
               onChange={(e) => {              setWebhookUrl(e.target.value); setErrors((prev) => ({ ...prev, webhook_url: undefined })); setTestStatus('idle'); setTestStatusCode(null) }}
               className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
             />
-            <button
-              type="button"
+            <Button
               onClick={handleTestWebhook}
-              disabled={testStatus === 'sending'}
-              className="inline-flex items-center gap-2 px-3 py-2.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors disabled:opacity-50 whitespace-nowrap"
+              loading={testStatus === 'sending'}
+              variant="secondary"
+              size="lg"
+              className="whitespace-nowrap"
             >
-              {testStatus === 'sending' && (
-                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                </svg>
-              )}
               {testStatus === 'sending' ? 'Sending…' : testStatus === 'ok' ? `${testStatusCode} OK` : testStatus === 'error' ? `${testStatusCode ?? 'ERR'} Failed` : 'Test'}
-            </button>
+            </Button>
           </div>
           <p className="mt-1.5 text-xs text-zinc-400">HTTP and HTTPS are supported. Example: <span className="font-mono">https://api.example.com/alerts</span></p>
           {errors.webhook_url && <p className="mt-1 text-xs text-red-400">{errors.webhook_url}</p>}
@@ -489,24 +662,24 @@ export default function NewContractPage() {
 
         {/* Actions */}
         <div className="flex items-center gap-3 pt-2">
-          <button
-            type="button"
+          <Button
             onClick={handleSave}
-            disabled={saving}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-white transition-colors"
+            loading={saving}
+            variant="primary"
+            size="lg"
           >
             {saving ? 'Saving...' : 'Save Contract'}
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
             onClick={() => requestNavigation(null)}
-            className="px-4 py-2.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
+            variant="ghost"
+            size="lg"
           >
             Cancel
-          </button>
+          </Button>
         </div>
       </div>
-    </div>
+      </div>
     </>
   )
 }

@@ -1,16 +1,67 @@
 import { z } from 'zod'
 import { WatchedContract, AlertPayload, Network } from '@/types'
+import { STORAGE_KEYS } from '@/lib/storageKeys'
 import {
   STORAGE_QUOTA_BYTES,
   MAX_ALERTS_PER_CONTRACT,
   ALERTS_RETENTION_DAYS,
 } from './constants'
 
-const CONTRACTS_KEY = 'txwatch_contracts'
-const ALERTS_KEY = 'txwatch_alerts'
-const SETTINGS_KEY = 'txwatch_settings'
-const STORAGE_VERSION_KEY = 'txwatch_storage_version'
+const CONTRACTS_KEY = STORAGE_KEYS.CONTRACTS
+const ALERTS_KEY = STORAGE_KEYS.ALERTS
+const SETTINGS_KEY = STORAGE_KEYS.SETTINGS
+const STORAGE_VERSION_KEY = STORAGE_KEYS.STORAGE_VERSION
 const CURRENT_STORAGE_VERSION = 2
+
+/**
+ * Same-tab pub/sub registry. The browser `storage` event only fires in *other*
+ * tabs/windows, so writes made in the current tab must notify listeners
+ * directly. Keyed by storage key.
+ */
+const changeListeners = new Map<string, Set<() => void>>()
+
+function notify(key: string): void {
+  const listeners = changeListeners.get(key)
+  if (!listeners) return
+  for (const listener of Array.from(listeners)) {
+    try {
+      listener()
+    } catch {
+      // A misbehaving listener must not break the write path or other listeners.
+    }
+  }
+}
+
+function subscribe(key: string, callback: () => void): () => void {
+  let listeners = changeListeners.get(key)
+  if (!listeners) {
+    listeners = new Set()
+    changeListeners.set(key, listeners)
+  }
+  listeners.add(callback)
+  return () => {
+    const current = changeListeners.get(key)
+    if (!current) return
+    current.delete(callback)
+    if (current.size === 0) {
+      changeListeners.delete(key)
+    }
+  }
+}
+
+function onStorageKeyChange(key: string, callback: () => void): () => void {
+  const handler = (e: StorageEvent) => {
+    if (e.key === key) {
+      callback()
+    }
+  }
+  window.addEventListener('storage', handler)
+  const unsubscribe = subscribe(key, callback)
+  return () => {
+    window.removeEventListener('storage', handler)
+    unsubscribe()
+  }
+}
 
 function getStorage(): Storage | undefined {
   if (typeof window !== 'undefined') return window.localStorage
@@ -125,14 +176,17 @@ function setStorageVersion(version: number): void {
   storage.setItem(STORAGE_VERSION_KEY, version.toString())
 }
 
-export function migrateStorage(migrations: Record<number, () => void>): void {
+export function migrateStorage(
+  migrations: Record<number, () => void>,
+  targetVersion: number = CURRENT_STORAGE_VERSION
+): void {
   const currentVersion = getStorageVersion()
-  for (let v = currentVersion + 1; v <= CURRENT_STORAGE_VERSION; v++) {
+  for (let v = currentVersion + 1; v <= targetVersion; v++) {
     if (migrations[v]) {
       migrations[v]()
     }
   }
-  setStorageVersion(CURRENT_STORAGE_VERSION)
+  setStorageVersion(targetVersion)
 }
 
 /**
@@ -212,13 +266,7 @@ export function saveSettings(settings: Partial<AppSettings>): AppSettings {
 }
 
 export function onSettingsChange(callback: () => void): () => void {
-  const handler = (e: StorageEvent) => {
-    if (e.key === SETTINGS_KEY) {
-      callback()
-    }
-  }
-  window.addEventListener('storage', handler)
-  return () => window.removeEventListener('storage', handler)
+  return onStorageKeyChange(SETTINGS_KEY, callback)
 }
 
 export function getContracts(): WatchedContract[] {
@@ -260,11 +308,13 @@ export function saveContract(contract: WatchedContract): void {
   const contracts = getContracts().filter((c) => c.id !== contract.id)
   const updated: WatchedContract = { ...contract, updated_at: Date.now() }
   save(CONTRACTS_KEY, [...contracts, updated])
+  notify(CONTRACTS_KEY)
 }
 
 export function deleteContract(id: string): void {
   const contract = getContract(id)
   save(CONTRACTS_KEY, getContracts().filter((c) => c.id !== id))
+  notify(CONTRACTS_KEY)
   if (contract) {
     deleteAlerts(contract.contract_id)
   }
@@ -273,11 +323,13 @@ export function deleteContract(id: string): void {
 export function deleteAlerts(contractId: string): void {
   const alerts = load<AlertPayload>(ALERTS_KEY)
   save(ALERTS_KEY, alerts.filter((a) => a.contract_id !== contractId))
+  notify(ALERTS_KEY)
 }
 
 export function deleteAlert(alertId: string): void {
   const alerts = load<AlertPayload & { id?: string }>(ALERTS_KEY)
   save(ALERTS_KEY, alerts.filter((a) => a.id !== alertId))
+  notify(ALERTS_KEY)
 }
 
 /** Most recent alert timestamp per contract_id, computed in a single pass. */
@@ -316,6 +368,22 @@ export function getAlerts(contractId: string): AlertPayload[] {
     (a) => a.contract_id === contractId
   )
 }
+are 
+function deterministicSuffix(contractId: string, sequence: number): string {
+  let h = sequence * 2654435761
+  for (let i = 0; i < contractId.length; i++) {
+    h = Math.imul(h ^ contractId.charCodeAt(i), 2246822519)
+  }
+  return (h >>> 0).toString(16).padStart(8, '0').repeat(2)
+}
+
+function deterministicSuffix(contractId: string, sequence: number): string {
+  let h = sequence * 2654435761
+  for (let i = 0; i < contractId.length; i++) {
+    h = Math.imul(h ^ contractId.charCodeAt(i), 2246822519)
+  }
+  return (h >>> 0).toString(16).padStart(8, '0').repeat(2)
+}
 
 export function seedMockAlerts(
   contractId: string,
@@ -338,7 +406,7 @@ export function seedMockAlerts(
       contract_id: contractId,
       network,
       rule_triggered: 'AnyTransaction',
-      transaction_hash: `${hash}-${Math.random().toString(16).slice(2, 18)}`,
+      transaction_hash: `${hash}-${deterministicSuffix(contractId, sequence)}`,
       amount: 10 + index * 5,
       timestamp: now - index * 15 * 60 * 1000,
       horizon_link: `https://${horizonHost}/transactions/${hash}`,
@@ -346,6 +414,7 @@ export function seedMockAlerts(
   })
 
   save(ALERTS_KEY, [...alerts, ...load(ALERTS_KEY, AlertPayloadSchema)])
+  notify(ALERTS_KEY)
 }
 
 export function addAlert(alert: AlertPayload | (AlertPayload & { contractId?: string; id?: string })): void {
@@ -359,11 +428,7 @@ export function addAlert(alert: AlertPayload | (AlertPayload & { contractId?: st
     counts[a.contract_id] = (counts[a.contract_id] ?? 0) + 1
     return counts[a.contract_id] <= MAX_ALERTS_PER_CONTRACT
   }))
-}
-
-export function deleteAlertsByContractId(contractId: string): void {
-  const alerts = load<AlertPayload>(ALERTS_KEY)
-  save(ALERTS_KEY, alerts.filter((a) => a.contract_id !== contractId))
+  notify(ALERTS_KEY)
 }
 
 export const saveAlert = addAlert
@@ -421,33 +486,21 @@ export function getDailyAlertCounts(
 export const getAlertCountsByDay = getDailyAlertCounts
 
 export function onAlertsChange(callback: () => void): () => void {
-  const handler = (e: StorageEvent) => {
-    if (e.key === ALERTS_KEY) {
-      callback()
-    }
-  }
-  window.addEventListener('storage', handler)
-  return () => window.removeEventListener('storage', handler)
+  return onStorageKeyChange(ALERTS_KEY, callback)
 }
 
 export function onContractsChange(callback: () => void): () => void {
-  const handler = (e: StorageEvent) => {
-    if (e.key === CONTRACTS_KEY) {
-      callback()
-    }
-  }
-  window.addEventListener('storage', handler)
-  return () => window.removeEventListener('storage', handler)
+  return onStorageKeyChange(CONTRACTS_KEY, callback)
 }
 
 /**
  * API key management for txwatch-core backend authentication.
  *
- * The key is stored in localStorage under `txwatch_api_key` and sent as a
+ * The key is stored in localStorage under `STORAGE_KEYS.API_KEY` and sent as a
  * Bearer token on requests to the txwatch-core API when
  * `NEXT_PUBLIC_API_URL` is configured.
  */
-const API_KEY_STORAGE_KEY = 'txwatch_api_key'
+const API_KEY_STORAGE_KEY = STORAGE_KEYS.API_KEY
 
 export function getApiKey(): string | null {
   const storage = getStorage()

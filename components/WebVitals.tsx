@@ -1,7 +1,7 @@
 'use client'
 
 import { useReportWebVitals } from 'next/web-vitals'
-import { useAnalytics } from '@/lib/useAnalytics'
+import { useAnalytics } from '@/hooks/useAnalytics'
 
 const ANALYTICS_ENABLED = process.env.NEXT_PUBLIC_ANALYTICS_ENABLED === 'true'
 

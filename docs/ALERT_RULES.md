@@ -20,11 +20,18 @@ Every rule is an `AlertRule` object with a `type` and the fields that type needs
 ```ts
 interface AlertRule {
   type: 'AnyTransaction' | 'LargeTransfer' | 'FunctionCalled' | 'AdminFunctionCalled' | 'TransactionFailed'
-  threshold_xlm?: number    // LargeTransfer only
+  name?: string             // Optional user-supplied rule name, shown in the dashboard and CSV exports
+  threshold_xlm?: number    // LargeTransfer only (XLM-denominated form)
+  asset?: string            // LargeTransfer only (token-denominated form)
+  threshold?: number        // LargeTransfer only (token-denominated form, paired with `asset`)
   function_name?: string    // FunctionCalled only
   function_names?: string[] // AdminFunctionCalled only
 }
 ```
+
+`name` is optional and purely cosmetic: it labels the rule in the dashboard (`RuleBuilder.tsx`, `ActiveRulesList.tsx`) and in the webhook log's CSV export. It does not affect matching.
+
+`LargeTransfer` supports two mutually exclusive forms: the XLM-denominated form uses `threshold_xlm`, while the token-denominated form uses `asset` plus `threshold`. See [LargeTransfer](#largetransfer) for details.
 
 Fields that don't belong to the selected type are dropped when you switch types in the RuleBuilder.
 
@@ -79,25 +86,39 @@ Every webhook carries the same `AlertPayload` envelope. `rule_triggered` holds t
 
 ## LargeTransfer
 
-**When it fires:** when a transaction moves an amount **greater than or equal to** `threshold_xlm` through the watched contract. The dashboard shows the rule as `>= <threshold> XLM`.
+**When it fires:** when a transaction moves an amount **greater than or equal to** the configured threshold through the watched contract. The dashboard shows the rule as `>= <threshold> XLM` for the XLM-denominated form, or `>= <threshold> <asset>` for the token-denominated form.
+
+A `LargeTransfer` rule comes in one of two mutually exclusive forms:
+
+- **XLM-denominated:** set `threshold_xlm`. The amount is compared in XLM.
+- **Token-denominated:** set `asset` (the token identifier, e.g. a Soroban contract address or asset code) and `threshold`. The amount is compared in units of that asset.
 
 **Fields:**
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `threshold_xlm` | number | Yes | Minimum transfer amount, in XLM, that triggers the alert |
+| `threshold_xlm` | number | Yes (XLM form) | Minimum transfer amount, in XLM, that triggers the alert |
+| `asset` | string | Yes (token form) | Token the threshold applies to. Mutually exclusive with `threshold_xlm` |
+| `threshold` | number | Yes (token form) | Minimum transfer amount, in units of `asset`, that triggers the alert. Paired with `asset` |
 
 **Validation:**
 
-- Must be a number. Empty or non-numeric input is rejected with *"Enter a valid XLM threshold"*.
-- Must be greater than `0`. Entering `0` clears the field, so it is also rejected as invalid.
+- The threshold (`threshold_xlm` or `threshold`) must be a number. Empty or non-numeric input is rejected with *"Enter a valid XLM threshold"* (or the asset equivalent for the token form).
+- The threshold must be greater than `0`. Entering `0` clears the field, so it is also rejected as invalid.
 - Decimals are allowed (`step="any"`). There is no upper bound.
-- Two `LargeTransfer` rules with the same threshold count as duplicates. Rules with different thresholds can coexist.
+- In the token-denominated form, `asset` must not be empty.
+- Two `LargeTransfer` rules with the same threshold (and, for the token form, the same `asset`) count as duplicates. Rules with different thresholds or assets can coexist.
 
-**Example rule:**
+**Example rule (XLM-denominated):**
 
 ```json
 { "type": "LargeTransfer", "threshold_xlm": 10000 }
+```
+
+**Example rule (token-denominated):**
+
+```json
+{ "type": "LargeTransfer", "asset": "USDC", "threshold": 5000 }
 ```
 
 **Example payload:**
@@ -275,7 +296,9 @@ The **Test** button sends a mock payload with `rule_triggered: "AnyTransaction"`
 
 | Rule type | Field | Constraint | Error shown |
 |---|---|---|---|
-| `LargeTransfer` | `threshold_xlm` | Number, `> 0` | *Enter a valid XLM threshold* / *Threshold must be greater than 0* |
+| `LargeTransfer` | `threshold_xlm` | Number, `> 0` (XLM form) | *Enter a valid XLM threshold* / *Threshold must be greater than 0* |
+| `LargeTransfer` | `asset` | Non-empty (token form) | *Enter an asset* |
+| `LargeTransfer` | `threshold` | Number, `> 0` (token form) | *Enter a valid threshold* / *Threshold must be greater than 0* |
 | `FunctionCalled` | `function_name` | Non-empty, `^[a-zA-Z_][a-zA-Z0-9_]*$` | *Enter a function name* / *Function name must start with a letter or underscore…* |
 | `AdminFunctionCalled` | `function_names` | At least one non-empty name | *Enter at least one function name* |
 | Any | (whole rule) | No exact duplicate on add | *This rule already exists* |

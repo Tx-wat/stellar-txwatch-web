@@ -65,8 +65,12 @@ app/
     new/page.tsx              # Add contract form + webhook test
     [id]/page.tsx             # Contract detail + alert history
 components/
+  ActiveRulesList.tsx         # Active alert rules on the detail page
+  AlertHeatmap.tsx            # Contract activity heatmap
   AlertRuleBadge.tsx          # Rule type display badge
+  BulkActionBar.tsx           # Contract list bulk actions
   ContractCard.tsx            # Contract summary card
+  ContractListToolbar.tsx     # Contract list search/filter/sort controls
   CopyButton.tsx              # Clipboard copy button
   EmptyState.tsx              # Empty list placeholder
   FreighterConnect.tsx        # Wallet connection button
@@ -80,12 +84,24 @@ components/
   WalletStatusBadge.tsx       # Freighter connected/disconnected indicator
   WebhookLog.tsx              # Webhook delivery history table
   WebhookLogCard.tsx          # Single webhook delivery entry card
+  ui/
+    Button.tsx                # Shared button with variants
 docs/
   FREIGHTER_INTEGRATION.md    # Freighter wallet integration guide
   MOCK_API_STRATEGY.md        # Mock vs. real API mode strategy
   images/                     # README screenshots and demo GIF
 hooks/
+  useAlerts.ts                # Alert history per contract, today count, last alert times
+  useAlertsWebSocket.ts       # Live alert stream into storage
+  useAnalytics.ts             # No-op analytics hook (trackEvent stub)
+  useContractListState.ts     # Contract list search/filter/sort/pagination/selection
+  useContracts.ts             # Contract state
+  useFreighter.ts             # Freighter connection state + actions
+  useFreighterConnection.ts   # Freighter connection check with loading state
+  useNewContractForm.ts       # Add-contract form state and submission
   useSortedLog.ts             # Sort log entries by timestamp with a toggle
+  useWallet.ts                # Minimal connected wallet public key hook
+  useWebSocket.ts             # Reconnecting WebSocket wrapper
 lib/
   api.ts                      # Fetch wrapper + test webhook
   contractSort.ts             # Deterministic contract ordering (network, label, id)
@@ -94,13 +110,8 @@ lib/
   formatAmount.ts             # Asset amount formatting (XLM, USDC, stroops)
   stellar.ts                  # Horizon/Soroban URLs, validation, explorer links
   storage.ts                  # localStorage contract and alert registry
+  storageKeys.ts              # All browser storage key names
   storageLogger.ts            # Safe JSON parsing with storage error hooks
-  useAlerts.ts                # React hook for a contract's alert history
-  useAnalytics.ts             # No-op analytics hook (trackEvent stub)
-  useContracts.ts             # React hook for contract state
-  useFreighter.ts             # Freighter connection state + actions
-  useFreighterConnection.ts   # Freighter connection check with loading state
-  useWallet.ts                # Minimal connected wallet public key hook
   __tests__/                  # Unit tests for lib modules
 types/
   index.ts                    # Shared types (mirrors core Rust structs)

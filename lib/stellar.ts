@@ -115,11 +115,29 @@ export function explorerContractUrl(
   }
 }
 
+/**
+ * Abbreviate a long identifier for display.
+ *
+ * @param id - Full identifier string.
+ * @param chars - Number of leading/trailing characters to keep (default `8`).
+ * @returns The identifier unchanged when short enough, otherwise
+ *   `${first}...${last}`.
+ */
 export function truncateId(id: string, chars = 8): string {
   if (id.length <= chars * 2 + 3) return id
   return `${id.slice(0, chars)}...${id.slice(-chars)}`
 }
 
+/**
+ * Validate a Soroban contract identifier.
+ *
+ * @param id - Candidate contract identifier.
+ * @returns `true` for a 56-character `C` + base32 (A-Z, 2-7) address.
+ * @example
+ *   isValidContractId('CCJZ5D3C...'); // true (valid C-address)
+ *   isValidContractId('GABC...'); // false (G-address)
+ *   isValidContractId('cabc...'); // false (lowercase invalid)
+ */
 export function isValidContractId(id: string): boolean {
   try {
     return StrKey.isValidContract(id)

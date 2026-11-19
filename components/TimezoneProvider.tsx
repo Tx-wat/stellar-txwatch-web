@@ -1,10 +1,11 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { STORAGE_KEYS } from '@/lib/storageKeys'
 
 export type TimezoneMode = 'local' | 'utc'
 
-const STORAGE_KEY = 'txwatch_timezone_mode'
+const STORAGE_KEY = STORAGE_KEYS.TIMEZONE_MODE
 
 interface TimezoneContextValue {
   mode: TimezoneMode

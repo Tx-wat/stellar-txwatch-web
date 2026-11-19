@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-10-20
 - **Deciders:** stellar-txwatch-web maintainers
-- **Related:** [ADR-0001](./0001-localstorage-first-storage.md), [docs/FREIGHTER_INTEGRATION.md](../FREIGHTER_INTEGRATION.md), `lib/useFreighter.ts`, `components/FreighterConnect.tsx`
+- **Related:** [ADR-0001](./0001-localstorage-first-storage.md), [docs/FREIGHTER_INTEGRATION.md](../FREIGHTER_INTEGRATION.md), `hooks/useFreighter.ts`, `components/FreighterConnect.tsx`
 
 ## Context and Problem Statement
 
@@ -28,7 +28,7 @@ Which wallet or wallets should the dashboard support?
 
 Chosen option: **1. Freighter only**. Freighter is maintained by the Stellar Development Foundation, has first-class Soroban and Futurenet support, and is the wallet the Soroban docs and tooling assume. A single wallet keeps connection, network detection and error handling simple.
 
-- `lib/useFreighter.ts` declares the `window.freighter` interface (`isConnected`, `getPublicKey`, `getNetwork`, `signTransaction`) and exposes connection state.
+- `hooks/useFreighter.ts` declares the `window.freighter` interface (`isConnected`, `getPublicKey`, `getNetwork`, `signTransaction`) and exposes connection state.
 - `components/FreighterConnect.tsx` and `WalletStatusBadge.tsx` are the only UI that knows about the wallet.
 - If the extension is missing, the user is sent to [freighter.app](https://www.freighter.app/) with a clear error.
 
