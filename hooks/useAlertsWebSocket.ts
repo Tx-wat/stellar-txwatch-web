@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useCallback } from 'react'
-import { addAlert } from '@/lib/storage'
+import { useStorageAdapter } from '@/lib/StorageContext'
 import type { AlertPayload } from '@/types'
 
 /**
@@ -13,6 +13,7 @@ import type { AlertPayload } from '@/types'
  * updates are desired; `enabled` gates the connection.
  */
 export function useAlertsWebSocket(enabled: boolean) {
+  const adapter = useStorageAdapter()
   const wsUrl =
     typeof process !== 'undefined' && process.env.NEXT_PUBLIC_ALERTS_WS_URL
       ? process.env.NEXT_PUBLIC_ALERTS_WS_URL
@@ -40,7 +41,7 @@ export function useAlertsWebSocket(enabled: boolean) {
       try {
         const payload = JSON.parse(event.data) as AlertPayload
         if (payload && payload.transaction_hash) {
-          addAlert(payload)
+          adapter.addAlert(payload)
         }
       } catch {
         // Ignore malformed alert frames.
@@ -67,7 +68,7 @@ export function useAlertsWebSocket(enabled: boolean) {
       }
       ws.close()
     }
-  }, [enabled, wsUrl])
+  }, [enabled, wsUrl, adapter])
 
   useEffect(() => {
     const unsub = connect()

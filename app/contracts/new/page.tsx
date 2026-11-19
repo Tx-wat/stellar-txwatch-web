@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { AlertRule, Network, WatchedContract } from '@/types'
-import { isValidContractId, isValidUrl } from '@/lib/stellar'
+import { isValidContractId, isValidUrl, isValidAccountId } from '@/lib/stellar'
 import { saveContract, getContracts } from '@/lib/storage'
 import { STORAGE_KEYS } from '@/lib/storageKeys'
 import { sendTestWebhook } from '@/lib/api'
@@ -21,6 +21,7 @@ interface ContractDraft {
   network: Network
   webhookUrl: string
   rules: AlertRule[]
+  group?: string
 }
 
 interface FormErrors {
@@ -34,10 +35,16 @@ interface FormErrors {
   signers?: string
 }
 
-const STELLAR_PUBLIC_KEY_REGEX = /^G[A-Z2-7]{55}$/
+const STELLAR_PUBLIC_KEY_FORMAT_REGEX = /^G[A-Z2-7]{55}$/
 
-function isValidPublicKey(key: string): boolean {
-  return STELLAR_PUBLIC_KEY_REGEX.test(key)
+function validateSignerPublicKey(key: string): string | null {
+  if (!STELLAR_PUBLIC_KEY_FORMAT_REGEX.test(key)) {
+    return 'Must be a valid Stellar public key (starts with G, 56 chars)'
+  }
+  if (!isValidAccountId(key)) {
+    return 'Invalid Stellar public key: checksum does not verify'
+  }
+  return null
 }
 
 interface ImportRowError {
@@ -87,6 +94,7 @@ export default function NewContractPage() {
   const { contracts, add: addContract } = useContracts()
   const [networkWarning, setNetworkWarning] = useState<string | null>(null)
   const [label, setLabel] = useState('')
+  const [group, setGroup] = useState('')
   const [contractId, setContractId] = useState('')
   const [network, setNetwork] = useState<Network>('testnet')
   const [webhookUrl, setWebhookUrl] = useState('')
@@ -135,6 +143,7 @@ export default function NewContractPage() {
       if (raw) {
         const draft = JSON.parse(raw) as Partial<ContractDraft>
         if (typeof draft.label === 'string') setLabel(draft.label)
+        if (typeof draft.group === 'string') setGroup(draft.group)
         if (typeof draft.contractId === 'string') setContractId(draft.contractId)
         if (draft.network === 'testnet' || draft.network === 'mainnet' || draft.network === 'futurenet') {
           setNetwork(draft.network)
@@ -157,7 +166,7 @@ export default function NewContractPage() {
       try {
         sessionStorage.setItem(
           DRAFT_STORAGE_KEY,
-          JSON.stringify({ label, contractId, network, webhookUrl, rules })
+          JSON.stringify({ label, group, contractId, network, webhookUrl, rules })
         )
       } catch {
         // ignore storage errors
@@ -166,7 +175,7 @@ export default function NewContractPage() {
     return () => {
       if (draftTimerRef.current) clearTimeout(draftTimerRef.current)
     }
-  }, [label, contractId, network, webhookUrl, rules])
+  }, [label, group, contractId, network, webhookUrl, rules])
 
   function clearDraft() {
     if (draftTimerRef.current) clearTimeout(draftTimerRef.current)
@@ -180,6 +189,7 @@ export default function NewContractPage() {
   function handleDiscardDraft() {
     clearDraft()
     setLabel('')
+    setGroup('')
     setContractId('')
     setNetwork('testnet')
     setWebhookUrl('')
@@ -207,8 +217,9 @@ export default function NewContractPage() {
   function addSigner() {
     const trimmed = signerInput.trim()
     if (!trimmed) return
-    if (!isValidPublicKey(trimmed)) {
-      setErrors((prev) => ({ ...prev, signers: 'Must be a valid Stellar public key (starts with G, 56 chars)' }))
+    const signerError = validateSignerPublicKey(trimmed)
+    if (signerError) {
+      setErrors((prev) => ({ ...prev, signers: signerError }))
       return
     }
     if (signers.includes(trimmed)) {
@@ -286,6 +297,7 @@ export default function NewContractPage() {
     const contract: WatchedContract = {
       id: crypto.randomUUID(),
       label: label.trim(),
+      group: group.trim() || undefined,
       contract_id: contractId.trim(),
       network,
       rules,
@@ -503,6 +515,26 @@ export default function NewContractPage() {
             </div>
             <p className="text-xs text-zinc-500">{label.length}/100</p>
           </div>
+        </div>
+
+        {/* Group */}
+        <div>
+          <label className="block text-sm font-medium text-zinc-300 mb-1.5">Group (Optional)</label>
+          <input
+            type="text"
+            list="contract-group-options"
+            placeholder="e.g. Production"
+            value={group}
+            onChange={(e) => setGroup(e.target.value)}
+            maxLength={50}
+            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
+          />
+          <datalist id="contract-group-options">
+            {existingGroups.map((g) => (
+              <option key={g} value={g} />
+            ))}
+          </datalist>
+          <p className="mt-1.5 text-xs text-zinc-400">Organise contracts into named groups. Existing groups are suggested.</p>
         </div>
 
         {/* Contract ID */}

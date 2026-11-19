@@ -57,6 +57,8 @@ export interface WatchedContract {
   /** Unix timestamp (ms) when the contract was last updated */
   updated_at: number
   instanceLiveUntilLedgerSeq?: number
+  /** Free-text folder/group name used to organise contracts (e.g. "Production", "Client A"). */
+  group?: string
 }
 
 export type DeliveryStatus = 'delivered' | 'retrying' | 'failed'

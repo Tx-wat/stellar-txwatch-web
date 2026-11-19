@@ -1,34 +1,53 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { WatchedContract } from '@/types'
 import { isValidUrl } from '@/lib/stellar'
+import { getContracts } from '@/lib/storage'
 
 interface EditDetailsModalProps {
   contract: WatchedContract
   onSave: (updated: WatchedContract) => void
   onClose: () => void
+  existingGroups?: string[]
 }
 
-export default function EditDetailsModal({ contract, onSave, onClose }: EditDetailsModalProps) {
+export default function EditDetailsModal({ contract, onSave, onClose, existingGroups }: EditDetailsModalProps) {
   const [label, setLabel] = useState(contract.label)
   const [webhookUrl, setWebhookUrl] = useState(contract.webhook_url)
+  const [group, setGroup] = useState(contract.group ?? '')
   const [error, setError] = useState<string | null>(null)
+
+  const groupOptions = useMemo(() => {
+    const source = existingGroups ?? getContracts().map((c) => c.group)
+    const unique = Array.from(new Set(source.filter((g): g is string => !!g && g.trim().length > 0)))
+    return unique.sort((a, b) => a.localeCompare(b))
+  }, [existingGroups])
 
   function handleSave() {
     const trimmedLabel = label.trim()
     const trimmedUrl = webhookUrl.trim()
+    const trimmedGroup = group.trim()
 
     if (!trimmedLabel) { setError('Label is required'); return }
     if (trimmedLabel.length > 100) { setError('Label must be 100 characters or less'); return }
     if (!trimmedUrl) { setError('Webhook URL is required'); return }
     if (!isValidUrl(trimmedUrl)) { setError('Please enter a valid HTTP or HTTPS URL'); return }
+    if (trimmedGroup.length > 50) { setError('Group must be 50 characters or less'); return }
 
-    onSave({ ...contract, label: trimmedLabel, webhook_url: trimmedUrl })
+    onSave({
+      ...contract,
+      label: trimmedLabel,
+      webhook_url: trimmedUrl,
+      group: trimmedGroup || undefined,
+    })
   }
 
   function handleCancel() {
-    const isDirty = label !== contract.label || webhookUrl !== contract.webhook_url
+    const isDirty =
+      label !== contract.label ||
+      webhookUrl !== contract.webhook_url ||
+      group !== (contract.group ?? '')
     if (isDirty) {
       if (confirm('You have unsaved changes. Are you sure you want to discard them?')) onClose()
     } else {
@@ -71,6 +90,28 @@ export default function EditDetailsModal({ contract, onSave, onClose }: EditDeta
               className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
             />
             <p className="text-xs text-zinc-500 mt-1">Must be a valid HTTP or HTTPS URL</p>
+          </div>
+
+          <div>
+            <label htmlFor="edit-group" className="block text-sm font-medium text-zinc-300 mb-2">
+              Group <span className="text-zinc-500 font-normal">(optional)</span>
+            </label>
+            <input
+              id="edit-group"
+              type="text"
+              list="edit-group-options"
+              value={group}
+              onChange={(e) => { setGroup(e.target.value); setError(null) }}
+              placeholder="e.g. Production"
+              maxLength={50}
+              className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            />
+            <datalist id="edit-group-options">
+              {groupOptions.map((g) => (
+                <option key={g} value={g} />
+              ))}
+            </datalist>
+            <p className="text-xs text-zinc-500 mt-1">Organise contracts into folders. Leave empty for no group.</p>
           </div>
         </div>
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { WatchedContract, Network } from '@/types'
@@ -20,6 +20,9 @@ const NETWORK_LABELS: Record<Network, string> = {
 }
 
 const VALID_NETWORKS: Network[] = ['mainnet', 'testnet', 'futurenet']
+
+const UNGROUPED_KEY = '__ungrouped__'
+const UNGROUPED_LABEL = 'Ungrouped'
 
 interface CsvRowError {
   line: number
@@ -153,9 +156,38 @@ export default function ContractsPage() {
   const [mounted, setMounted] = useState(false)
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
   const [importResult, setImportResult] = useState<CsvImportResult | null>(null)
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
   const lastAlertTimes = useLastAlertTimes()
   const list = useContractListState(allContracts, searchParams?.get('q') ?? '')
+
+  const contractGroups = useMemo(() => {
+    const groups = new Map<string, WatchedContract[]>()
+    for (const contract of list.filtered) {
+      const key = contract.group?.trim() ? contract.group.trim() : UNGROUPED_KEY
+      const existing = groups.get(key)
+      if (existing) {
+        existing.push(contract)
+      } else {
+        groups.set(key, [contract])
+      }
+    }
+    return Array.from(groups.entries())
+      .map(([key, contracts]) => ({
+        key,
+        label: key === UNGROUPED_KEY ? UNGROUPED_LABEL : key,
+        contracts,
+      }))
+      .sort((a, b) => {
+        if (a.key === UNGROUPED_KEY) return 1
+        if (b.key === UNGROUPED_KEY) return -1
+        return a.label.localeCompare(b.label)
+      })
+  }, [list.filtered])
+
+  const toggleGroup = (key: string) => {
+    setCollapsedGroups((prev) => ({ ...prev, [key]: !prev[key] }))
+  }
 
   useEffect(() => {
     document.title = 'Contracts · TxWatch'
@@ -334,6 +366,39 @@ export default function ContractsPage() {
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {networkContracts.map(renderCard)}
                 </div>
+              </section>
+            )
+          })}
+        </div>
+      ) : contractGroups.length > 0 && contractGroups.some((g) => g.key !== UNGROUPED_KEY) ? (
+        <div className="space-y-8">
+          {contractGroups.map((group) => {
+            const collapsed = !!collapsedGroups[group.key]
+            return (
+              <section key={group.key}>
+                <h2 className="text-lg font-semibold text-zinc-300 mb-3 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(group.key)}
+                    aria-expanded={!collapsed}
+                    aria-controls={`group-section-${group.key}`}
+                    className="flex items-center gap-2 text-left hover:text-zinc-100"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`inline-block transition-transform ${collapsed ? '-rotate-90' : ''}`}
+                    >
+                      ▾
+                    </span>
+                    {group.label}
+                    <span className="text-sm font-normal text-zinc-500">({group.contracts.length})</span>
+                  </button>
+                </h2>
+                {!collapsed && (
+                  <div id={`group-section-${group.key}`} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {group.contracts.map(renderCard)}
+                  </div>
+                )}
               </section>
             )
           })}
