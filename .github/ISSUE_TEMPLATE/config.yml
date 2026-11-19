@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions & discussions
+    url: https://github.com/Tx-wat/stellar-txwatch-web/discussions
+    about: Ask questions and share ideas with the community.
+  - name: Core engine issues
+    url: https://github.com/Tx-wat/stellar-txwatch-core/issues
+    about: Report monitoring or webhook delivery bugs in the Rust core engine.

@@ -1,5 +1,10 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import FreighterConnect from '@/components/FreighterConnect'
+
+export const metadata: Metadata = {
+  title: 'TxWatch — Soroban Contract Monitoring',
+}
 
 const features = [
   {

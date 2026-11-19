@@ -1,18 +1,17 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { WatchedContract, Network } from '@/types'
-import { getContracts, getAlerts } from '@/lib/storage'
+import { getContracts, deleteContract, saveContract } from '@/lib/storage'
+import { STORAGE_KEYS } from '@/lib/storageKeys'
+import { useContractListState } from '@/hooks/useContractListState'
+import { useLastAlertTimes } from '@/hooks/useAlerts'
 import ContractCard from '@/components/ContractCard'
+import ContractListToolbar from '@/components/ContractListToolbar'
+import BulkActionBar from '@/components/BulkActionBar'
 import EmptyState from '@/components/EmptyState'
-
-type ViewMode = 'flat' | 'grouped'
-type NetworkFilter = 'all' | Network
-type SortOption = 'newest' | 'oldest' | 'label-asc' | 'label-desc'
-
-const PAGE_SIZE = 12
 
 const NETWORK_LABELS: Record<Network, string> = {
   mainnet: 'Mainnet',
@@ -20,59 +19,157 @@ const NETWORK_LABELS: Record<Network, string> = {
   futurenet: 'Futurenet',
 }
 
-const NETWORK_FILTERS: { value: NetworkFilter; label: string }[] = [
-  { value: 'all', label: 'All Networks' },
-  { value: 'mainnet', label: 'Mainnet' },
-  { value: 'testnet', label: 'Testnet' },
-  { value: 'futurenet', label: 'Futurenet' },
-]
+const VALID_NETWORKS: Network[] = ['mainnet', 'testnet', 'futurenet']
 
-const SORT_OPTIONS: { value: SortOption; label: string }[] = [
-  { value: 'newest', label: 'Newest first' },
-  { value: 'oldest', label: 'Oldest first' },
-  { value: 'label-asc', label: 'Label A–Z' },
-  { value: 'label-desc', label: 'Label Z–A' },
-]
+interface CsvRowError {
+  line: number
+  message: string
+}
 
-function sortContracts(contracts: WatchedContract[], sortBy: SortOption) {
-  const sorted = [...contracts]
-  switch (sortBy) {
-    case 'oldest':
-      return sorted.sort((a, b) => a.created_at - b.created_at)
-    case 'label-asc':
-      return sorted.sort((a, b) => a.label.localeCompare(b.label))
-    case 'label-desc':
-      return sorted.sort((a, b) => b.label.localeCompare(a.label))
-    case 'newest':
-    default:
-      return sorted.sort((a, b) => b.created_at - a.created_at)
+interface CsvImportResult {
+  imported: number
+  skipped: number
+  errors: CsvRowError[]
+}
+
+function isValidWebhookUrl(value: string): boolean {
+  if (!value) return true
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
   }
+}
+
+function parseCsvLine(line: string): string[] {
+  const cells: string[] = []
+  let current = ''
+  let inQuotes = false
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i]
+    if (inQuotes) {
+      if (char === '"') {
+        if (line[i + 1] === '"') {
+          current += '"'
+          i++
+        } else {
+          inQuotes = false
+        }
+      } else {
+        current += char
+      }
+    } else if (char === '"') {
+      inQuotes = true
+    } else if (char === ',') {
+      cells.push(current)
+      current = ''
+    } else {
+      current += char
+    }
+  }
+  cells.push(current)
+  return cells.map((cell) => cell.trim())
+}
+
+function importContractsFromCsv(text: string): CsvImportResult {
+  const errors: CsvRowError[] = []
+  let imported = 0
+  let skipped = 0
+
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+
+  if (lines.length === 0) {
+    return { imported: 0, skipped: 0, errors: [{ line: 0, message: 'CSV file is empty' }] }
+  }
+
+  const header = parseCsvLine(lines[0]).map((cell) => cell.toLowerCase())
+  const expected = ['contract_id', 'label', 'network', 'webhook_url']
+  const hasHeader = header.includes('contract_id')
+  const dataLines = hasHeader ? lines.slice(1) : lines
+  const startLine = hasHeader ? 2 : 1
+
+  if (hasHeader) {
+    const missing = expected.filter((col) => !header.includes(col))
+    if (missing.length > 0) {
+      return {
+        imported: 0,
+        skipped: 0,
+        errors: [{ line: 1, message: `Missing column(s): ${missing.join(', ')}` }],
+      }
+    }
+  }
+
+  const colIndex = (name: string) => (hasHeader ? header.indexOf(name) : expected.indexOf(name))
+
+  dataLines.forEach((line, idx) => {
+    const lineNumber = startLine + idx
+    const cells = parseCsvLine(line)
+    const contractId = cells[colIndex('contract_id')] ?? ''
+    const label = cells[colIndex('label')] ?? ''
+    const network = (cells[colIndex('network')] ?? '').toLowerCase()
+    const webhookUrl = cells[colIndex('webhook_url')] ?? ''
+
+    const rowErrors: string[] = []
+    if (!contractId) rowErrors.push('contract_id is required')
+    if (!network) {
+      rowErrors.push('network is required')
+    } else if (!VALID_NETWORKS.includes(network as Network)) {
+      rowErrors.push(`invalid network "${network}"`)
+    }
+    if (!isValidWebhookUrl(webhookUrl)) {
+      rowErrors.push('invalid webhook_url')
+    }
+
+    if (rowErrors.length > 0) {
+      skipped++
+      errors.push({ line: lineNumber, message: rowErrors.join('; ') })
+      return
+    }
+
+    const now = Date.now()
+    saveContract({
+      id: crypto.randomUUID(),
+      contract_id: contractId,
+      label: label || contractId,
+      network: network as Network,
+      rules: [],
+      webhook_url: webhookUrl,
+      created_at: now,
+      updated_at: now,
+    })
+    imported++
+  })
+
+  return { imported, skipped, errors }
 }
 
 export default function ContractsPage() {
   const searchParams = useSearchParams()
   const [allContracts, setAllContracts] = useState<WatchedContract[]>([])
-  const [networkFilter, setNetworkFilter] = useState<NetworkFilter>('all')
-  const [sortBy, setSortBy] = useState<SortOption>('newest')
-  const [search, setSearch] = useState(() => searchParams?.get('q') ?? '')
   const [mounted, setMounted] = useState(false)
-  const [viewMode, setViewMode] = useState<ViewMode>('flat')
-  const [page, setPage] = useState(1)
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
+  const [importResult, setImportResult] = useState<CsvImportResult | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const lastAlertTimes = useLastAlertTimes()
+  const list = useContractListState(allContracts, searchParams?.get('q') ?? '')
 
   useEffect(() => {
-    const all = getContracts()
-    setAllContracts(all)
+    document.title = 'Contracts · TxWatch'
+    setAllContracts(getContracts())
     setMounted(true)
   }, [])
 
   // Check for a recently-created contract id in sessionStorage and highlight it once
   useEffect(() => {
     try {
-      const id = sessionStorage.getItem('txwatch_last_created_contract')
+      const id = sessionStorage.getItem(STORAGE_KEYS.LAST_CREATED_CONTRACT)
       if (id) {
         setHighlightedId(id)
-        sessionStorage.removeItem('txwatch_last_created_contract')
+        sessionStorage.removeItem(STORAGE_KEYS.LAST_CREATED_CONTRACT)
         const t = setTimeout(() => setHighlightedId(null), 6000)
         return () => clearTimeout(t)
       }
@@ -81,185 +178,125 @@ export default function ContractsPage() {
     }
   }, [])
 
-  useEffect(() => {
-    setPage(1)
-  }, [networkFilter, search])
-
-  const networkFiltered = useMemo(() => {
-    if (networkFilter === 'all') {
-      return allContracts
+  const handleDeleteSelected = () => {
+    for (const id of list.selectedIds) {
+      deleteContract(id)
     }
-    return allContracts.filter((contract) => contract.network === networkFilter)
-  }, [allContracts, networkFilter])
+    list.clearSelection()
+    setAllContracts(getContracts())
+  }
 
-  const filtered = useMemo(() => {
-    const query = search.trim().toLowerCase()
-    if (!query) return networkFiltered
-
-    return networkFiltered.filter((contract) => {
-      return (
-        contract.label.toLowerCase().includes(query) ||
-        contract.contract_id.toLowerCase().includes(query)
-      )
-    })
-  }, [networkFiltered, search])
-
-  const sorted = useMemo(() => sortContracts(filtered, sortBy), [filtered, sortBy])
-  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
-  const paginated = useMemo(
-    () => sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [page, sorted]
-  )
-
-  useEffect(() => {
-    if (page > totalPages) {
-      setPage(totalPages)
-    }
-  }, [page, totalPages])
-
-  const grouped = useMemo(() => {
-    const groups: Record<Network, WatchedContract[]> = {
-      mainnet: [],
-      testnet: [],
-      futurenet: [],
-    }
-    for (const contract of sorted) {
-      groups[contract.network].push(contract)
-    }
-    return groups
-  }, [sorted])
+  const handleCsvFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    const text = await file.text()
+    setImportResult(importContractsFromCsv(text))
+    setAllContracts(getContracts())
+  }
 
   if (!mounted) return null
 
   const hasAnyContracts = allContracts.length > 0
-  const hasFilteredContracts = filtered.length > 0
+  const hasFilteredContracts = list.filtered.length > 0
+
+  const renderCard = (contract: WatchedContract) => {
+    const selected = list.selectedIds.includes(contract.id)
+    return (
+      <div key={contract.id} className="relative">
+        <ContractCard
+          contract={contract}
+          lastAlertTime={lastAlertTimes[contract.contract_id]}
+          highlight={highlightedId === contract.id}
+        />
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => list.toggleSelected(contract.id)}
+          aria-label={`Select ${contract.label}`}
+          className="absolute bottom-3 right-3 h-4 w-4 rounded border-zinc-600 bg-zinc-800 accent-indigo-600"
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-zinc-100">Contracts</h1>
-          <p className="text-sm text-zinc-500 mt-1">{filtered.length} registered</p>
-        </div>
+      <ContractListToolbar
+        search={list.search}
+        onSearchChange={list.setSearch}
+        networkFilter={list.networkFilter}
+        onNetworkFilterChange={list.setNetworkFilter}
+        networkCounts={list.networkCounts}
+        sortBy={list.sortBy}
+        onSortChange={list.setSortBy}
+        viewMode={list.viewMode}
+        onViewModeChange={list.setViewMode}
+        hasAnyContracts={hasAnyContracts}
+        resultCount={list.filtered.length}
+      />
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="min-w-[260px] relative">
-            <label htmlFor="contract-search" className="sr-only">
-              Search contracts
-            </label>
-            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-zinc-500">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 103.5 10.5a7.5 7.5 0 0013.15 6.15z" />
-              </svg>
-            </span>
-            <input
-              id="contract-search"
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search by label or contract ID"
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-900 py-2 pl-10 pr-3 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-            />
-          </div>
+      <div className="flex justify-end">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv,text/csv"
+          onChange={handleCsvFile}
+          className="hidden"
+          aria-hidden="true"
+          tabIndex={-1}
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+        >
+          Import CSV
+        </button>
+      </div>
 
-          {search && (
+      {importResult && (
+        <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-4 text-sm">
+          <div className="flex items-start justify-between gap-3">
+            <p className="font-medium text-zinc-100">
+              {importResult.imported} contracts imported, {importResult.skipped} skipped
+            </p>
             <button
               type="button"
-              onClick={() => setSearch('')}
-              className="inline-flex items-center justify-center rounded-lg bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-700"
+              onClick={() => setImportResult(null)}
+              className="text-zinc-500 hover:text-zinc-300"
+              aria-label="Dismiss import summary"
             >
-              Clear search
+              ✕
             </button>
+          </div>
+          {importResult.errors.length > 0 && (
+            <ul className="mt-2 space-y-1 text-xs text-red-400">
+              {importResult.errors.map((err, i) => (
+                <li key={i}>
+                  {err.line > 0 ? `Line ${err.line}: ` : ''}
+                  {err.message}
+                </li>
+              ))}
+            </ul>
           )}
         </div>
-      </div>
+      )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-1 p-1 bg-zinc-900 border border-zinc-800 rounded-lg w-fit" role="group" aria-label="Filter by network">
-          {NETWORK_FILTERS.map(({ value, label }) => {
-            const count = value === 'all' ? allContracts.length : allContracts.filter((contract) => contract.network === value).length
-            const isActive = networkFilter === value
-            return (
-              <button
-                key={value}
-                onClick={() => setNetworkFilter(value)}
-                aria-pressed={isActive}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
-                }`}
-              >
-                {label}
-                <span className={`text-xs px-1.5 py-0.5 rounded-full ${isActive ? 'bg-indigo-500 text-indigo-100' : 'bg-zinc-800 text-zinc-500'}`}>
-                  {count}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-
-        <div className="flex items-center gap-3">
-          {hasAnyContracts && (
-            <div className="relative">
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as SortOption)}
-                className="appearance-none px-3 py-2 pr-8 rounded-lg bg-zinc-800 border border-zinc-700 text-sm font-medium text-zinc-200 hover:bg-zinc-750 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer"
-                aria-label="Sort contracts"
-              >
-                {SORT_OPTIONS.map(({ value, label }) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              <svg className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-          )}
-
-          {hasAnyContracts && (
-            <div className="flex items-center rounded-lg bg-zinc-800 border border-zinc-700 p-0.5">
-              <button
-                type="button"
-                onClick={() => setViewMode('flat')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  viewMode === 'flat' ? 'bg-indigo-600 text-white' : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                Flat
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('grouped')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  viewMode === 'grouped' ? 'bg-indigo-600 text-white' : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                By Network
-              </button>
-            </div>
-          )}
-
-          <Link
-            href="/contracts/new"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            <span className="hidden sm:inline">Add Contract</span>
-            <span className="sm:hidden">Add</span>
-          </Link>
-        </div>
-      </div>
+      {hasFilteredContracts && (
+        <BulkActionBar
+          selectedCount={list.selectedIds.length}
+          allVisibleSelected={list.allVisibleSelected}
+          onToggleSelectAll={list.toggleSelectAllVisible}
+          onClearSelection={list.clearSelection}
+          onDeleteSelected={handleDeleteSelected}
+        />
+      )}
 
       {!hasAnyContracts ? (
         <EmptyState
           title="No contracts yet"
-          description="Register a Soroban contract to begin monitoring transactions and configuring alert rules."
+          description="Add a contract to start monitoring its activity, or import a CSV to register many at once."
           action={
             <Link
               href="/contracts/new"
@@ -275,20 +312,17 @@ export default function ContractsPage() {
           description="No contracts match the active search or network filter. Try clearing the search or selecting a different network."
           action={
             <button
-              onClick={() => {
-                setSearch('')
-                setNetworkFilter('all')
-              }}
+              onClick={list.clearFilters}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white transition-colors"
             >
               Clear Filters
             </button>
           }
         />
-      ) : viewMode === 'grouped' ? (
+      ) : list.viewMode === 'grouped' ? (
         <div className="space-y-8">
           {(Object.entries(NETWORK_LABELS) as [Network, string][]).map(([network, label]) => {
-            const networkContracts = grouped[network]
+            const networkContracts = list.grouped[network]
             if (networkContracts.length === 0) return null
             return (
               <section key={network}>
@@ -298,14 +332,7 @@ export default function ContractsPage() {
                   <span className="text-sm font-normal text-zinc-500">({networkContracts.length})</span>
                 </h2>
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {networkContracts.map((contract) => (
-                    <ContractCard
-                      key={contract.id}
-                      contract={contract}
-                      lastAlertTime={getAlerts(contract.contract_id)[0]?.timestamp}
-                      highlight={highlightedId === contract.id}
-                    />
-                  ))}
+                  {networkContracts.map(renderCard)}
                 </div>
               </section>
             )
@@ -314,32 +341,25 @@ export default function ContractsPage() {
       ) : (
         <>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {paginated.map((contract) => (
-              <ContractCard
-                key={contract.id}
-                contract={contract}
-                lastAlertTime={getAlerts(contract.contract_id)[0]?.timestamp}
-                highlight={highlightedId === contract.id}
-              />
-            ))}
+            {list.paginated.map(renderCard)}
           </div>
 
-          {totalPages > 1 && (
+          {list.totalPages > 1 && (
             <div className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-300">
-              <span>Page {page} of {totalPages}</span>
+              <span>Page {list.page} of {list.totalPages}</span>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setPage((current) => Math.max(1, current - 1))}
-                  disabled={page === 1}
+                  onClick={() => list.setPage(list.page - 1)}
+                  disabled={list.page === 1}
                   className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-600 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Previous
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-                  disabled={page === totalPages}
+                  onClick={() => list.setPage(Math.min(list.totalPages, list.page + 1))}
+                  disabled={list.page === list.totalPages}
                   className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-600 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Next
