@@ -13,7 +13,7 @@ export default function WalletStatusBadge() {
       return
     }
 
-    window.freighter.isConnected().then((connected) => {
+    window.freighter?.isConnected().then((connected) => {
       setStatus(connected ? 'connected' : 'disconnected')
     })
   }, [])

@@ -6,6 +6,7 @@ import Link from 'next/link'
 const links = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/contracts', label: 'Contracts' },
+  { href: '/settings', label: 'Settings' },
   { href: 'https://github.com/Tx-wat', label: 'GitHub', external: true },
 ]
 

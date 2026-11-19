@@ -1,6 +1,8 @@
 'use client';
 
 import React from 'react';
+import { explorerTxUrl, getExplorerName } from '@/lib/explorer';
+import { useExplorerPreference } from '@/hooks/useExplorerPreference';
 
 export interface WebhookEntry {
   id: string;
@@ -40,6 +42,8 @@ function truncateHash(hash: string, chars = 8): string {
 }
 
 export function WebhookLogCard({ entry }: WebhookLogCardProps) {
+  const explorer = useExplorerPreference();
+
   return (
     <article
       className="rounded-lg border border-border bg-card p-4 shadow-sm space-y-3"
@@ -82,11 +86,11 @@ export function WebhookLogCard({ entry }: WebhookLogCardProps) {
         <div className="text-xs">
           <span className="text-muted-foreground">Tx: </span>
           <a
-            href={`https://stellar.expert/explorer/public/tx/${entry.txHash}`}
+            href={explorerTxUrl(entry.txHash, explorer)}
             target="_blank"
             rel="noopener noreferrer"
             className="font-mono text-primary hover:underline break-all"
-            aria-label={`View transaction ${entry.txHash} on Stellar Explorer`}
+            aria-label={`View transaction ${entry.txHash} on ${getExplorerName(explorer)}`}
           >
             {truncateHash(entry.txHash)}
           </a>

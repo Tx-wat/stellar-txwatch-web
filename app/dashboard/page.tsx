@@ -1,25 +1,22 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useContracts } from '@/lib/useContracts'
-import { getTodayAlertCount, getAlerts } from '@/lib/storage'
+import { useContracts } from '@/hooks/useContracts'
+import { useTodayAlertCount, useLastAlertTimes } from '@/hooks/useAlerts'
 import ContractCard from '@/components/ContractCard'
 import EmptyState from '@/components/EmptyState'
 import NetworkBadge from '@/components/NetworkBadge'
 import { Network } from '@/types'
 
 export default function DashboardPage() {
-  const { contracts } = useContracts()
-  const [alertsToday, setAlertsToday] = useState(0)
-  const [mounted, setMounted] = useState(false)
+  const { contracts, loading } = useContracts()
+  const alertsToday = useTodayAlertCount()
+  const lastAlertTimes = useLastAlertTimes()
 
-  useEffect(() => {
-    setAlertsToday(getTodayAlertCount())
-    setMounted(true)
-  }, [])
-
+  const activeContracts = contracts.filter((c) => c.enabled).length
+  const pausedContracts = contracts.length - activeContracts
   const activeWebhooks = contracts.filter((c) => c.webhook_url).length
+  const activeRules = contracts.reduce((sum, c) => sum + c.rules.length, 0)
   const networkCounts = contracts.reduce<Record<Network, number>>((counts, contract) => {
     counts[contract.network] = (counts[contract.network] ?? 0) + 1
     return counts
@@ -28,12 +25,7 @@ export default function DashboardPage() {
     .filter((network) => networkCounts[network])
     .map((network) => ({ network, count: networkCounts[network] }))
 
-  function lastAlertTime(contractId: string): number | undefined {
-    const alerts = getAlerts(contractId)
-    return alerts[0]?.timestamp
-  }
-
-  if (!mounted) return null
+  if (loading) return null
 
   return (
     <div className="space-y-8">
@@ -55,10 +47,29 @@ export default function DashboardPage() {
 
       {/* Stats bar */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <Link href="/contracts" className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-600 transition-colors">
+          <p className="text-2xl font-bold text-zinc-100">{contracts.length}</p>
+          <p className="text-xs text-zinc-500 mt-1">Contracts Watched</p>
+          <div className="mt-4 flex items-center gap-4 text-xs">
+            <span className="inline-flex items-center gap-1.5 text-emerald-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              {activeContracts} active
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-zinc-500">
+              <span className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
+              {pausedContracts} paused
+            </span>
+          </div>
+        </Link>
+
         {[
-          { label: 'Contracts Watched', value: contracts.length, href: '/contracts' },
           { label: 'Alerts Today', value: alertsToday, href: '/contracts?filter=alerts' },
           { label: 'Active Webhooks', value: activeWebhooks, href: '/contracts?filter=webhooks' },
+          {
+            label: 'Alert Rules Active',
+            value: contracts.reduce((sum, c) => sum + c.rules.length, 0),
+            href: '/contracts?filter=rules',
+          },
         ].map((stat) => (
           <Link key={stat.label} href={stat.href} className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-600 transition-colors">
             <p className="text-2xl font-bold text-zinc-100">{stat.value}</p>
@@ -104,7 +115,7 @@ export default function DashboardPage() {
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {contracts.map((c) => (
-            <ContractCard key={c.id} contract={c} lastAlertTime={lastAlertTime(c.id)} />
+            <ContractCard key={c.id} contract={c} lastAlertTime={lastAlertTimes[c.contract_id]} />
           ))}
         </div>
       )}
