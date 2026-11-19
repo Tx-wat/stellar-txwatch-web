@@ -1,3 +1,5 @@
+import { env } from '@/lib/env';
+
 export type StorageErrorHandler = (context: StorageErrorContext) => void;
 
 export interface StorageErrorContext {
@@ -17,15 +19,29 @@ export function clearStorageErrorHandlers(): void {
   errorHandlers.length = 0;
 }
 
+function forwardToSentry(ctx: StorageErrorContext): void {
+  try {
+    const client = Sentry.getClient();
+    if (!client) {
+      return;
+    }
+
+    Sentry.captureException(ctx.error, {
+      tags: { source: 'storageLogger' },
+      extra: {
+        key: ctx.key,
+        timestamp: ctx.timestamp,
+        rawValue: (ctx.rawValue ?? '').slice(0, 200),
+      },
+    });
+  } catch {
+    // Never let Sentry reporting crash the app
+  }
+}
+
 function emitStorageError(ctx: StorageErrorContext): void {
-  const isDev =
-    typeof process !== 'undefined'
-      ? process.env.NODE_ENV !== 'production'
-      : true;
-  const debugEnabled =
-    typeof process !== 'undefined'
-      ? process.env.DEBUG_STORAGE === 'true'
-      : false;
+  const isDev = env.NODE_ENV !== 'production';
+  const debugEnabled = env.DEBUG_STORAGE;
 
   if (isDev || debugEnabled) {
     console.warn(
@@ -36,6 +52,8 @@ function emitStorageError(ctx: StorageErrorContext): void {
     );
   }
 
+  forwardToSentry(ctx);
+
   for (const handler of errorHandlers) {
     try {
       handler(ctx);
@@ -45,8 +63,12 @@ function emitStorageError(ctx: StorageErrorContext): void {
   }
 }
 
-export function safeParseStorage<T>(key: string, fallback: T): T {
-  const raw = localStorage.getItem(key);
+export function safeParseStorage<T>(
+  key: string,
+  fallback: T,
+  storage: Pick<Storage, 'getItem'> = localStorage,
+): T {
+  const raw = storage.getItem(key);
 
   if (raw === null) {
     return fallback;

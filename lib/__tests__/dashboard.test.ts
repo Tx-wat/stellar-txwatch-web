@@ -120,6 +120,48 @@ describe('dashboard stats — contracts count', () => {
   })
 })
 
+describe('dashboard stats — active vs paused contracts', () => {
+  it('separates active and paused contracts', () => {
+    saveContract(makeContract({ id: 'c1', enabled: true }))
+    saveContract(makeContract({ id: 'c2', enabled: true }))
+    saveContract(makeContract({ id: 'c3', enabled: false }))
+
+    const contracts = getContracts()
+    const active = contracts.filter((c) => c.enabled !== false).length
+    const paused = contracts.filter((c) => c.enabled === false).length
+
+    expect(active).toBe(2)
+    expect(paused).toBe(1)
+    expect(active + paused).toBe(contracts.length)
+  })
+
+  it('treats contracts without an explicit enabled flag as active', () => {
+    saveContract(makeContract({ id: 'c1' }))
+    saveContract(makeContract({ id: 'c2', enabled: false }))
+
+    const contracts = getContracts()
+    expect(contracts.filter((c) => c.enabled !== false).length).toBe(1)
+    expect(contracts.filter((c) => c.enabled === false).length).toBe(1)
+  })
+
+  it('reports zero paused when all contracts are active', () => {
+    saveContract(makeContract({ id: 'c1', enabled: true }))
+    saveContract(makeContract({ id: 'c2', enabled: true }))
+
+    const contracts = getContracts()
+    expect(contracts.filter((c) => c.enabled === false).length).toBe(0)
+  })
+
+  it('reports zero active when all contracts are paused', () => {
+    saveContract(makeContract({ id: 'c1', enabled: false }))
+    saveContract(makeContract({ id: 'c2', enabled: false }))
+
+    const contracts = getContracts()
+    expect(contracts.filter((c) => c.enabled !== false).length).toBe(0)
+    expect(contracts.filter((c) => c.enabled === false).length).toBe(2)
+  })
+})
+
 describe('dashboard stats — network distribution', () => {
   it('counts contracts by network', () => {
     saveContract(makeContract({ id: 'c1', network: 'mainnet' }))
