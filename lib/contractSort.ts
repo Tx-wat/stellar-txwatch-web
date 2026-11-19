@@ -16,6 +16,18 @@ function networkRank(network: string): number {
   return NETWORK_ORDER[network.toLowerCase()] ?? 99;
 }
 
+export function sortByLastAlert<T extends StoredContract & { contract_id: string; created_at: number }>(
+  contracts: T[],
+  getLastAlertTime: (contractId: string) => number | undefined
+): T[] {
+  return [...contracts].sort((a, b) => {
+    const aTime = getLastAlertTime(a.contract_id) ?? 0
+    const bTime = getLastAlertTime(b.contract_id) ?? 0
+    if (bTime !== aTime) return bTime - aTime
+    return b.created_at - a.created_at
+  })
+}
+
 export function sortContracts<T extends StoredContract>(contracts: T[]): T[] {
   return [...contracts].sort((a, b) => {
     const netDiff = networkRank(a.network) - networkRank(b.network);
