@@ -234,7 +234,7 @@ export default function WebhookLog({
             {/* Header */}
             <div
               role="row"
-              className="grid border-b border-zinc-800 pb-3 mb-0"
+              className="grid sticky top-0 z-10 bg-zinc-900 border-b border-zinc-800 pb-3 mb-0"
               style={{ gridTemplateColumns: '160px 180px 1fr 140px 120px 120px' }}
             >
               {['Time', 'Rule', 'Tx Hash', 'Function', 'Amount', 'Latency'].map((h) => (
