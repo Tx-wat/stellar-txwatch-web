@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, type ChangeEvent } from 'react'
 import { AlertRule, AlertRuleType } from '@/types'
 import { formatRuleSummary } from '@/lib/format'
+import { parseRulesToml } from '@/lib/tomlRules'
 import { HORIZON_URLS } from '@/lib/stellar'
 import { STORAGE_KEYS } from '@/lib/storageKeys'
 import AlertRuleBadge from './AlertRuleBadge'
@@ -367,8 +368,46 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
     setShowTemplateModal(true)
   }
 
+  // Import rules from a txwatch-core TOML config (#646)
+  const [importMessage, setImportMessage] = useState<string | null>(null)
+  const tomlInputRef = useRef<HTMLInputElement>(null)
+
+  const handleTomlFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    const { rules: imported, skipped } = parseRulesToml(await file.text())
+    if (imported.length > 0) {
+      const updated = [...rules, ...imported]
+      onChange(updated)
+      onRulesChanged?.(updated, 'add')
+    }
+    setImportMessage(
+      `Imported ${imported.length} ${imported.length === 1 ? 'rule' : 'rules'}` +
+        (skipped > 0 ? `, skipped ${skipped} invalid` : ''),
+    )
+  }
+
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => tomlInputRef.current?.click()}
+          className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-xs font-medium text-zinc-200 hover:border-zinc-600"
+        >
+          Import from TOML
+        </button>
+        <input
+          ref={tomlInputRef}
+          type="file"
+          accept=".toml,text/plain"
+          className="hidden"
+          onChange={handleTomlFile}
+          aria-label="TOML rule config file"
+        />
+        {importMessage && <p role="status" className="text-xs text-zinc-400">{importMessage}</p>}
+      </div>
       <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4 space-y-3">
         <div>
           <label className="block text-xs font-medium text-zinc-400 mb-1">Rule Type</label>
