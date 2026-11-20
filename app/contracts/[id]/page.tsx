@@ -18,6 +18,7 @@ import ActiveRulesList from '@/components/ActiveRulesList'
 import EditDetailsModal from '@/components/EditDetailsModal'
 import EditRulesModal from '@/components/EditRulesModal'
 import DeleteContractModal from '@/components/DeleteContractModal'
+import CopyRulesModal from '@/components/CopyRulesModal'
 import ContractDetailLoading from './loading'
 
 
@@ -30,6 +31,7 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
   const [contractNotFound, setContractNotFound] = useState(false)
 
   const [showDelete, setShowDelete] = useState(false)
+  const [showCopyRules, setShowCopyRules] = useState(false)
   const [showEditDetails, setShowEditDetails] = useState(false)
   const [showEditRules, setShowEditRules] = useState(false)
   const [editedRules, setEditedRules] = useState<AlertRule[]>([])
@@ -936,6 +938,14 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
               ruleCount: rules.length,
             })
           }
+        />
+      )}
+
+      {showCopyRules && (
+        <CopyRulesModal
+          sourceContractId={contract.id}
+          rules={contract.rules}
+          onClose={() => setShowCopyRules(false)}
         />
       )}
 
