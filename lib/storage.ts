@@ -318,6 +318,7 @@ export function saveContract(contract: WatchedContract): void {
 }
 
 export function deleteContract(id: string): void {
+  // Removes the contract's alerts too. DeleteContractModal shows the count first (#652).
   const contract = getContract(id)
   save(CONTRACTS_KEY, getContracts().filter((c) => c.id !== id))
   notify(CONTRACTS_KEY)
