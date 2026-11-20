@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { getNetworkDetails } from '@stellar/freighter-api'
 import { AlertRule, Network, WatchedContract } from '@/types'
 import { isValidContractId, isValidUrl, isValidAccountId } from '@/lib/stellar'
 import { saveContract, getContracts } from '@/lib/storage'
@@ -262,9 +263,8 @@ export default function NewContractPage() {
   }
 
   async function checkNetworkMismatch(selectedNetwork: Network) {
-    if (!window.freighter) return
     try {
-      const walletNetwork = await window.freighter?.getNetwork()
+      const { network: walletNetwork } = await getNetworkDetails()
       const networkMap: Record<string, string> = {
         testnet: 'TESTNET',
         mainnet: 'PUBLIC',
@@ -571,7 +571,6 @@ export default function NewContractPage() {
             onChange={(e) => {
               const newNetwork = e.target.value as Network
               setNetwork(newNetwork)
-              checkNetworkMismatch(newNetwork)
               checkNetworkMismatch(newNetwork)
             }}
             className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-indigo-500 transition-colors"
