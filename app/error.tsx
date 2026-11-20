@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { onStorageError } from '@/lib/storageLogger';
+import * as Sentry from '@sentry/nextjs';
 
 export default function Error({
   error,
@@ -15,12 +15,7 @@ export default function Error({
 
   useEffect(() => {
     try {
-      onStorageError({
-        key: 'app-error',
-        rawValue: null,
-        error,
-        timestamp: Date.now(),
-      });
+      Sentry.captureException(error);
     } catch {
       // Never let error reporting throw inside the error boundary.
     }

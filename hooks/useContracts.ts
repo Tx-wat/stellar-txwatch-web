@@ -27,6 +27,8 @@ function delay(ms: number): Promise<void> {
 
 export type ExistenceResult = boolean | 'unknown'
 
+export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error'
+
 export async function checkContractsExistence(
   contracts: WatchedContract[]
 ): Promise<Map<string, ExistenceResult>> {
@@ -63,7 +65,7 @@ export function useContracts() {
   const [contracts, setContracts] = useState<WatchedContract[]>([])
   const [missingIds, setMissingIds] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle')
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle')
 
   const refresh = useCallback(async () => {
     setContracts(await adapter.getContracts())
