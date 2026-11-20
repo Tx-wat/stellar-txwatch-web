@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { WatchedContract, AlertPayload, AlertRule } from '@/types'
-import { getContract, deleteContract, getAlerts, saveContract } from '@/lib/storage'
+import { getContract, deleteContract, deleteAlerts, getAlerts, saveContract } from '@/lib/storage'
 import { truncateId, explorerContractUrl, isValidUrl } from '@/lib/stellar'
 import { formatDate, formatRuleSummary } from '@/lib/format'
 import { useAnalytics } from '@/hooks/useAnalytics'
@@ -18,6 +18,7 @@ import ActiveRulesList from '@/components/ActiveRulesList'
 import EditDetailsModal from '@/components/EditDetailsModal'
 import EditRulesModal from '@/components/EditRulesModal'
 import DeleteContractModal from '@/components/DeleteContractModal'
+import ClearHistoryModal from '@/components/ClearHistoryModal'
 import ContractDetailLoading from './loading'
 
 
@@ -30,6 +31,7 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
   const [contractNotFound, setContractNotFound] = useState(false)
 
   const [showDelete, setShowDelete] = useState(false)
+  const [showClearHistory, setShowClearHistory] = useState(false)
   const [showEditDetails, setShowEditDetails] = useState(false)
   const [showEditRules, setShowEditRules] = useState(false)
   const [editedRules, setEditedRules] = useState<AlertRule[]>([])
@@ -234,6 +236,13 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
       setTestError(err instanceof Error ? err.message : 'Request failed')
       addToast(`Test webhook failed: ${err instanceof Error ? err.message : 'Request failed'}`, 'error')
     }
+  }
+
+  // Alerts are keyed by the on-chain contract ID, not the route ID (#661)
+  function handleClearHistory() {
+    deleteAlerts(contract!.contract_id)
+    setAlerts(getAlerts(contract!.contract_id))
+    setShowClearHistory(false)
   }
 
   function handleDelete() {
@@ -441,6 +450,14 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
             className="flex-1 sm:flex-none"
           >
             Edit Rules
+          </Button>
+          <Button
+            onClick={() => setShowClearHistory(true)}
+            variant="secondary"
+            size="sm"
+            className="flex-1 sm:flex-none"
+          >
+            Clear History
           </Button>
           <Button
             onClick={() => setShowDelete(true)}
@@ -934,6 +951,15 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
           alertCount={alerts.length}
           onConfirm={handleDelete}
           onClose={() => setShowDelete(false)}
+        />
+      )}
+
+      {showClearHistory && (
+        <ClearHistoryModal
+          contractLabel={contract.label}
+          alertCount={getAlerts(contract.contract_id).length}
+          onConfirm={handleClearHistory}
+          onClose={() => setShowClearHistory(false)}
         />
       )}
     </div>

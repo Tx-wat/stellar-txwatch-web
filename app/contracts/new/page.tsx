@@ -104,6 +104,8 @@ export default function NewContractPage() {
   const [signers, setSigners] = useState<string[]>([])
   const [signerInput, setSignerInput] = useState('')
   const [errors, setErrors] = useState<FormErrors>({})
+  // The review step sits between validation and the actual save (#660)
+  const [reviewing, setReviewing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [testStatus, setTestStatus] = useState<'idle' | 'sending' | 'ok' | 'error'>('idle')
   const [testError, setTestError] = useState<string | null>(null)
@@ -281,6 +283,12 @@ export default function NewContractPage() {
     } catch {
       setNetworkWarning(null)
     }
+  }
+
+  function handleReview() {
+    const e = validate()
+    if (Object.keys(e).length > 0) { setErrors(e); return }
+    setReviewing(true)
   }
 
   async function handleSave() {
@@ -660,15 +668,42 @@ export default function NewContractPage() {
           </p>
         )}
 
+        {reviewing && (
+          <section aria-label="Review contract" className="rounded-xl border border-zinc-700 bg-zinc-900 p-4 space-y-3 text-sm text-zinc-300">
+            <h2 className="font-semibold text-zinc-100">Review before registering</h2>
+            <dl className="grid gap-2 sm:grid-cols-[max-content_1fr]">
+              <dt className="text-zinc-500">Label</dt>
+              <dd>{label.trim()}</dd>
+              <dt className="text-zinc-500">Contract ID</dt>
+              <dd className="font-mono break-all">{contractId.trim()}</dd>
+              <dt className="text-zinc-500">Network</dt>
+              <dd>{network}</dd>
+              <dt className="text-zinc-500">Webhook URL</dt>
+              <dd className="break-all">{webhookUrl.trim()}</dd>
+              <dt className="text-zinc-500">Rules</dt>
+              <dd>{rules.length}</dd>
+            </dl>
+          </section>
+        )}
+
         {/* Actions */}
         <div className="flex items-center gap-3 pt-2">
+          {reviewing && (
+            <Button
+              onClick={() => setReviewing(false)}
+              variant="ghost"
+              size="lg"
+            >
+              Back
+            </Button>
+          )}
           <Button
-            onClick={handleSave}
+            onClick={reviewing ? handleSave : handleReview}
             loading={saving}
             variant="primary"
             size="lg"
           >
-            {saving ? 'Saving...' : 'Save Contract'}
+            {reviewing ? (saving ? 'Saving...' : 'Confirm registration') : 'Review'}
           </Button>
           <Button
             onClick={() => requestNavigation(null)}
