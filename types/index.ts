@@ -90,6 +90,9 @@ export interface AlertPayload {
   delivery_retry_count?: number
   /** Timestamp (ms) of the last delivery attempt. */
   delivery_last_attempt?: number
+  /** Webhook delivery latency in milliseconds (time from transaction to delivery).
+   *  Absent for older alerts stored before this field existed, or for mock data. */
+  delivery_ms?: number
 }
 
 declare global {

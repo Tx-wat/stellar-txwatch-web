@@ -32,7 +32,7 @@ const ruleTypes: AlertRuleType[] = [
 // CSV export always operates on the full filtered set, not just the visible window.
 function exportCSV(alerts: AlertPayload[]) {
   const rows = [
-    ['Time', 'Rule', 'Rule Name', 'Tx Hash', 'Function', 'Amount'],
+    ['Time', 'Rule', 'Rule Name', 'Tx Hash', 'Function', 'Amount', 'Latency'],
     ...alerts.map((a) => [
       new Date(a.timestamp).toLocaleString(),
       a.rule_triggered,
@@ -43,6 +43,11 @@ function exportCSV(alerts: AlertPayload[]) {
       a.delivery_status ?? 'unknown',
       a.delivery_retry_count !== undefined ? String(a.delivery_retry_count) : 'N/A',
       a.delivery_last_attempt ? new Date(a.delivery_last_attempt).toLocaleString() : 'N/A',
+      a.delivery_ms !== undefined
+        ? a.delivery_ms < 1000
+          ? `${a.delivery_ms} ms`
+          : `${(a.delivery_ms / 1000).toFixed(2)} s`
+        : 'N/A',
     ]),
   ]
   const csv = rows.map((r) => r.map((v) => `"${v}"`).join(',')).join('\n')
@@ -230,9 +235,9 @@ export default function WebhookLog({
             <div
               role="row"
               className="grid border-b border-zinc-800 pb-3 mb-0"
-              style={{ gridTemplateColumns: '160px 180px 1fr 140px 120px' }}
+              style={{ gridTemplateColumns: '160px 180px 1fr 140px 120px 120px' }}
             >
-              {['Time', 'Rule', 'Tx Hash', 'Function', 'Amount'].map((h) => (
+              {['Time', 'Rule', 'Tx Hash', 'Function', 'Amount', 'Latency'].map((h) => (
                 <div
                   key={h}
                   role="columnheader"
@@ -278,7 +283,7 @@ export default function WebhookLog({
                         transform: `translateY(${row.start}px)`,
                         minHeight: ROW_HEIGHT,
                         alignItems: 'center',
-                        gridTemplateColumns: '160px 180px 1fr 140px 120px',
+                        gridTemplateColumns: '160px 180px 1fr 140px 120px 120px',
                       }}
                     >
                       <div role="cell" className="pr-4 text-zinc-400 whitespace-nowrap text-xs">
@@ -317,11 +322,18 @@ export default function WebhookLog({
                           <div role="cell" className="text-zinc-400 text-xs">
                             {alert.amount !== undefined ? `${alert.amount} XLM` : 'N/A'}
                           </div>
+                          <div role="cell" className="text-zinc-400 text-xs whitespace-nowrap">
+                            {alert.delivery_ms !== undefined
+                              ? alert.delivery_ms < 1000
+                                ? `${alert.delivery_ms} ms`
+                                : `${(alert.delivery_ms / 1000).toFixed(2)} s`
+                              : 'N/A'}
+                          </div>
                         </>
                       ) : (
                         <div
                           role="cell"
-                          className="col-span-4 text-zinc-600 text-xs italic"
+                          className="col-span-5 text-zinc-600 text-xs italic"
                           style={{ gridColumn: '2 / -1' }}
                         >
                           — No alert at this timestamp —
