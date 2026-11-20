@@ -266,6 +266,8 @@ export default function ContractsPage() {
         onViewModeChange={list.setViewMode}
         hasAnyContracts={hasAnyContracts}
         resultCount={list.filtered.length}
+        allVisibleSelected={list.allVisibleSelected}
+        onToggleSelectAll={list.toggleSelectAllVisible}
       />
 
       <div className="flex justify-end">
