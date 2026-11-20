@@ -161,8 +161,9 @@ export async function sendTestWebhook(
   webhookUrl: string,
   contractId: string,
   network: Network = 'testnet',
-  timeoutMs = 10000
-): Promise<void> {
+  signal?: AbortSignal,
+  signers?: string[]
+): Promise<{ status: number; ok: boolean }> {
   if (!webhookUrl || !isValidUrl(webhookUrl)) {
     throw new Error('Invalid webhook URL')
   }
@@ -179,15 +180,14 @@ export async function sendTestWebhook(
     ...(signers && signers.length > 0 ? { signers } : {}),
   }
 
-  let signal: AbortSignal | undefined
+  // Callers pass their own AbortSignal; without one, fall back to a 10s timeout.
   let timeoutId: ReturnType<typeof setTimeout> | undefined
+  let requestSignal = signal
 
-  if (typeof timeoutOrSignal === 'number') {
+  if (!requestSignal) {
     const controller = new AbortController()
-    timeoutId = setTimeout(() => controller.abort(), timeoutOrSignal)
-    signal = controller.signal
-  } else {
-    signal = timeoutOrSignal
+    timeoutId = setTimeout(() => controller.abort(), 10000)
+    requestSignal = controller.signal
   }
 
   try {
@@ -195,7 +195,7 @@ export async function sendTestWebhook(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-      signal,
+      signal: requestSignal,
     })
     return { status: res.status, ok: res.ok }
   } catch (error) {
