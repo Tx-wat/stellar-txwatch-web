@@ -6,6 +6,7 @@ import { useTodayAlertCount, useLastAlertTimes } from '@/hooks/useAlerts'
 import ContractCard from '@/components/ContractCard'
 import EmptyState from '@/components/EmptyState'
 import NetworkBadge from '@/components/NetworkBadge'
+import NetworkPie from '@/components/NetworkPie'
 import { Network } from '@/types'
 
 export default function DashboardPage() {
@@ -90,6 +91,9 @@ export default function DashboardPage() {
         <Link href="/contracts" className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-600 transition-colors">
           <p className="text-2xl font-bold text-zinc-100">{Object.keys(networkCounts).length}</p>
           <p className="text-xs text-zinc-500 mt-1">Networks in use</p>
+          <div className="mt-4">
+            <NetworkPie data={networkSummary} />
+          </div>
           <div className="mt-4 space-y-2">
             {networkSummary.length > 0 ? (
               networkSummary.map(({ network, count }) => (
