@@ -2,7 +2,6 @@ import { vi } from 'vitest';
 import {
   saveContract,
   deleteContract,
-  restoreContract,
   getContracts,
   getContract,
   saveAlert,

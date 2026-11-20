@@ -4,10 +4,11 @@ import {
   clearStorageErrorHandlers,
   StorageErrorContext,
 } from '../storageLogger';
+import { vi } from 'vitest';
 
-const captureExceptionMock = jest.fn();
+const captureExceptionMock = vi.fn();
 
-jest.mock('@sentry/nextjs', () => ({
+vi.mock('@sentry/nextjs', () => ({
   captureException: (...args: unknown[]) => captureExceptionMock(...args),
 }));
 

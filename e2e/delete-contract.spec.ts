@@ -14,19 +14,23 @@ const TEST_CONTRACT = {
 const TEST_ALERTS = [
   {
     id: 'alert-1',
-    contractId: 'contract-del-123',
-    type: 'transfer',
-    threshold: 100,
+    contract_id: 'CA3D5KRYMCMCZVACQ3YNMCXTREVRFW4SCPOQUELTRQD4Y3O7XR3LQGAS',
+    rule_triggered: 'transfer',
+    transaction_hash: 'tx-hash-1',
     timestamp: Date.now(),
-    createdAt: Date.now(),
+    horizon_link: 'https://horizon.stellar.org/transactions/tx-hash-1',
+    label: 'Contract To Delete',
+    network: 'testnet',
   },
   {
     id: 'alert-2',
-    contractId: 'contract-del-123',
-    type: 'invocation',
-    threshold: 0,
+    contract_id: 'CA3D5KRYMCMCZVACQ3YNMCXTREVRFW4SCPOQUELTRQD4Y3O7XR3LQGAS',
+    rule_triggered: 'invocation',
+    transaction_hash: 'tx-hash-2',
     timestamp: Date.now(),
-    createdAt: Date.now(),
+    horizon_link: 'https://horizon.stellar.org/transactions/tx-hash-2',
+    label: 'Contract To Delete',
+    network: 'testnet',
   },
 ]
 
@@ -73,6 +77,6 @@ test.describe('Contract Deletion Confirmation Modal', () => {
       return { contracts, alerts }
     })
     expect(storageState.contracts.find((c: any) => c.id === 'contract-del-123')).toBeUndefined()
-    expect(storageState.alerts.filter((a: any) => a.contractId === 'contract-del-123')).toHaveLength(0)
+    expect(storageState.alerts.filter((a: any) => a.contract_id === 'CA3D5KRYMCMCZVACQ3YNMCXTREVRFW4SCPOQUELTRQD4Y3O7XR3LQGAS')).toHaveLength(0)
   })
 })

@@ -23,7 +23,7 @@ test.describe('Add Contract Form', () => {
 
     // Fill in form fields
     await page.fill('input[placeholder="e.g. My DEX Contract"]', 'Production DEX')
-    await page.fill('input[placeholder="C... (56 characters)"]', VALID_CONTRACT_ID)
+    await page.fill('input[placeholder="CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"]', VALID_CONTRACT_ID)
     await page.selectOption('select', 'testnet')
     await page.fill('input[placeholder="https://your-server.com/webhook"]', 'https://example.com/webhook')
 
@@ -52,7 +52,7 @@ test.describe('Add Contract Form', () => {
     }, WALLET_PUBLIC_KEY)
 
     await page.goto('/contracts/new')
-    await page.fill('input[placeholder="C... (56 characters)"]', VALID_CONTRACT_ID)
+    await page.fill('input[placeholder="CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"]', VALID_CONTRACT_ID)
     await page.fill('input[placeholder="https://your-server.com/webhook"]', 'https://example.com/webhook')
     await page.click('button:has-text("Add Rule")')
 
@@ -71,7 +71,7 @@ test.describe('Add Contract Form', () => {
 
     await page.goto('/contracts/new')
     await page.fill('input[placeholder="e.g. My DEX Contract"]', 'Production DEX')
-    await page.fill('input[placeholder="C... (56 characters)"]', 'INVALID_ID')
+    await page.fill('input[placeholder="CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"]', 'INVALID_ID')
     await page.fill('input[placeholder="https://your-server.com/webhook"]', 'https://example.com/webhook')
     await page.click('button:has-text("Add Rule")')
 
@@ -90,7 +90,7 @@ test.describe('Add Contract Form', () => {
 
     await page.goto('/contracts/new')
     await page.fill('input[placeholder="e.g. My DEX Contract"]', 'Production DEX')
-    await page.fill('input[placeholder="C... (56 characters)"]', VALID_CONTRACT_ID)
+    await page.fill('input[placeholder="CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"]', VALID_CONTRACT_ID)
     await page.fill('input[placeholder="https://your-server.com/webhook"]', 'not-a-valid-url')
     await page.click('button:has-text("Add Rule")')
 
@@ -109,7 +109,7 @@ test.describe('Add Contract Form', () => {
 
     await page.goto('/contracts/new')
     await page.fill('input[placeholder="e.g. My DEX Contract"]', 'Production DEX')
-    await page.fill('input[placeholder="C... (56 characters)"]', VALID_CONTRACT_ID)
+    await page.fill('input[placeholder="CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"]', VALID_CONTRACT_ID)
     await page.fill('input[placeholder="https://your-server.com/webhook"]', 'https://example.com/webhook')
 
     await page.click('button:has-text("Save Contract")')
@@ -119,7 +119,7 @@ test.describe('Add Contract Form', () => {
   test('validation: save without wallet connected shows error', async ({ page }) => {
     await page.goto('/contracts/new')
     await page.fill('input[placeholder="e.g. My DEX Contract"]', 'Production DEX')
-    await page.fill('input[placeholder="C... (56 characters)"]', VALID_CONTRACT_ID)
+    await page.fill('input[placeholder="CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"]', VALID_CONTRACT_ID)
     await page.fill('input[placeholder="https://your-server.com/webhook"]', 'https://example.com/webhook')
     await page.click('button:has-text("Add Rule")')
 

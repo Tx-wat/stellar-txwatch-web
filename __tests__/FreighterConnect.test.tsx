@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { Networks } from '@stellar/stellar-sdk'
+import { vi } from 'vitest'
 import FreighterConnect from '@/components/FreighterConnect'
 import {
   isConnected,
@@ -7,23 +8,23 @@ import {
   getPublicKey,
 } from '@stellar/freighter-api'
 
-jest.mock('@stellar/freighter-api', () => ({
-  isConnected: jest.fn(),
-  requestAccess: jest.fn(),
-  getPublicKey: jest.fn(),
-  getNetworkDetails: jest.fn(),
-  signTransaction: jest.fn(),
+vi.mock('@stellar/freighter-api', () => ({
+  isConnected: vi.fn(),
+  requestAccess: vi.fn(),
+  getPublicKey: vi.fn(),
+  getNetworkDetails: vi.fn(),
+  signTransaction: vi.fn(),
 }))
 
-const mockIsConnected = isConnected as jest.MockedFunction<typeof isConnected>
-const mockRequestAccess = requestAccess as jest.MockedFunction<typeof requestAccess>
-const mockGetPublicKey = getPublicKey as jest.MockedFunction<typeof getPublicKey>
+const mockIsConnected = isConnected as ReturnType<typeof vi.fn>
+const mockRequestAccess = requestAccess as ReturnType<typeof vi.fn>
+const mockGetPublicKey = getPublicKey as ReturnType<typeof vi.fn>
 
 const MOCK_PUBLIC_KEY = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
 
 describe('FreighterConnect', () => {
   beforeEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
     mockIsConnected.mockResolvedValue(true)
     mockRequestAccess.mockResolvedValue(MOCK_PUBLIC_KEY)
     mockGetPublicKey.mockResolvedValue(MOCK_PUBLIC_KEY)
@@ -145,7 +146,7 @@ describe('FreighterConnect', () => {
     it('opens Freighter website when extension is not installed', async () => {
       mockIsConnected.mockResolvedValue(false)
       mockRequestAccess.mockRejectedValue(new Error('Freighter is not installed'))
-      const windowOpenSpy = jest.spyOn(window, 'open').mockImplementation()
+      const windowOpenSpy = vi.spyOn(window, 'open').mockImplementation()
 
       render(<FreighterConnect />)
 
@@ -161,7 +162,7 @@ describe('FreighterConnect', () => {
 
   describe('callbacks', () => {
     it('calls onConnect callback when connection succeeds', async () => {
-      const onConnect = jest.fn()
+      const onConnect = vi.fn()
       mockIsConnected.mockResolvedValue(false)
 
       render(<FreighterConnect onConnect={onConnect} />)
@@ -174,7 +175,7 @@ describe('FreighterConnect', () => {
     })
 
     it('calls onConnect callback on initial mount if already connected', async () => {
-      const onConnect = jest.fn()
+      const onConnect = vi.fn()
 
       render(<FreighterConnect onConnect={onConnect} />)
 
@@ -189,9 +190,9 @@ describe('FreighterConnect', () => {
 
     const setupFreighter = (networkPassphrase: string) => {
       ;(window as any).freighter = {
-        isConnected: jest.fn().mockResolvedValue(true),
-        getPublicKey: jest.fn().mockResolvedValue(mockPublicKey),
-        getNetworkDetails: jest.fn().mockResolvedValue({
+        isConnected: vi.fn().mockResolvedValue(true),
+        getPublicKey: vi.fn().mockResolvedValue(mockPublicKey),
+        getNetworkDetails: vi.fn().mockResolvedValue({
           network: 'CUSTOM',
           networkPassphrase,
           networkUrl: 'https://example.com',

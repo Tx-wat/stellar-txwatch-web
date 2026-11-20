@@ -7,6 +7,7 @@ import {
   STELLAR_EXPERT_BASE,
 } from '@/lib/stellar'
 import { Network } from '@/types'
+import { vi } from 'vitest'
 
 describe('isValidContractId', () => {
   it('accepts valid C-addresses', () => {
@@ -138,10 +139,10 @@ describe('explorer URLs', () => {
 // Soroban RPC helper tests
 // ---------------------------------------------------------------------------
 
-const mockScValToNative = jest.fn((val: unknown) => val)
+const mockScValToNative = vi.fn((val: unknown) => val)
 
-jest.mock('@stellar/stellar-sdk', () => {
-  const actual = jest.requireActual('@stellar/stellar-sdk')
+vi.mock('@stellar/stellar-sdk', () => {
+  const actual = vi.importActual('@stellar/stellar-sdk')
   return {
     ...actual,
     scValToNative: (val: unknown) => mockScValToNative(val),
@@ -170,11 +171,11 @@ describe('checkContractExists', () => {
 
   afterEach(() => {
     global.fetch = originalFetch
-    jest.restoreAllMocks()
+    vi.restoreAllMocks()
   })
 
   it('returns exists true when an entry is present', async () => {
-    global.fetch = jest.fn().mockResolvedValue(
+    global.fetch = vi.fn().mockResolvedValue(
       jsonResponse({
         result: {
           entries: [{ key: 'instance', xdr: 'AAAA' }],
@@ -191,7 +192,7 @@ describe('checkContractExists', () => {
   })
 
   it('returns exists false when the entry is null', async () => {
-    global.fetch = jest.fn().mockResolvedValue(
+    global.fetch = vi.fn().mockResolvedValue(
       jsonResponse({
         result: {
           entries: null,
@@ -207,7 +208,7 @@ describe('checkContractExists', () => {
   })
 
   it('surfaces an error when the RPC responds with an error', async () => {
-    global.fetch = jest.fn().mockResolvedValue(
+    global.fetch = vi.fn().mockResolvedValue(
       jsonResponse(
         {
           error: { code: -32600, message: 'Invalid request' },
@@ -224,7 +225,7 @@ describe('checkContractExists', () => {
   })
 
   it('returns a non-throwing error result when fetch rejects', async () => {
-    global.fetch = jest
+    global.fetch = vi
       .fn()
       .mockRejectedValue(new Error('network down')) as unknown as typeof fetch
 
@@ -240,12 +241,12 @@ describe('fetchContractMetadata', () => {
 
   afterEach(() => {
     global.fetch = originalFetch
-    jest.restoreAllMocks()
+    vi.restoreAllMocks()
     mockScValToNative.mockClear()
   })
 
   it('returns isSac true for SAC executables', async () => {
-    global.fetch = jest.fn().mockResolvedValue(
+    global.fetch = vi.fn().mockResolvedValue(
       jsonResponse({
         result: {
           entries: [
@@ -277,7 +278,7 @@ describe('fetchContractMetadata', () => {
   it('returns a wasm hash for wasm executables', async () => {
     const wasmHash = 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789'
 
-    global.fetch = jest.fn().mockResolvedValue(
+    global.fetch = vi.fn().mockResolvedValue(
       jsonResponse({
         result: {
           entries: [
@@ -313,7 +314,7 @@ describe('fetchContractEvents', () => {
 
   afterEach(() => {
     global.fetch = originalFetch
-    jest.restoreAllMocks()
+    vi.restoreAllMocks()
     mockScValToNative.mockClear()
   })
 
@@ -326,7 +327,7 @@ describe('fetchContractEvents', () => {
       return val
     })
 
-    global.fetch = jest.fn().mockResolvedValue(
+    global.fetch = vi.fn().mockResolvedValue(
       jsonResponse({
         result: {
           events: [
