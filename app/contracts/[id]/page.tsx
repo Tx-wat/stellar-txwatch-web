@@ -18,6 +18,7 @@ import ActiveRulesList from '@/components/ActiveRulesList'
 import EditDetailsModal from '@/components/EditDetailsModal'
 import EditRulesModal from '@/components/EditRulesModal'
 import DeleteContractModal from '@/components/DeleteContractModal'
+import CopyRulesModal from '@/components/CopyRulesModal'
 import ContractDetailLoading from './loading'
 
 
@@ -30,6 +31,7 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
   const [contractNotFound, setContractNotFound] = useState(false)
 
   const [showDelete, setShowDelete] = useState(false)
+  const [showCopyRules, setShowCopyRules] = useState(false)
   const [showEditDetails, setShowEditDetails] = useState(false)
   const [showEditRules, setShowEditRules] = useState(false)
   const [editedRules, setEditedRules] = useState<AlertRule[]>([])
@@ -628,7 +630,18 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
 
       {/* Active Rules */}
       <div>
-        <h2 className="text-lg font-semibold text-zinc-100 mb-3">Active Rules</h2>
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <h2 className="text-lg font-semibold text-zinc-100">Active Rules</h2>
+          {contract.rules.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowCopyRules(true)}
+              className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+            >
+              Copy rules
+            </button>
+          )}
+        </div>
         {contract.rules.length === 0 ? (
           <p className="text-sm text-zinc-500">No rules configured.</p>
         ) : (
@@ -925,6 +938,14 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
               ruleCount: rules.length,
             })
           }
+        />
+      )}
+
+      {showCopyRules && (
+        <CopyRulesModal
+          sourceContractId={contract.id}
+          rules={contract.rules}
+          onClose={() => setShowCopyRules(false)}
         />
       )}
 
