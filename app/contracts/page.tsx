@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { WatchedContract, Network } from '@/types'
-import { getContracts, deleteContract, saveContract } from '@/lib/storage'
+import { getContracts, deleteContract, saveContract, getTodayAlertCount } from '@/lib/storage'
 import { STORAGE_KEYS } from '@/lib/storageKeys'
 import { useContractListState } from '@/hooks/useContractListState'
 import { useLastAlertTimes } from '@/hooks/useAlerts'
@@ -230,6 +230,9 @@ export default function ContractsPage() {
   if (!mounted) return null
 
   const hasAnyContracts = allContracts.length > 0
+  // Totals for the footer (#648). Alert count is read on render, so it refreshes with the page.
+  const totalRules = allContracts.reduce((sum, contract) => sum + contract.rules.length, 0)
+  const todayAlertCount = getTodayAlertCount()
   const hasFilteredContracts = list.filtered.length > 0
 
   const renderCard = (contract: WatchedContract) => {
@@ -433,6 +436,14 @@ export default function ContractsPage() {
             </div>
           )}
         </>
+      )}
+
+      {hasAnyContracts && (
+        <footer className="flex flex-wrap gap-x-6 gap-y-1 border-t border-zinc-800 pt-4 text-sm text-zinc-400">
+          <span>{allContracts.length} {allContracts.length === 1 ? 'contract' : 'contracts'}</span>
+          <span>{totalRules} {totalRules === 1 ? 'rule' : 'rules'}</span>
+          <span>{todayAlertCount} {todayAlertCount === 1 ? 'alert' : 'alerts'} today</span>
+        </footer>
       )}
     </div>
   )
