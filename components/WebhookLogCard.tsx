@@ -1,8 +1,9 @@
 'use client';
 
 import React from 'react';
-import { explorerTxUrl, getExplorerName } from '@/lib/explorer';
-import { useExplorerPreference } from '@/hooks/useExplorerPreference';
+import { EXPLORERS, explorerTxUrl } from '@/lib/stellar';
+import { getSettings } from '@/lib/storage';
+import type { Network } from '@/types';
 
 export interface WebhookEntry {
   id: string;
@@ -13,6 +14,8 @@ export interface WebhookEntry {
   amount?: string;
   asset?: string;
   txHash?: string;
+  /** Network the transaction ran on; the explorer link defaults to testnet. */
+  network?: Network;
 }
 
 interface WebhookLogCardProps {
@@ -42,7 +45,9 @@ function truncateHash(hash: string, chars = 8): string {
 }
 
 export function WebhookLogCard({ entry }: WebhookLogCardProps) {
-  const explorer = useExplorerPreference();
+  // Explorer comes from the saved settings, not a separate hook (#551).
+  const explorer = getSettings().explorer;
+  const explorerName = EXPLORERS.find((e) => e.id === explorer)?.name ?? explorer;
 
   return (
     <article
@@ -86,11 +91,11 @@ export function WebhookLogCard({ entry }: WebhookLogCardProps) {
         <div className="text-xs">
           <span className="text-muted-foreground">Tx: </span>
           <a
-            href={explorerTxUrl(entry.txHash, explorer)}
+            href={explorerTxUrl(entry.network ?? 'testnet', entry.txHash, explorer)}
             target="_blank"
             rel="noopener noreferrer"
             className="font-mono text-primary hover:underline break-all"
-            aria-label={`View transaction ${entry.txHash} on ${getExplorerName(explorer)}`}
+            aria-label={`View transaction ${entry.txHash} on ${explorerName}`}
           >
             {truncateHash(entry.txHash)}
           </a>
