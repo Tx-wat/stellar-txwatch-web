@@ -6,6 +6,7 @@ import { useTodayAlertCount, useLastAlertTimes } from '@/hooks/useAlerts'
 import ContractCard from '@/components/ContractCard'
 import EmptyState from '@/components/EmptyState'
 import NetworkBadge from '@/components/NetworkBadge'
+import NetworkPie from '@/components/NetworkPie'
 import { Network } from '@/types'
 
 export default function DashboardPage() {
