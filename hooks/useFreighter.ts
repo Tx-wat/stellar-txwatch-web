@@ -2,20 +2,12 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Networks } from '@stellar/stellar-sdk'
-
-declare global {
-  interface Window {
-    freighter?: {
-      isConnected: () => Promise<boolean>
-      getPublicKey: () => Promise<string>
-      getNetwork: () => Promise<string>
-      getNetworkDetails: () => Promise<{ networkPassphrase: string }>
-      signTransaction: (xdr: string, options: { networkPassphrase: string }) => Promise<string>
-    }
-    /** Globally cached public key set by FreighterConnect after connection. */
-    __freighterPublicKey?: string | null
-  }
-}
+import {
+  isConnected,
+  requestAccess,
+  getPublicKey,
+  getNetworkDetails,
+} from '@stellar/freighter-api'
 
 export type KnownNetwork = 'PUBLIC' | 'TESTNET' | 'FUTURENET' | 'custom'
 
@@ -68,7 +60,7 @@ export function useFreighter() {
           return
         }
         setState({
-          publicKey: keyResult.address,
+          publicKey: keyResult.publicKey,
           network: networkResult.network,
           loading: false,
           error: null,
@@ -99,8 +91,8 @@ export function useFreighter() {
 
       const accessResult = await requestAccess()
       if (accessResult.error) {
-        const message = accessResult.error.message ?? ''
-        const isLocked = /lock/i.test(message)
+        const message = accessResult.error.code ?? ''
+        const isLocked = message === 'LOCKED'
         setState((prev) => ({
           ...prev,
           loading: false,
@@ -123,7 +115,7 @@ export function useFreighter() {
       }
 
       setState({
-        publicKey: keyResult.address,
+        publicKey: keyResult.publicKey,
         network: networkResult.network,
         loading: false,
         error: null,
