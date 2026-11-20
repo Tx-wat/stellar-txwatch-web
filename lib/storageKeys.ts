@@ -25,6 +25,8 @@ export const STORAGE_KEYS = {
   LAST_CREATED_CONTRACT: 'txwatch_last_created_contract',
   /** sessionStorage — unsaved draft of the add-contract form */
   NEW_CONTRACT_DRAFT: 'txwatch_new_contract_draft',
+  /** localStorage — whether the user has completed the onboarding tour */
+  ONBOARDING_COMPLETED: 'txwatch_onboarding_completed',
 } as const
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS]
