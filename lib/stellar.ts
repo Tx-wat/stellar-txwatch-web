@@ -123,6 +123,18 @@ export function explorerContractUrl(
  * @returns The identifier unchanged when short enough, otherwise
  *   `${first}...${last}`.
  */
+/**
+ * Native XLM balance for a Stellar account. Contract (C...) addresses have no
+ * Horizon account record, so they resolve to null (#649).
+ */
+export async function fetchNativeBalance(network: Network, accountId: string): Promise<string | null> {
+  if (!StrKey.isValidEd25519PublicKey(accountId)) return null
+  const server = new Horizon.Server(DEFAULT_HORIZON_URLS[network])
+  const account = await server.accounts().accountId(accountId).call()
+  const native = account.balances.find((balance) => balance.asset_type === 'native')
+  return native?.balance ?? null
+}
+
 export function truncateId(id: string, chars = 8): string {
   if (id.length <= chars * 2 + 3) return id
   return `${id.slice(0, chars)}...${id.slice(-chars)}`
