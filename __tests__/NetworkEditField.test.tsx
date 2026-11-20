@@ -1,8 +1,9 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { vi } from 'vitest';
 import { NetworkEditField } from '../components/NetworkEditField';
 
-const noop = jest.fn();
+const noop = vi.fn();
 
 describe('NetworkEditField', () => {
   beforeEach(() => noop.mockClear());
