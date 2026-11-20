@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { onStorageError } from '@/lib/storageLogger';
+import * as Sentry from '@sentry/nextjs';
 
 interface GlobalErrorProps {
   error: Error & { digest?: string };
@@ -13,7 +13,7 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
 
   useEffect(() => {
     try {
-      onStorageError(error);
+      Sentry.captureException(error);
     } catch {
       // Never let error reporting throw inside the error boundary.
     }
