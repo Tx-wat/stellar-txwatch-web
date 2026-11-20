@@ -465,6 +465,7 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
                 disabled={testStatus === 'sending'}
                 className="px-2 py-0.5 rounded-md border border-zinc-700 hover:border-zinc-500 text-xs text-zinc-300 hover:text-zinc-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Send a test payload to this webhook endpoint"
+                data-tour-test-webhook
               >
                 {testStatus === 'sending' ? 'Sending…' : testStatus === 'ok' ? `${testStatusCode} OK` : testStatus === 'error' ? `${testStatusCode ?? 'ERR'} Failed` : 'Send test'}
               </button>

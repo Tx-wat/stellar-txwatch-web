@@ -148,8 +148,14 @@ function save<T>(key: string, data: T[]): void {
   if (key === ALERTS_KEY) {
     const size = getStorageSize()
     if (size > STORAGE_QUOTA_BYTES * 0.9) {
-      const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000
-      data = (data as AlertPayload[]).filter((a) => a.timestamp >= cutoff) as unknown as T[]
+      // Emergency quota trim: keep only MAX_ALERTS_PER_CONTRACT newest per contract
+      const alerts = data as AlertPayload[]
+      const sorted = [...alerts].sort((a, b) => b.timestamp - a.timestamp)
+      const counts: Record<string, number> = {}
+      data = sorted.filter((a) => {
+        counts[a.contract_id] = (counts[a.contract_id] ?? 0) + 1
+        return counts[a.contract_id] <= MAX_ALERTS_PER_CONTRACT
+      }) as unknown as T[]
     }
     storage.setItem(key, JSON.stringify(data))
     return
@@ -159,8 +165,8 @@ function save<T>(key: string, data: T[]): void {
 
   const size = getStorageSize()
   if (size > STORAGE_QUOTA_BYTES * 0.9) {
-    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000
-    trimAlertsToCutoff(cutoff)
+    // Prune old alerts if still over quota
+    pruneOldAlerts()
   }
 }
 
@@ -423,6 +429,10 @@ export function addAlert(alert: AlertPayload | (AlertPayload & { contractId?: st
     contract_id: alert.contract_id ?? (alert as { contractId?: string }).contractId,
   }
   const all = [...load(ALERTS_KEY, AlertPayloadSchema), normalizedAlert]
+  
+  // Sort by timestamp descending to keep newest alerts, then trim per-contract
+  all.sort((a, b) => b.timestamp - a.timestamp)
+  
   const counts: Record<string, number> = {}
   save(ALERTS_KEY, all.filter((a) => {
     counts[a.contract_id] = (counts[a.contract_id] ?? 0) + 1

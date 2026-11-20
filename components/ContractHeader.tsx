@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { WatchedContract } from '@/types'
 import { truncateId, explorerContractUrl } from '@/lib/stellar'
 import NetworkBadge from '@/components/NetworkBadge'
@@ -18,6 +19,19 @@ export default function ContractHeader({
   onEditRules,
   onDelete,
 }: ContractHeaderProps) {
+  const [showShareCopied, setShowShareCopied] = useState(false)
+
+  const handleShareLink = async () => {
+    try {
+      const url = typeof window !== 'undefined' ? window.location.href : ''
+      await navigator.clipboard.writeText(url)
+      setShowShareCopied(true)
+      setTimeout(() => setShowShareCopied(false), 2000)
+    } catch {
+      // Fallback if clipboard API fails
+    }
+  }
+
   return (
     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
       <div className="space-y-1 min-w-0">
@@ -38,7 +52,14 @@ export default function ContractHeader({
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto relative">
+        <button
+          onClick={handleShareLink}
+          className="px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
+          title="Copy link to this contract"
+        >
+          {showShareCopied ? '✓ Copied' : 'Share'}
+        </button>
         <button
           onClick={onEditDetails}
           className="px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
@@ -48,6 +69,7 @@ export default function ContractHeader({
         <button
           onClick={onEditRules}
           className="px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
+          data-tour-configure-rules
         >
           Edit Rules
         </button>
