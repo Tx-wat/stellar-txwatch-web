@@ -11,6 +11,7 @@ import { useLastAlertTimes } from '@/hooks/useAlerts'
 import ContractCard from '@/components/ContractCard'
 import ContractListToolbar from '@/components/ContractListToolbar'
 import BulkActionBar from '@/components/BulkActionBar'
+import { exportSelectedContractsAsBlob } from '@/lib/exportStorage'
 import EmptyState from '@/components/EmptyState'
 
 const NETWORK_LABELS: Record<Network, string> = {
@@ -218,6 +219,16 @@ export default function ContractsPage() {
     setAllContracts(getContracts())
   }
 
+  // Downloads only the selected contracts, in the same format as the full export (#653)
+  const handleExportSelected = () => {
+    const url = URL.createObjectURL(exportSelectedContractsAsBlob(list.selectedIds))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'txwatch-selected-contracts.json'
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
   const handleCsvFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     event.target.value = ''
@@ -320,6 +331,7 @@ export default function ContractsPage() {
           selectedCount={list.selectedIds.length}
           allVisibleSelected={list.allVisibleSelected}
           onToggleSelectAll={list.toggleSelectAllVisible}
+          onExportSelected={handleExportSelected}
           onClearSelection={list.clearSelection}
           onDeleteSelected={handleDeleteSelected}
         />
