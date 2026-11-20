@@ -7,6 +7,7 @@ import { getContract, deleteContract, getAlerts, saveContract } from '@/lib/stor
 import { truncateId, explorerContractUrl, isValidUrl } from '@/lib/stellar'
 import { formatDate, formatRuleSummary } from '@/lib/format'
 import { useAnalytics } from '@/hooks/useAnalytics'
+import { useRecentlyViewed } from '@/hooks/useRecentlyViewed'
 import NetworkBadge from '@/components/NetworkBadge'
 import AlertRuleBadge from '@/components/AlertRuleBadge'
 import CopyButton from '@/components/CopyButton'
@@ -24,6 +25,7 @@ import ContractDetailLoading from './loading'
 export default function ContractDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const { trackEvent } = useAnalytics()
+  const { recordView } = useRecentlyViewed()
 
   const [contract, setContract] = useState<WatchedContract | null>(null)
   const [alerts, setAlerts] = useState<AlertPayload[]>([])
@@ -92,7 +94,8 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
     if (!c) { setContractNotFound(true); return }
     setContract(c)
     setAlerts(getAlerts(params.id))
-  }, [params.id])
+    recordView(params.id)
+  }, [params.id, recordView])
 
   const filteredAlerts = useMemo(() => {
     if (!searchHash) return alerts
