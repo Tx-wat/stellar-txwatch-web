@@ -5,8 +5,10 @@ import { useRouter } from 'next/navigation'
 import { WatchedContract, AlertPayload, AlertRule } from '@/types'
 import { getContract, deleteContract, getAlerts, saveContract } from '@/lib/storage'
 import { truncateId, explorerContractUrl, isValidUrl } from '@/lib/stellar'
-import { formatDate, formatRuleSummary } from '@/lib/format'
+import { formatDate, formatRuleSummary, formatRelativeTime } from '@/lib/format'
 import { useAnalytics } from '@/hooks/useAnalytics'
+import { useContracts } from '@/hooks/useContracts'
+import SyncIndicator from '@/components/SyncIndicator'
 import NetworkBadge from '@/components/NetworkBadge'
 import AlertRuleBadge from '@/components/AlertRuleBadge'
 import CopyButton from '@/components/CopyButton'
@@ -24,6 +26,7 @@ import ContractDetailLoading from './loading'
 export default function ContractDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const { trackEvent } = useAnalytics()
+  const { syncStatus, lastSyncedAt } = useContracts()
 
   const [contract, setContract] = useState<WatchedContract | null>(null)
   const [alerts, setAlerts] = useState<AlertPayload[]>([])
@@ -401,6 +404,14 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl font-bold text-zinc-100">{contract.label}</h1>
             <NetworkBadge network={contract.network} />
+            <div className="flex items-center gap-1.5">
+              <SyncIndicator status={syncStatus} />
+              {lastSyncedAt && (
+                <span className="text-xs text-zinc-500" title={formatDate(lastSyncedAt)}>
+                  · polled {formatRelativeTime(lastSyncedAt)}
+                </span>
+              )}
+            </div>
             {isPaused && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-900/30 border border-amber-700 text-xs font-medium text-amber-400">
                 Paused
