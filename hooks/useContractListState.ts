@@ -139,8 +139,19 @@ export function countByNetwork(contracts: WatchedContract[]): Record<NetworkFilt
   return counts
 }
 
-export function useContractListState(contracts: WatchedContract[], initialSearch = '') {
-  const [state, dispatch] = useReducer(contractListReducer, initialSearch, createInitialState)
+export function useContractListState(
+  contracts: WatchedContract[],
+  initialSearch = '',
+  options?: {
+    initialPage?: number
+    onPageChange?: (page: number) => void
+  }
+) {
+  const [state, dispatch] = useReducer(
+    contractListReducer,
+    { search: initialSearch, initialPage: options?.initialPage ?? 1 },
+    ({ search, initialPage }) => ({ ...createInitialState(search), page: initialPage })
+  )
 
   const filtered = useMemo(
     () => filterContracts(contracts, state.networkFilter, state.search),
@@ -157,6 +168,11 @@ export function useContractListState(contracts: WatchedContract[], initialSearch
       dispatch({ type: 'setPage', page: totalPages })
     }
   }, [state.page, totalPages])
+
+  useEffect(() => {
+    options?.onPageChange?.(state.page)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.page])
 
   // Drop selections for contracts that no longer exist
   useEffect(() => {

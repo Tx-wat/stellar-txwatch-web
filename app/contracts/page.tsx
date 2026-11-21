@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { WatchedContract, Network } from '@/types'
 import { getContracts, deleteContract, saveContract } from '@/lib/storage'
@@ -151,6 +151,7 @@ function importContractsFromCsv(text: string): CsvImportResult {
 }
 
 export default function ContractsPage() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const [allContracts, setAllContracts] = useState<WatchedContract[]>([])
   const [mounted, setMounted] = useState(false)
@@ -159,7 +160,20 @@ export default function ContractsPage() {
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
   const lastAlertTimes = useLastAlertTimes()
-  const list = useContractListState(allContracts, searchParams?.get('q') ?? '')
+
+  const pageParam = parseInt(searchParams?.get('page') ?? '1', 10)
+  const initialPage = isNaN(pageParam) || pageParam < 1 ? 1 : pageParam
+
+  const handlePageChange = useCallback((p: number) => {
+    const params = new URLSearchParams(searchParams?.toString() ?? '')
+    params.set('page', String(p))
+    router.replace(`/contracts?${params.toString()}`, { scroll: false })
+  }, [router, searchParams])
+
+  const list = useContractListState(allContracts, searchParams?.get('q') ?? '', {
+    initialPage,
+    onPageChange: handlePageChange,
+  })
 
   const contractGroups = useMemo(() => {
     const groups = new Map<string, WatchedContract[]>()

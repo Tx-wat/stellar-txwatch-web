@@ -1,13 +1,13 @@
 import { StrKey } from '@stellar/stellar-sdk'
 import { Network } from '@/types'
-import { StrKey } from '@stellar/stellar-sdk'
-import { SorobanRpc, Horizon, contract } from '@stellar/stellar-sdk'
 
 const DEFAULT_HORIZON_URLS: Record<Network, string> = {
   mainnet: 'https://horizon.stellar.org',
   testnet: 'https://horizon-testnet.stellar.org',
   futurenet: 'https://horizon-futurenet.stellar.org',
 }
+
+export const HORIZON_URLS: Record<Network, string> = DEFAULT_HORIZON_URLS
 
 const mainnetRpcUrl =
   process.env.NEXT_PUBLIC_SOROBAN_RPC_URL_MAINNET ||
@@ -158,6 +158,8 @@ export type ContractIdValidationResult =
   | { valid: true }
   | { valid: false; reason: 'format' | 'checksum'; message: string }
 
+const CONTRACT_ID_FORMAT = /^C[A-Z2-7]{55}$/
+
 /**
  * Validate a Stellar contract ID (StrKey `C...`).
  *
@@ -173,5 +175,36 @@ export function validateContractId(id: string): ContractIdValidationResult {
       message:
         'Invalid contract ID format: expected a 56-character string starting with "C" using the base32 alphabet (A-Z, 2-7).',
     }
+  }
+  try {
+    if (StrKey.isValidContract(id)) {
+      return { valid: true }
+    }
+    return {
+      valid: false,
+      reason: 'checksum',
+      message: 'Contract ID checksum is invalid. Check for a typo.',
+    }
+  } catch {
+    return {
+      valid: false,
+      reason: 'checksum',
+      message: 'Contract ID checksum is invalid. Check for a typo.',
+    }
+  }
+}
+
+/**
+ * Validate a URL for use as a webhook endpoint.
+ *
+ * @param url - Candidate URL string.
+ * @returns `true` only for valid HTTPS URLs.
+ */
+export function isValidUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'https:'
+  } catch {
+    return false
   }
 }
