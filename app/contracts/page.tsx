@@ -257,8 +257,8 @@ export default function ContractsPage() {
       <ContractListToolbar
         search={list.search}
         onSearchChange={list.setSearch}
-        networkFilter={list.networkFilter}
-        onNetworkFilterChange={list.setNetworkFilter}
+        networkFilters={list.networkFilters}
+        onNetworkFilterToggle={list.toggleNetworkFilter}
         networkCounts={list.networkCounts}
         sortBy={list.sortBy}
         onSortChange={list.setSortBy}

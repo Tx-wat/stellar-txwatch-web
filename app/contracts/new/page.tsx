@@ -108,6 +108,7 @@ export default function NewContractPage() {
   const [testStatus, setTestStatus] = useState<'idle' | 'sending' | 'ok' | 'error'>('idle')
   const [testError, setTestError] = useState<string | null>(null)
   const [testStatusCode, setTestStatusCode] = useState<number | null>(null)
+  const [testBodyPreview, setTestBodyPreview] = useState<string | null>(null)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [contractCheck, setContractCheck] = useState<'idle' | 'checking' | 'found' | 'not_found' | 'error'>('idle')
   const testAbortRef = useRef<AbortController | null>(null)
@@ -336,8 +337,9 @@ export default function NewContractPage() {
     setTestStatus('sending')
     setTestError(null)
     setTestStatusCode(null)
+    setTestBodyPreview(null)
     try {
-      const { status, ok } = await sendTestWebhook(
+      const { status, ok, bodyPreview } = await sendTestWebhook(
         trimmedWebhookUrl,
         trimmedContractId,
         network,
@@ -345,6 +347,7 @@ export default function NewContractPage() {
         signers.length > 0 ? signers : undefined
       )
       setTestStatusCode(status)
+      setTestBodyPreview(bodyPreview)
       if (ok) {
         setTestStatus('ok')
       } else {
@@ -612,6 +615,14 @@ export default function NewContractPage() {
           {errors.webhook_url && <p className="mt-1 text-xs text-red-400">{errors.webhook_url}</p>}
           {testStatus === 'error' && testError && <p className="mt-1 text-xs text-red-400">{testError}</p>}
           {testStatus === 'ok' && <p className="mt-1 text-xs text-emerald-400">Test payload delivered — {testStatusCode} received</p>}
+          {(testStatus === 'ok' || testStatus === 'error') && testBodyPreview && (
+            <div className="mt-1.5 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2">
+              <p className="text-xs text-zinc-500 mb-1">
+                Response {testStatusCode !== null && <span className="font-mono">({testStatusCode})</span>}
+              </p>
+              <pre className="text-xs text-zinc-400 whitespace-pre-wrap break-all font-mono">{testBodyPreview}</pre>
+            </div>
+          )}
         </div>
 
         {/* Webhook Secret */}

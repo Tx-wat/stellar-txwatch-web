@@ -1,8 +1,8 @@
 import Link from 'next/link'
 import { NetworkFilter, SortOption, ViewMode } from '@/hooks/useContractListState'
+import { Network } from '@/types'
 
-const NETWORK_FILTERS: { value: NetworkFilter; label: string }[] = [
-  { value: 'all', label: 'All Networks' },
+const NETWORK_FILTERS: { value: Network; label: string }[] = [
   { value: 'mainnet', label: 'Mainnet' },
   { value: 'testnet', label: 'Testnet' },
   { value: 'futurenet', label: 'Futurenet' },
@@ -18,8 +18,8 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
 interface ContractListToolbarProps {
   search: string
   onSearchChange: (search: string) => void
-  networkFilter: NetworkFilter
-  onNetworkFilterChange: (filter: NetworkFilter) => void
+  networkFilters: Network[]
+  onNetworkFilterToggle: (network: Network) => void
   networkCounts: Record<NetworkFilter, number>
   sortBy: SortOption
   onSortChange: (sortBy: SortOption) => void
@@ -32,8 +32,8 @@ interface ContractListToolbarProps {
 export default function ContractListToolbar({
   search,
   onSearchChange,
-  networkFilter,
-  onNetworkFilterChange,
+  networkFilters,
+  onNetworkFilterToggle,
   networkCounts,
   sortBy,
   onSortChange,
@@ -84,24 +84,43 @@ export default function ContractListToolbar({
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-1 p-1 bg-zinc-900 border border-zinc-800 rounded-lg w-fit" role="group" aria-label="Filter by network">
+          <button
+            onClick={() => networkFilters.forEach((n) => onNetworkFilterToggle(n))}
+            aria-pressed={networkFilters.length === 0}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              networkFilters.length === 0
+                ? 'bg-indigo-600 text-white'
+                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+            }`}
+          >
+            All Networks
+            <span className={`text-xs px-1.5 py-0.5 rounded-full ${networkFilters.length === 0 ? 'bg-indigo-500 text-indigo-100' : 'bg-zinc-800 text-zinc-500'}`}>
+              {networkCounts.all}
+            </span>
+          </button>
           {NETWORK_FILTERS.map(({ value, label }) => {
-            const isActive = networkFilter === value
+            const isActive = networkFilters.includes(value)
             return (
-              <button
+              <label
                 key={value}
-                onClick={() => onNetworkFilterChange(value)}
-                aria-pressed={isActive}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                   isActive
                     ? 'bg-indigo-600 text-white'
                     : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
                 }`}
               >
+                <input
+                  type="checkbox"
+                  checked={isActive}
+                  onChange={() => onNetworkFilterToggle(value)}
+                  className="sr-only"
+                  aria-label={`Filter by ${label}`}
+                />
                 {label}
                 <span className={`text-xs px-1.5 py-0.5 rounded-full ${isActive ? 'bg-indigo-500 text-indigo-100' : 'bg-zinc-800 text-zinc-500'}`}>
                   {networkCounts[value]}
                 </span>
-              </button>
+              </label>
             )
           })}
         </div>
