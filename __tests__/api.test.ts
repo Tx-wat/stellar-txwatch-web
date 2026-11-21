@@ -60,13 +60,16 @@ describe('sendTestWebhook', () => {
     vi.restoreAllMocks()
   })
 
-  it('resolves without error on success (200) and includes network parameter in payload', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 })
+  it('resolves with status/ok/bodyPreview on success (200) and includes network parameter in payload', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve('{"received":true}'),
+    })
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(
-      sendTestWebhook('https://example.com/webhook', 'CBCDEF12345', 'mainnet')
-    ).resolves.toBeUndefined()
+    const result = await sendTestWebhook('https://example.com/webhook', 'CBCDEF12345', 'mainnet')
+    expect(result).toEqual({ status: 200, ok: true, bodyPreview: '{"received":true}' })
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const [calledUrl, options] = fetchMock.mock.calls[0]
@@ -81,16 +84,29 @@ describe('sendTestWebhook', () => {
     expect(body.horizon_link).toContain('transactions/test')
   })
 
-  it('throws "Webhook returned 500" on HTTP 500 error', async () => {
+  it('resolves with ok: false and the status/body on an HTTP error response', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: false,
       status: 500,
+      text: () => Promise.resolve('Internal Server Error'),
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(
-      sendTestWebhook('https://example.com/webhook', 'CBCDEF12345')
-    ).rejects.toThrow('Webhook returned 500')
+    const result = await sendTestWebhook('https://example.com/webhook', 'CBCDEF12345')
+    expect(result).toEqual({ status: 500, ok: false, bodyPreview: 'Internal Server Error' })
+  })
+
+  it('truncates the body preview to 200 characters', async () => {
+    const longBody = 'x'.repeat(500)
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve(longBody),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await sendTestWebhook('https://example.com/webhook', 'CBCDEF12345')
+    expect(result.bodyPreview).toHaveLength(200)
   })
 
   it('throws "Webhook request timed out" on AbortError timeout', async () => {

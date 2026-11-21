@@ -157,12 +157,20 @@ export async function fetchTokenDecimals(
   return value
 }
 
+export interface TestWebhookResult {
+  status: number
+  ok: boolean
+  /** First 200 chars of the response body, for display purposes. */
+  bodyPreview: string
+}
+
 export async function sendTestWebhook(
   webhookUrl: string,
   contractId: string,
   network: Network = 'testnet',
-  timeoutMs = 10000
-): Promise<void> {
+  signalOrTimeoutMs: AbortSignal | number = 10000,
+  signers?: string[]
+): Promise<TestWebhookResult> {
   if (!webhookUrl || !isValidUrl(webhookUrl)) {
     throw new Error('Invalid webhook URL')
   }
@@ -182,12 +190,12 @@ export async function sendTestWebhook(
   let signal: AbortSignal | undefined
   let timeoutId: ReturnType<typeof setTimeout> | undefined
 
-  if (typeof timeoutOrSignal === 'number') {
+  if (typeof signalOrTimeoutMs === 'number') {
     const controller = new AbortController()
-    timeoutId = setTimeout(() => controller.abort(), timeoutOrSignal)
+    timeoutId = setTimeout(() => controller.abort(), signalOrTimeoutMs)
     signal = controller.signal
   } else {
-    signal = timeoutOrSignal
+    signal = signalOrTimeoutMs
   }
 
   try {
@@ -197,7 +205,14 @@ export async function sendTestWebhook(
       body: JSON.stringify(payload),
       signal,
     })
-    return { status: res.status, ok: res.ok }
+    let bodyPreview = ''
+    try {
+      const text = await res.text()
+      bodyPreview = text.slice(0, 200)
+    } catch {
+      bodyPreview = ''
+    }
+    return { status: res.status, ok: res.ok, bodyPreview }
   } catch (error) {
     const err = error as { name?: string }
     if (err?.name === 'AbortError') {
