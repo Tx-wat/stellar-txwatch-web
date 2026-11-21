@@ -113,6 +113,60 @@ export async function fetchContractInstance(
   return { liveUntilLedgerSeq: Number(entry.liveUntilLedgerSeq) }
 }
 
+const contractFunctionsCache = new Map<string, string[]>()
+
+/**
+ * Fetches the list of exported function names from a contract's Soroban
+ * spec, shared by both the FunctionCalled and AdminFunctionCalled rule
+ * inputs in RuleBuilder (issue #626). Results are cached per
+ * `network:contract_id` so re-opening the rule builder for the same
+ * contract doesn't re-fetch. Falls back to an empty list (plain text
+ * entry) if the spec can't be read, instead of throwing.
+ */
+export async function fetchContractFunctions(
+  contractId: string,
+  network: Network = 'testnet'
+): Promise<string[]> {
+  const cacheKey = `${network}:${contractId}`
+  const cached = contractFunctionsCache.get(cacheKey)
+  if (cached) return cached
+
+  try {
+    const { Contract, rpc } = await import('@stellar/stellar-sdk')
+    const server = new rpc.Server(SOROBAN_RPC_URLS[network])
+    const contract = new Contract(contractId)
+    // getContractSpec parses the WASM's exported contractspecv0 section
+    // into function/type definitions.
+    const spec = await (server as unknown as {
+      getContractSpec: (c: unknown) => Promise<{ funcs: () => Array<{ name: () => string }> }>
+    }).getContractSpec(contract)
+    const names = spec.funcs().map((f) => f.name()).filter(Boolean)
+    contractFunctionsCache.set(cacheKey, names)
+    return names
+  } catch {
+    contractFunctionsCache.set(cacheKey, [])
+    return []
+  }
+}
+
+/**
+ * Checks whether a contract instance exists on the given network by
+ * querying Soroban RPC for its ledger entry. Used to validate a
+ * contract_id before switching a watched contract to a new network
+ * (see issue #627).
+ */
+export async function contractExistsOnNetwork(
+  contractId: string,
+  network: Network
+): Promise<boolean> {
+  try {
+    await fetchContractInstance(contractId, network)
+    return true
+  } catch {
+    return false
+  }
+}
+
 /**
  * Invokes the token contract's `decimals()` function via Soroban RPC
  * simulation and returns the token's decimal precision.
