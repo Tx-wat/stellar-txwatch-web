@@ -419,7 +419,10 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
             <CopyButton text={contract.contract_id} />
           </div>
         </div>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+        <div className="no-print flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+          <Button onClick={() => window.print()} variant="secondary" size="sm">
+            Print / Export PDF
+          </Button>
           <Button onClick={handleToggleEnabled} variant="secondary" size="sm">
             {isPaused ? 'Resume' : 'Pause'}
           </Button>
