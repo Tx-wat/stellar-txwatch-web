@@ -3,13 +3,15 @@ import { WatchedContract, Network } from '@/types'
 
 export type ViewMode = 'flat' | 'grouped'
 export type NetworkFilter = 'all' | Network
+export const ALL_NETWORKS: Network[] = ['mainnet', 'testnet', 'futurenet']
 export type SortOption = 'newest' | 'oldest' | 'label-asc' | 'label-desc'
 
 export const PAGE_SIZE = 12
 
 export interface ContractListState {
   search: string
-  networkFilter: NetworkFilter
+  /** Empty array means "all networks" */
+  networkFilters: Network[]
   sortBy: SortOption
   viewMode: ViewMode
   page: number
@@ -18,7 +20,8 @@ export interface ContractListState {
 
 export type ContractListAction =
   | { type: 'setSearch'; search: string }
-  | { type: 'setNetworkFilter'; networkFilter: NetworkFilter }
+  | { type: 'toggleNetworkFilter'; network: Network }
+  | { type: 'setNetworkFilters'; networks: Network[] }
   | { type: 'setSortBy'; sortBy: SortOption }
   | { type: 'setViewMode'; viewMode: ViewMode }
   | { type: 'setPage'; page: number }
@@ -30,7 +33,7 @@ export type ContractListAction =
 export function createInitialState(search = ''): ContractListState {
   return {
     search,
-    networkFilter: 'all',
+    networkFilters: [],
     sortBy: 'newest',
     viewMode: 'flat',
     page: 1,
@@ -45,8 +48,16 @@ export function contractListReducer(
   switch (action.type) {
     case 'setSearch':
       return { ...state, search: action.search, page: 1 }
-    case 'setNetworkFilter':
-      return { ...state, networkFilter: action.networkFilter, page: 1 }
+    case 'toggleNetworkFilter':
+      return {
+        ...state,
+        networkFilters: state.networkFilters.includes(action.network)
+          ? state.networkFilters.filter((n) => n !== action.network)
+          : [...state.networkFilters, action.network],
+        page: 1,
+      }
+    case 'setNetworkFilters':
+      return { ...state, networkFilters: Array.from(new Set(action.networks)), page: 1 }
     case 'setSortBy':
       return { ...state, sortBy: action.sortBy }
     case 'setViewMode':
@@ -54,7 +65,7 @@ export function contractListReducer(
     case 'setPage':
       return { ...state, page: Math.max(1, action.page) }
     case 'clearFilters':
-      return { ...state, search: '', networkFilter: 'all', page: 1 }
+      return { ...state, search: '', networkFilters: [], page: 1 }
     case 'toggleSelected':
       return {
         ...state,
@@ -73,13 +84,13 @@ export function contractListReducer(
 
 export function filterContracts(
   contracts: WatchedContract[],
-  networkFilter: NetworkFilter,
+  networkFilters: Network[],
   search: string
 ): WatchedContract[] {
   const byNetwork =
-    networkFilter === 'all'
+    networkFilters.length === 0
       ? contracts
-      : contracts.filter((contract) => contract.network === networkFilter)
+      : contracts.filter((contract) => networkFilters.includes(contract.network))
 
   const query = search.trim().toLowerCase()
   if (!query) return byNetwork
@@ -143,8 +154,8 @@ export function useContractListState(contracts: WatchedContract[], initialSearch
   const [state, dispatch] = useReducer(contractListReducer, initialSearch, createInitialState)
 
   const filtered = useMemo(
-    () => filterContracts(contracts, state.networkFilter, state.search),
-    [contracts, state.networkFilter, state.search]
+    () => filterContracts(contracts, state.networkFilters, state.search),
+    [contracts, state.networkFilters, state.search]
   )
   const sorted = useMemo(() => sortContractList(filtered, state.sortBy), [filtered, state.sortBy])
   const totalPages = getTotalPages(sorted.length)
@@ -171,8 +182,12 @@ export function useContractListState(contracts: WatchedContract[], initialSearch
     visible.length > 0 && visible.every((contract) => state.selectedIds.includes(contract.id))
 
   const setSearch = useCallback((search: string) => dispatch({ type: 'setSearch', search }), [])
-  const setNetworkFilter = useCallback(
-    (networkFilter: NetworkFilter) => dispatch({ type: 'setNetworkFilter', networkFilter }),
+  const toggleNetworkFilter = useCallback(
+    (network: Network) => dispatch({ type: 'toggleNetworkFilter', network }),
+    []
+  )
+  const setNetworkFilters = useCallback(
+    (networks: Network[]) => dispatch({ type: 'setNetworkFilters', networks }),
     []
   )
   const setSortBy = useCallback((sortBy: SortOption) => dispatch({ type: 'setSortBy', sortBy }), [])
@@ -200,7 +215,8 @@ export function useContractListState(contracts: WatchedContract[], initialSearch
     totalPages,
     allVisibleSelected,
     setSearch,
-    setNetworkFilter,
+    toggleNetworkFilter,
+    setNetworkFilters,
     setSortBy,
     setViewMode,
     setPage,
