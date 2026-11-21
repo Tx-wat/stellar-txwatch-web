@@ -21,7 +21,7 @@ export default function ActiveRulesList({ rules }: ActiveRulesListProps) {
               key={i}
               className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2"
             >
-              <AlertRuleBadge type={rule.type} />
+              <AlertRuleBadge type={rule.type} asset={rule.asset} name={rule.name} />
               {rule.name && (
                 <span className="text-xs font-medium text-zinc-200">{rule.name}</span>
               )}
