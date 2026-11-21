@@ -59,6 +59,14 @@ describe('AlertRuleBadge', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('prefixes the tooltip with the rule name when provided', () => {
+    render(<AlertRuleBadge type="LargeTransfer" name="Treasury withdraw" />)
+    fireEvent.mouseEnter(screen.getByText('Large Transfer'))
+    expect(
+      screen.getByText('"Treasury withdraw" — Alert when a transfer exceeds the specified XLM threshold')
+    ).toBeInTheDocument()
+  })
+
   it('renders gracefully for an unknown rule type without throwing', () => {
     expect(() =>
       render(<AlertRuleBadge type={'Bogus' as AlertRuleType} />)

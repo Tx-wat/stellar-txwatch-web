@@ -7,6 +7,8 @@ interface AlertRuleBadgeProps {
   type: AlertRuleType
   /** Optional token (SAC/token contract ID) for token-denominated LargeTransfer thresholds */
   asset?: string
+  /** Optional user-supplied rule name, prefixed onto the tooltip when present. */
+  name?: string
 }
 
 const styles: Record<AlertRuleType, string> = {
@@ -33,13 +35,14 @@ const descriptions: Record<AlertRuleType, string> = {
   TransactionFailed: 'Alert when a transaction fails',
 }
 
-export default function AlertRuleBadge({ type, asset }: AlertRuleBadgeProps) {
+export default function AlertRuleBadge({ type, asset, name }: AlertRuleBadgeProps) {
   const [showTooltip, setShowTooltip] = useState(false)
 
-  const description =
+  const baseDescription =
     type === 'LargeTransfer' && asset
       ? 'Alert when a transfer exceeds the specified token threshold'
       : descriptions[type]
+  const description = name ? `"${name}" — ${baseDescription}` : baseDescription
 
   return (
     <div className="relative inline-block">
