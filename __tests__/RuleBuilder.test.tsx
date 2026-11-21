@@ -178,4 +178,17 @@ describe('RuleBuilder', () => {
     expect(screen.queryByText('Any Transaction')).not.toBeInTheDocument()
     expect(screen.getByText('Tx Failed')).toBeInTheDocument()
   })
+
+  it('shows the rule count badge without a warning under the limit', () => {
+    render(<Harness initial={[{ type: 'AnyTransaction' }]} />)
+    expect(screen.getByTestId('rule-count-badge')).toHaveTextContent('1 rule')
+    expect(screen.queryByTestId('rule-count-warning')).not.toBeInTheDocument()
+  })
+
+  it('shows a warning badge when rule count exceeds the threshold', () => {
+    const manyRules: AlertRule[] = Array.from({ length: 21 }, () => ({ type: 'AnyTransaction' }))
+    render(<Harness initial={manyRules} />)
+    expect(screen.getByTestId('rule-count-badge')).toHaveTextContent('21 rules')
+    expect(screen.getByTestId('rule-count-warning')).toBeInTheDocument()
+  })
 })

@@ -30,6 +30,15 @@ const RULE_EXAMPLES: Record<AlertRuleType, string> = {
 }
 
 const TEMPLATE_STORAGE_KEY = STORAGE_KEYS.RULE_TEMPLATES
+const ALERT_RULES_DOC_URL = 'https://docs.txwatch.dev/alert-rules'
+/** Rules beyond this count may cause core-engine evaluation slowdowns. */
+const RULE_COUNT_WARNING_THRESHOLD = 20
+
+interface DryRunResult {
+  matched: number
+  total: number
+  matchedHashes: string[]
+}
 
 interface RuleTemplate {
   id: string
@@ -82,7 +91,7 @@ async function fetchTokenDecimals(asset: string): Promise<number | null> {
   }
 }
 
-export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBuilderProps) {
+export default function RuleBuilder({ rules, onChange, onRulesChanged, exportedFunctions }: RuleBuilderProps) {
   const [draft, setDraft] = useState<AlertRule>(emptyRule())
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -91,6 +100,9 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
   const [showTemplateModal, setShowTemplateModal] = useState(false)
   const [templateName, setTemplateName] = useState('')
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
+  const [decimalsLoading, setDecimalsLoading] = useState(false)
+  const [decimalsError, setDecimalsError] = useState<string | null>(null)
+  const [tokenDecimals, setTokenDecimals] = useState<number | null>(null)
 
   useEffect(() => {
     setTemplates(loadTemplates())
@@ -197,37 +209,37 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
     return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)
   }
 
-  function addRule() {
+  function validateDraft(): boolean {
     if (draft.name && draft.name.length > 60) {
       setError('Rule name must be 60 characters or fewer')
-      return
+      return false
     }
     if (draft.type === 'LargeTransfer') {
       if (draft.asset) {
         if (!SAC_CONTRACT_ID_REGEX.test(draft.asset)) {
           setError('Enter a valid token contract ID (starts with C, 56 characters)')
-          return
+          return false
         }
         if (decimalsError) {
           setError(decimalsError)
-          return
+          return false
         }
         if (draft.threshold === undefined || draft.threshold === null || isNaN(draft.threshold)) {
           setError('Enter a valid token threshold')
-          return
+          return false
         }
         if (draft.threshold <= 0) {
           setError('Threshold must be greater than 0')
-          return
+          return false
         }
       } else {
         if (draft.threshold_xlm === undefined || draft.threshold_xlm === null || isNaN(draft.threshold_xlm)) {
           setError('Enter a valid XLM threshold')
-          return
+          return false
         }
         if (draft.threshold_xlm <= 0) {
           setError('Threshold must be greater than 0')
-          return
+          return false
         }
       }
     }
@@ -367,8 +379,27 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
     setShowTemplateModal(true)
   }
 
+  const isOverRuleLimit = rules.length > RULE_COUNT_WARNING_THRESHOLD
+
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-medium text-zinc-300">Alert Rules</h4>
+        <span
+          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+            isOverRuleLimit ? 'bg-amber-900/30 text-amber-400 border border-amber-700' : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
+          }`}
+          data-testid="rule-count-badge"
+        >
+          {rules.length} rule{rules.length !== 1 ? 's' : ''}
+        </span>
+      </div>
+      {isOverRuleLimit && (
+        <p className="text-xs text-amber-400" data-testid="rule-count-warning">
+          You have {rules.length} rules, which exceeds the recommended limit of {RULE_COUNT_WARNING_THRESHOLD}.
+          The core engine may have performance issues evaluating this many rules per contract.
+        </p>
+      )}
       <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4 space-y-3">
         <div>
           <label className="block text-xs font-medium text-zinc-400 mb-1">Rule Type</label>
@@ -521,22 +552,6 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
             </svg>
             {editingIndex !== null ? 'Update Rule' : 'Add Rule'}
           </button>
-
-          {isDraftTestable() && (
-            <button
-              type="button"
-              onClick={handleTestRule}
-              disabled={dryRunStatus === 'running'}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-sm font-medium text-zinc-200 transition-colors"
-              title={!contractId ? 'Enter a contract ID to enable dry-run testing' : 'Evaluate this rule against the last 20 transactions'}
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              {dryRunStatus === 'running' ? 'Testing…' : 'Test Rule'}
-            </button>
-          )}
 
           {editingIndex !== null && (
             <button
