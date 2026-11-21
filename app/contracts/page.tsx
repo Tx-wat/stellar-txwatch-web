@@ -266,6 +266,7 @@ export default function ContractsPage() {
         onViewModeChange={list.setViewMode}
         hasAnyContracts={hasAnyContracts}
         resultCount={list.filtered.length}
+        isSearchPending={list.isSearchPending}
       />
 
       <div className="flex justify-end">

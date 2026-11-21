@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
 import { WatchedContract, Network } from '@/types'
 
 export type ViewMode = 'flat' | 'grouped'
@@ -139,12 +139,25 @@ export function countByNetwork(contracts: WatchedContract[]): Record<NetworkFilt
   return counts
 }
 
+export const SEARCH_DEBOUNCE_MS = 200
+
 export function useContractListState(contracts: WatchedContract[], initialSearch = '') {
   const [state, dispatch] = useReducer(contractListReducer, initialSearch, createInitialState)
+  const [debouncedSearch, setDebouncedSearch] = useState(state.search)
+  const [isSearchPending, setIsSearchPending] = useState(false)
+
+  useEffect(() => {
+    setIsSearchPending(true)
+    const timer = setTimeout(() => {
+      setDebouncedSearch(state.search)
+      setIsSearchPending(false)
+    }, SEARCH_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
+  }, [state.search])
 
   const filtered = useMemo(
-    () => filterContracts(contracts, state.networkFilter, state.search),
-    [contracts, state.networkFilter, state.search]
+    () => filterContracts(contracts, state.networkFilter, debouncedSearch),
+    [contracts, state.networkFilter, debouncedSearch]
   )
   const sorted = useMemo(() => sortContractList(filtered, state.sortBy), [filtered, state.sortBy])
   const totalPages = getTotalPages(sorted.length)
@@ -198,6 +211,7 @@ export function useContractListState(contracts: WatchedContract[], initialSearch
     grouped,
     networkCounts,
     totalPages,
+    isSearchPending,
     allVisibleSelected,
     setSearch,
     setNetworkFilter,
