@@ -3,7 +3,7 @@ import { WatchedContract, Network } from '@/types'
 
 export type ViewMode = 'flat' | 'grouped'
 export type NetworkFilter = 'all' | Network
-export type SortOption = 'newest' | 'oldest' | 'label-asc' | 'label-desc'
+export type SortOption = 'newest' | 'oldest' | 'label-asc' | 'label-desc' | 'rule-count-desc'
 
 export const PAGE_SIZE = 12
 
@@ -100,6 +100,11 @@ export function sortContractList(contracts: WatchedContract[], sortBy: SortOptio
       return sorted.sort((a, b) => a.label.localeCompare(b.label))
     case 'label-desc':
       return sorted.sort((a, b) => b.label.localeCompare(a.label))
+    case 'rule-count-desc':
+      return sorted.sort((a, b) => {
+        const diff = (b.rules?.length ?? 0) - (a.rules?.length ?? 0)
+        return diff !== 0 ? diff : b.created_at - a.created_at
+      })
     case 'newest':
     default:
       return sorted.sort((a, b) => b.created_at - a.created_at)
