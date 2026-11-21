@@ -43,6 +43,7 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
   const [editedWebhookUrl, setEditedWebhookUrl] = useState('')
   const [editedWebhookSecret, setEditedWebhookSecret] = useState('')
   const [showWebhookSecret, setShowWebhookSecret] = useState(false)
+  const [secretVisible, setSecretVisible] = useState(false)
   const [metadataError, setMetadataError] = useState<string | null>(null)
   const [relativeCreatedAt, setRelativeCreatedAt] = useState<string>('')
 
@@ -493,9 +494,21 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
             <div className="flex items-center justify-between mb-1">
               <p className="text-xs text-zinc-500">Webhook Secret</p>
-              <CopyButton text={contract.webhook_secret} />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSecretVisible((v) => !v)}
+                  className="text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
+                  aria-label={secretVisible ? 'Hide webhook secret' : 'Show webhook secret'}
+                >
+                  {secretVisible ? 'Hide' : 'Show'}
+                </button>
+                <CopyButton text={contract.webhook_secret} />
+              </div>
             </div>
-            <p className="text-sm text-zinc-300 font-mono">••••••••{contract.webhook_secret.slice(-4)}</p>
+            <p className="text-sm text-zinc-300 font-mono break-all">
+              {secretVisible ? contract.webhook_secret : `••••••••${contract.webhook_secret.slice(-4)}`}
+            </p>
           </div>
         )}
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
