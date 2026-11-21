@@ -85,6 +85,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 max-w-sm"
         aria-live="polite"
       >
+        {toasts.length > 1 && (
+          <button
+            onClick={() => toasts.forEach((t) => removeToast(t.id))}
+            className="self-end text-xs font-medium text-zinc-400 hover:text-zinc-200 underline underline-offset-2"
+          >
+            Dismiss all
+          </button>
+        )}
         {toasts.map((toast) => (
           <div
             key={toast.id}
