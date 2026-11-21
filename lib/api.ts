@@ -114,6 +114,24 @@ export async function fetchContractInstance(
 }
 
 /**
+ * Checks whether a contract instance exists on the given network by
+ * querying Soroban RPC for its ledger entry. Used to validate a
+ * contract_id before switching a watched contract to a new network
+ * (see issue #627).
+ */
+export async function contractExistsOnNetwork(
+  contractId: string,
+  network: Network
+): Promise<boolean> {
+  try {
+    await fetchContractInstance(contractId, network)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
  * Invokes the token contract's `decimals()` function via Soroban RPC
  * simulation and returns the token's decimal precision.
  */
