@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { getApiKey, setApiKey, clearApiKey } from '@/lib/storage'
+import { getApiKey, setApiKey, clearApiKey, getSettings, saveSettings } from '@/lib/storage'
 import { testApiConnection } from '@/lib/api'
 import Toast from '@/components/Toast'
 
@@ -20,15 +20,21 @@ export default function SettingsPage() {
   const [testMessage, setTestMessage] = useState<string | null>(null)
   const testAbortRef = useRef<AbortController | null>(null)
 
+  const [soundEnabled, setSoundEnabled] = useState(false)
+  const [pushEnabled, setPushEnabled] = useState(false)
+
   const apiConfigured = !!process.env.NEXT_PUBLIC_API_URL
 
-  // Hydrate stored key on client mount
+  // Hydrate stored key and settings on client mount
   useEffect(() => {
     const stored = getApiKey()
     if (stored) {
       setApiKeyState(stored)
       setInputKey(stored)
     }
+    const settings = getSettings()
+    setSoundEnabled(settings.soundNotification)
+    setPushEnabled(settings.pushNotification ?? false)
     setMounted(true)
   }, [])
 
@@ -259,6 +265,52 @@ export default function SettingsPage() {
               Save an API key first to test the connection.
             </p>
           )}
+        </div>
+
+        {/* Sound Notification card */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold text-zinc-100">Sound Notifications</h2>
+            <p className="text-sm text-zinc-500 mt-1">
+              Play a short audio tone when a new alert arrives via WebSocket.
+            </p>
+          </div>
+          <label className="inline-flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={soundEnabled}
+              onChange={(e) => {
+                setSoundEnabled(e.target.checked)
+                saveSettings({ soundNotification: e.target.checked })
+              }}
+              className="rounded border-zinc-700 bg-zinc-800 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+              aria-label="Enable sound notifications"
+            />
+            <span className="text-sm text-zinc-300">Enable sound notifications</span>
+          </label>
+        </div>
+
+        {/* Push Notification card */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold text-zinc-100">Browser Push Notifications</h2>
+            <p className="text-sm text-zinc-500 mt-1">
+              Send a browser notification when a new alert arrives via WebSocket. Your browser will request permission on the first alert.
+            </p>
+          </div>
+          <label className="inline-flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={pushEnabled}
+              onChange={(e) => {
+                setPushEnabled(e.target.checked)
+                saveSettings({ pushNotification: e.target.checked })
+              }}
+              className="rounded border-zinc-700 bg-zinc-800 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+              aria-label="Enable browser push notifications"
+            />
+            <span className="text-sm text-zinc-300">Enable browser push notifications</span>
+          </label>
         </div>
       </div>
     </>

@@ -16,6 +16,8 @@ export type ExplorerId = 'stellar-expert' | 'stellarchain' | 'horizon'
 
 export interface AppSettings {
   explorer: ExplorerId
+  soundNotification: boolean
+  pushNotification?: boolean
 }
 
 /** Alert rule configuration for monitoring contract events.

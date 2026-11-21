@@ -1,6 +1,7 @@
 import { z } from 'zod'
-import { WatchedContract, AlertPayload, Network } from '@/types'
+import { WatchedContract, AlertPayload, Network, AppSettings } from '@/types'
 import { STORAGE_KEYS } from '@/lib/storageKeys'
+import { AlertPayloadSchema, WatchedContractSchema } from '@/lib/schemas'
 import {
   STORAGE_QUOTA_BYTES,
   MAX_ALERTS_PER_CONTRACT,
@@ -195,6 +196,11 @@ export function migrateStorage(
   setStorageVersion(targetVersion)
 }
 
+const DEFAULT_SETTINGS: AppSettings = {
+  explorer: 'stellar-expert',
+  soundNotification: false,
+}
+
 /**
  * Migration to v2:
  * - Normalizes LargeTransfer rules that only have `threshold_xlm` into the
@@ -373,14 +379,6 @@ export function getAlerts(contractId: string): AlertPayload[] {
   return load(ALERTS_KEY, AlertPayloadSchema).filter(
     (a) => a.contract_id === contractId
   )
-}
-are 
-function deterministicSuffix(contractId: string, sequence: number): string {
-  let h = sequence * 2654435761
-  for (let i = 0; i < contractId.length; i++) {
-    h = Math.imul(h ^ contractId.charCodeAt(i), 2246822519)
-  }
-  return (h >>> 0).toString(16).padStart(8, '0').repeat(2)
 }
 
 function deterministicSuffix(contractId: string, sequence: number): string {

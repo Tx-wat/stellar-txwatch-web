@@ -7,7 +7,9 @@
 .yarn/install-state.gz
 
 # testing
-/coverage
+/coverage/
+__snapshots__/
+**/__snapshots__/
 
 # next.js
 /.next/
@@ -18,12 +20,14 @@
 
 # misc
 .DS_Store
+Thumbs.db
 *.pem
 
 # debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+*.log
 
 # local env files
 .env*.local
@@ -37,3 +41,15 @@ next-env.d.ts
 
 # project notes
 vrickish.md
+
+# editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# claude
+.claude/
+
+# size-limit output
+.size-limit-results.json

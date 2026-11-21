@@ -2,29 +2,43 @@
 
 import { useState, useEffect } from 'react'
 import { Networks } from '@stellar/stellar-sdk'
+import {
+  isConnected,
+  requestAccess,
+  getPublicKey,
+  getNetworkDetails,
+} from '@stellar/freighter-api'
 import { STORAGE_KEYS } from '@/lib/storageKeys'
 
-declare global {
-  interface Window {
-    freighter?: {
-      isConnected: () => Promise<boolean>
-      getPublicKey: () => Promise<string>
-      getNetworkDetails: () => Promise<{ networkPassphrase: string }>
-    }
-    __freighterPublicKey?: string | null
+type FreighterErrorState =
+  | 'not-installed'
+  | 'not-allowed'
+  | 'locked'
+  | 'unknown'
+  | null
+
+function classifyError(err: unknown): { state: FreighterErrorState; message: string } {
+  const raw = err instanceof Error ? err.message : String(err)
+  const message = raw.toLowerCase()
+  if (/lock/i.test(message)) {
+    return { state: 'locked', message: 'Freighter is locked — unlock it and try again' }
   }
-  if (
-    message.includes('denied') ||
-    message.includes('rejected') ||
-    message.includes('not allowed') ||
-    message.includes('permission')
-  ) {
-    return { state: 'not-allowed', message: 'Connection rejected / permission denied' }
+  if (/denied|rejected|not allowed|permission/i.test(message)) {
+    return { state: 'not-allowed', message: 'Connection rejected' }
   }
-  if (message.includes('not installed') || message.includes('not available')) {
+  if (/not installed|not available/i.test(message)) {
     return { state: 'not-installed', message: 'Freighter not installed - install the extension and reload' }
   }
   return { state: 'unknown', message: raw || 'Connection rejected' }
+}
+
+function getNetworkWarning(passphrase: string | null): string | null {
+  if (!passphrase) return null
+  const known = [Networks.PUBLIC, Networks.TESTNET, Networks.FUTURENET]
+  if (!known.includes(passphrase as typeof Networks.PUBLIC)) {
+    return 'Wallet is on a custom network'
+  }
+  return null
 }
 
 const WALLET_STORAGE_KEY = STORAGE_KEYS.FREIGHTER_PUBLIC_KEY
@@ -36,6 +50,7 @@ interface FreighterConnectProps {
 
 export default function FreighterConnect({ onConnect, className = '' }: FreighterConnectProps) {
   const [publicKey, setPublicKey] = useState<string | null>(null)
+  const [networkPassphrase, setNetworkPassphrase] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [errorState, setErrorState] = useState<FreighterErrorState>(null)
@@ -50,22 +65,28 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
   async function checkConnection() {
     try {
       const connected = await isConnected()
-      if (!connected) {
-        return
-      }
+      if (!connected) return
 
-      const connected = await window.freighter?.isConnected()
-      if (connected) {
-        const key = await window.freighter?.getPublicKey()
-        setPublicKey(key)
-        window.__freighterPublicKey = key
-        onConnect?.(key)
-      }
+      const key = await getPublicKey()
+      if (!key) return
 
-      setPublicKey(keyResult.publicKey)
-      onConnect?.(keyResult.publicKey)
+      setPublicKey(key)
+      window.__freighterPublicKey = key
+      onConnect?.(key)
+
+      try {
+        // Try the imported API first; fall back to the window.freighter extension object
+        // (the latter is used by test setups that mock window.freighter directly)
+        let details = await getNetworkDetails().catch(() => null)
+        if (!details?.networkPassphrase && window.freighter && 'getNetworkDetails' in window.freighter) {
+          details = await (window.freighter as any).getNetworkDetails().catch(() => null)
+        }
+        setNetworkPassphrase(details?.networkPassphrase ?? null)
+      } catch {
+        setNetworkPassphrase(null)
+      }
     } catch {
-      // Connection check failed
+      // silent — connection check on mount
     } finally {
       setIsInitializing(false)
     }
@@ -79,28 +100,27 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
     setErrorState(null)
 
     try {
-      const connected = await isConnected()
-      if (!connected) {
-        setErrorState('not-installed')
-        setError('Freighter not installed - install the extension and reload')
+      // requestAccess returns the public key on success, or throws on rejection
+      const key = await requestAccess()
+      if (!key) {
+        setError('Connection rejected')
         return
       }
 
-      const key = await window.freighter?.getPublicKey()
-      const network = await window.freighter?.getNetwork()
-
-      if (!key || !networkPassphrase) {
-        setError('Failed to retrieve wallet information')
-        return
-      }
-
-      const knownPassphrases = [Networks.PUBLIC, Networks.TESTNET, Networks.FUTURENET]
-      if (!knownPassphrases.includes(networkPassphrase)) {
-        setError('Wallet is on a custom network')
-        return
+      let passphrase: string | null = null
+      try {
+        // Try the imported API first; fall back to the window.freighter extension object
+        let details = await getNetworkDetails().catch(() => null)
+        if (!details?.networkPassphrase && window.freighter && 'getNetworkDetails' in window.freighter) {
+          details = await (window.freighter as any).getNetworkDetails().catch(() => null)
+        }
+        passphrase = details?.networkPassphrase ?? null
+      } catch {
+        passphrase = null
       }
 
       setPublicKey(key)
+      setNetworkPassphrase(passphrase)
       window.__freighterPublicKey = key
       localStorage.setItem(WALLET_STORAGE_KEY, key)
       onConnect?.(key)
@@ -108,6 +128,9 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
       const classified = classifyError(err)
       setErrorState(classified.state)
       setError(classified.message)
+      if (classified.state === 'not-installed') {
+        window.open('https://www.freighter.app/', '_blank')
+      }
     } finally {
       setLoading(false)
       setIsConnecting(false)
@@ -116,10 +139,13 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
 
   function disconnect() {
     setPublicKey(null)
+    setNetworkPassphrase(null)
     setError(null)
     setErrorState(null)
     localStorage.removeItem(WALLET_STORAGE_KEY)
   }
+
+  const networkWarning = getNetworkWarning(networkPassphrase)
 
   if (isInitializing) {
     return (
@@ -131,17 +157,22 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
 
   if (publicKey) {
     return (
-      <div className={`flex items-center gap-2 ${className}`}>
-        <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
-        <span className="text-sm text-zinc-300 font-mono">
-          {publicKey.slice(0, 4)}...{publicKey.slice(-4)}
-        </span>
-        <button
-          onClick={disconnect}
-          className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-        >
-          Disconnect
-        </button>
+      <div className={`flex flex-col gap-1 ${className}`}>
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
+          <span className="text-sm text-zinc-300 font-mono">
+            {publicKey.slice(0, 4)}…{publicKey.slice(-4)}
+          </span>
+          <button
+            onClick={disconnect}
+            className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+          >
+            Disconnect
+          </button>
+        </div>
+        {networkWarning && (
+          <p className="text-xs text-amber-400" role="alert">{networkWarning}</p>
+        )}
       </div>
     )
   }
@@ -166,10 +197,10 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
         )}
         Connect Freighter
       </button>
-      {error ? (
+      {error && (
         <p className="mt-2 text-xs text-red-400" role="alert">
           {error}
-          {errorState === 'not-installed' ? (
+          {errorState === 'not-installed' && (
             <>
               {' '}
               <a
@@ -181,9 +212,9 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
                 Install Freighter
               </a>
             </>
-          ) : null}
+          )}
         </p>
-      ) : null}
+      )}
     </div>
   )
 }
