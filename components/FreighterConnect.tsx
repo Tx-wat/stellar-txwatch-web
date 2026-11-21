@@ -13,6 +13,14 @@ declare global {
     }
     __freighterPublicKey?: string | null
   }
+}
+
+type FreighterErrorState = 'not-installed' | 'not-allowed' | 'unsupported-browser' | 'unknown' | null
+
+function classifyError(err: unknown): { state: FreighterErrorState; message: string } {
+  const raw = err instanceof Error ? err.message : String(err ?? '')
+  const message = raw.toLowerCase()
+
   if (
     message.includes('denied') ||
     message.includes('rejected') ||
@@ -25,6 +33,21 @@ declare global {
     return { state: 'not-installed', message: 'Freighter not installed - install the extension and reload' }
   }
   return { state: 'unknown', message: raw || 'Connection rejected' }
+}
+
+/**
+ * Freighter ships as a Chromium/Firefox extension only - Safari does not
+ * support the extension APIs Freighter relies on, so no amount of
+ * reloading will make it show up there.
+ */
+function isSafariBrowser(): boolean {
+  if (typeof navigator === 'undefined') return false
+  const ua = navigator.userAgent
+  return /^((?!chrome|android|crios|fxios).)*safari/i.test(ua)
+}
+
+async function isConnected(): Promise<boolean> {
+  return Boolean(window.freighter) && (await window.freighter!.isConnected())
 }
 
 const WALLET_STORAGE_KEY = STORAGE_KEYS.FREIGHTER_PUBLIC_KEY
@@ -54,16 +77,12 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
         return
       }
 
-      const connected = await window.freighter?.isConnected()
-      if (connected) {
-        const key = await window.freighter?.getPublicKey()
+      const key = await window.freighter?.getPublicKey()
+      if (key) {
         setPublicKey(key)
         window.__freighterPublicKey = key
         onConnect?.(key)
       }
-
-      setPublicKey(keyResult.publicKey)
-      onConnect?.(keyResult.publicKey)
     } catch {
       // Connection check failed
     } finally {
@@ -79,6 +98,14 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
     setErrorState(null)
 
     try {
+      if (isSafariBrowser()) {
+        setErrorState('unsupported-browser')
+        setError(
+          'Freighter is not available on Safari. Switch to Chrome or Firefox, or use the Stellar Laboratory to manage this contract without a browser wallet.'
+        )
+        return
+      }
+
       const connected = await isConnected()
       if (!connected) {
         setErrorState('not-installed')
@@ -87,7 +114,8 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
       }
 
       const key = await window.freighter?.getPublicKey()
-      const network = await window.freighter?.getNetwork()
+      const networkDetails = await window.freighter?.getNetworkDetails()
+      const networkPassphrase = networkDetails?.networkPassphrase
 
       if (!key || !networkPassphrase) {
         setError('Failed to retrieve wallet information')
@@ -95,7 +123,7 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
       }
 
       const knownPassphrases = [Networks.PUBLIC, Networks.TESTNET, Networks.FUTURENET]
-      if (!knownPassphrases.includes(networkPassphrase)) {
+      if (!knownPassphrases.includes(networkPassphrase as Networks)) {
         setError('Wallet is on a custom network')
         return
       }
