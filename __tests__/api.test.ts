@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { apiFetch, sendTestWebhook } from '@/lib/api'
+import { setApiKey, clearApiKey } from '@/lib/storage'
 
 describe('apiFetch', () => {
   beforeEach(() => {
@@ -52,6 +53,36 @@ describe('apiFetch', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(apiFetch('/test')).rejects.toThrow('HTTP 500')
+  })
+
+  it('attaches an Authorization header when an API key is stored', async () => {
+    clearApiKey()
+    setApiKey('secret-key')
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({}),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await apiFetch('/test')
+
+    const call = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect(call[1].headers['Authorization']).toBe('Bearer secret-key')
+    clearApiKey()
+  })
+
+  it('omits the Authorization header when no API key is stored', async () => {
+    clearApiKey()
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({}),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await apiFetch('/test')
+
+    const call = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect(call[1].headers['Authorization']).toBeUndefined()
   })
 })
 
