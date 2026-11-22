@@ -39,6 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <nav className="hidden sm:flex items-center gap-6 text-sm text-zinc-400">
                     <Link href="/dashboard" className="hover:text-zinc-100 transition-colors">Dashboard</Link>
                     <Link href="/contracts" className="hover:text-zinc-100 transition-colors">Contracts</Link>
+                    <Link href="/contracts/compare" className="hover:text-zinc-100 transition-colors">Compare</Link>
                     <Link href="/settings" className="hover:text-zinc-100 transition-colors">Settings</Link>
                     <a
                       href="https://github.com/Tx-wat"
