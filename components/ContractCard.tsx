@@ -6,6 +6,57 @@ import NetworkBadge from './NetworkBadge'
 import { truncateId } from '@/lib/stellar'
 import { formatDate as defaultFormatDate } from '@/lib/format'
 import { useTimezone } from './TimezoneProvider'
+import { getDailyAlertCounts } from '@/lib/storage'
+
+/** Pure SVG sparkline showing the last 7 days of alert activity. */
+function ActivitySparkline({ contractId }: { contractId: string }) {
+  const W = 64
+  const H = 20
+  const days = getDailyAlertCounts(contractId, 7)
+  const counts = days.map((d) => d.count)
+  const max = Math.max(...counts, 1)
+
+  // Build polyline points across the width
+  const points = counts
+    .map((c, i) => {
+      const x = (i / (counts.length - 1)) * W
+      const y = H - (c / max) * H
+      return `${x.toFixed(1)},${y.toFixed(1)}`
+    })
+    .join(' ')
+
+  const hasActivity = counts.some((c) => c > 0)
+
+  return (
+    <svg
+      width={W}
+      height={H}
+      viewBox={`0 0 ${W} ${H}`}
+      aria-label="7-day activity sparkline"
+      role="img"
+    >
+      {hasActivity ? (
+        <polyline
+          points={points}
+          fill="none"
+          stroke="#6366f1"
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      ) : (
+        <line
+          x1="0"
+          y1={H}
+          x2={W}
+          y2={H}
+          stroke="#3f3f46"
+          strokeWidth="1"
+        />
+      )}
+    </svg>
+  )
+}
 
 interface ContractCardProps {
   contract: WatchedContract
@@ -133,13 +184,16 @@ function ContractCard({ contract, lastAlertTime, highlight, missing }: ContractC
             <span className="text-zinc-300 font-medium">{contract.rules.length}</span>{' '}
             {contract.rules.length === 1 ? 'rule' : 'rules'} {isPaused ? 'paused' : 'active'}
           </span>
-          {lastAlertTime ? (
-            <span title={isoString(lastAlertTime)}>
-              Last alert {formatDate(lastAlertTime)}{mode === 'utc' ? ' UTC' : ''}
-            </span>
-          ) : (
-            <span>No alerts yet</span>
-          )}
+          <div className="flex items-center gap-3">
+            <ActivitySparkline contractId={contract.id} />
+            {lastAlertTime ? (
+              <span title={isoString(lastAlertTime)}>
+                Last alert {formatDate(lastAlertTime)}{mode === 'utc' ? ' UTC' : ''}
+              </span>
+            ) : (
+              <span>No alerts yet</span>
+            )}
+          </div>
         </div>
       </Link>
 

@@ -178,4 +178,42 @@ describe('RuleBuilder', () => {
     expect(screen.queryByText('Any Transaction')).not.toBeInTheDocument()
     expect(screen.getByText('Tx Failed')).toBeInTheDocument()
   })
+
+  it('renders rule list with aria-label indicating drag-to-reorder', () => {
+    render(
+      <Harness initial={[{ type: 'AnyTransaction' }, { type: 'TransactionFailed' }]} />
+    )
+    const list = screen.getByRole('list', { name: /drag to reorder/i })
+    expect(list).toBeInTheDocument()
+  })
+
+  it('each draggable rule item has aria-grabbed attribute', () => {
+    render(
+      <Harness initial={[{ type: 'AnyTransaction' }, { type: 'TransactionFailed' }]} />
+    )
+    const items = screen.getAllByRole('listitem')
+    items.forEach((item) => {
+      expect(item).toHaveAttribute('aria-grabbed')
+    })
+  })
+
+  it('reorders rules after a drag sequence', () => {
+    const onChange = vi.fn()
+    render(
+      <Harness
+        initial={[{ type: 'AnyTransaction' }, { type: 'TransactionFailed' }]}
+        onChange={onChange}
+      />
+    )
+    const items = screen.getAllByRole('listitem')
+    // Simulate dragging item 0 over item 1
+    fireEvent.dragStart(items[0])
+    fireEvent.dragOver(items[1])
+    fireEvent.dragEnd(items[0])
+
+    expect(onChange).toHaveBeenCalledWith([
+      { type: 'TransactionFailed' },
+      { type: 'AnyTransaction' },
+    ])
+  })
 })

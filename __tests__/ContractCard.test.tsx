@@ -3,7 +3,8 @@
  * ContractCard.test.tsx
  *
  * Component tests covering label/ID rendering, network badge, detail
- * link, webhook warning, highlight pulse, and last-alert states.
+ * link, webhook warning, highlight pulse, last-alert states, and
+ * the 7-day activity sparkline (#615).
  */
 import '@testing-library/jest-dom/vitest'
 import React from 'react'
@@ -31,6 +32,13 @@ vi.mock('next/link', () => ({
     <a href={href} {...rest}>
       {children}
     </a>
+  ),
+}))
+
+// Mock storage so sparkline has deterministic data
+vi.mock('@/lib/storage', () => ({
+  getDailyAlertCounts: vi.fn(() =>
+    Array.from({ length: 7 }, (_, i) => ({ date: `2024-01-0${i + 1}`, count: i * 2 }))
   ),
 }))
 
@@ -128,5 +136,25 @@ describe('ContractCard', () => {
 
     fireEvent.click(compareBtn)
     expect(mockPush).toHaveBeenCalledWith('/contracts/compare?a=contract-1')
+  })
+
+  it('renders a 7-day activity sparkline SVG', () => {
+    const { container } = render(<ContractCard contract={baseContract} />)
+    const sparkline = container.querySelector('svg[aria-label="7-day activity sparkline"]')
+    expect(sparkline).not.toBeNull()
+    // Should contain a polyline when there is activity
+    expect(sparkline!.querySelector('polyline')).not.toBeNull()
+  })
+
+  it('renders a flat line sparkline when there is no activity', async () => {
+    const { getDailyAlertCounts } = await import('@/lib/storage')
+    vi.mocked(getDailyAlertCounts).mockReturnValueOnce(
+      Array.from({ length: 7 }, (_, i) => ({ date: `2024-01-0${i + 1}`, count: 0 }))
+    )
+    const { container } = render(<ContractCard contract={baseContract} />)
+    const sparkline = container.querySelector('svg[aria-label="7-day activity sparkline"]')
+    expect(sparkline).not.toBeNull()
+    expect(sparkline!.querySelector('line')).not.toBeNull()
+    expect(sparkline!.querySelector('polyline')).toBeNull()
   })
 })

@@ -91,6 +91,7 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
   const [showTemplateModal, setShowTemplateModal] = useState(false)
   const [templateName, setTemplateName] = useState('')
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
 
   useEffect(() => {
     setTemplates(loadTemplates())
@@ -320,6 +321,26 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
     const updated = rules.filter((_, i) => i !== index)
     onChange(updated)
     onRulesChanged?.(updated, 'remove')
+  }
+
+  function handleDragStart(index: number) {
+    setDragIndex(index)
+  }
+
+  function handleDragOver(e: React.DragEvent, overIndex: number) {
+    e.preventDefault()
+    if (dragIndex === null || dragIndex === overIndex) return
+    const updated = [...rules]
+    const [moved] = updated.splice(dragIndex, 1)
+    updated.splice(overIndex, 0, moved)
+    onChange(updated)
+    // If we were editing the dragged rule, follow it to its new position
+    if (editingIndex === dragIndex) setEditingIndex(overIndex)
+    setDragIndex(overIndex)
+  }
+
+  function handleDragEnd() {
+    setDragIndex(null)
   }
 
   function saveAsTemplate() {
@@ -587,10 +608,29 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
       </div>
 
       {rules.length > 0 && (
-        <ul className="space-y-2">
+        <ul className="space-y-2" aria-label="Alert rules — drag to reorder">
           {rules.map((rule, i) => (
-            <li key={i} className={`flex items-center justify-between rounded-lg px-3 py-2 border ${editingIndex === i ? 'bg-indigo-900/30 border-indigo-600' : 'bg-zinc-900 border-zinc-800'}`}>
+            <li
+              key={i}
+              draggable
+              aria-grabbed={dragIndex === i}
+              onDragStart={() => handleDragStart(i)}
+              onDragOver={(e) => handleDragOver(e, i)}
+              onDragEnd={handleDragEnd}
+              className={`flex items-center justify-between rounded-lg px-3 py-2 border cursor-grab active:cursor-grabbing ${
+                editingIndex === i ? 'bg-indigo-900/30 border-indigo-600' : 'bg-zinc-900 border-zinc-800'
+              } ${dragIndex === i ? 'opacity-50' : ''}`}
+            >
               <div className="flex items-center gap-2 flex-wrap">
+                <svg
+                  className="w-3.5 h-3.5 text-zinc-600 flex-shrink-0"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  aria-hidden="true"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                </svg>
                 <AlertRuleBadge type={rule.type} />
                 {rule.name && (
                   <span className="text-xs font-medium text-zinc-200">{rule.name}</span>

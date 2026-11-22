@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, notFound } from 'next/navigation'
 import { WatchedContract, AlertPayload, AlertRule } from '@/types'
 import { getContract, deleteContract, getAlerts, saveContract } from '@/lib/storage'
 import { truncateId, explorerContractUrl, isValidUrl } from '@/lib/stellar'
@@ -89,7 +89,10 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
 
   useEffect(() => {
     const c = getContract(params.id)
-    if (!c) { setContractNotFound(true); return }
+    if (!c) {
+      setContractNotFound(true)
+      return
+    }
     setContract(c)
     setAlerts(getAlerts(params.id))
   }, [params.id])
@@ -337,30 +340,7 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
   }
 
   if (contractNotFound) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center space-y-4 max-w-sm">
-          <div className="flex justify-center">
-            <svg className="w-16 h-16 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <h2 className="text-xl font-semibold text-zinc-100">Contract Not Found</h2>
-          <p className="text-sm text-zinc-400">
-            The contract you&apos;re looking for doesn&apos;t exist or has been deleted.
-          </p>
-          <button
-            onClick={() => router.push('/contracts')}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            Back to Contracts
-          </button>
-        </div>
-      </div>
-    )
+    notFound()
   }
 
   if (!contract) return <ContractDetailLoading />
