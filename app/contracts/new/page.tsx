@@ -22,6 +22,7 @@ interface ContractDraft {
   webhookUrl: string
   rules: AlertRule[]
   group?: string
+  tags?: string[]
 }
 
 interface FormErrors {
@@ -95,6 +96,8 @@ export default function NewContractPage() {
   const [networkWarning, setNetworkWarning] = useState<string | null>(null)
   const [label, setLabel] = useState('')
   const [group, setGroup] = useState('')
+  const [tags, setTags] = useState<string[]>([])
+  const [tagInput, setTagInput] = useState('')
   const [contractId, setContractId] = useState('')
   const [network, setNetwork] = useState<Network>('testnet')
   const [webhookUrl, setWebhookUrl] = useState('')
@@ -144,6 +147,7 @@ export default function NewContractPage() {
         const draft = JSON.parse(raw) as Partial<ContractDraft>
         if (typeof draft.label === 'string') setLabel(draft.label)
         if (typeof draft.group === 'string') setGroup(draft.group)
+        if (Array.isArray(draft.tags)) setTags(draft.tags)
         if (typeof draft.contractId === 'string') setContractId(draft.contractId)
         if (draft.network === 'testnet' || draft.network === 'mainnet' || draft.network === 'futurenet') {
           setNetwork(draft.network)
@@ -166,7 +170,7 @@ export default function NewContractPage() {
       try {
         sessionStorage.setItem(
           DRAFT_STORAGE_KEY,
-          JSON.stringify({ label, group, contractId, network, webhookUrl, rules })
+          JSON.stringify({ label, group, tags, contractId, network, webhookUrl, rules })
         )
       } catch {
         // ignore storage errors
@@ -175,7 +179,7 @@ export default function NewContractPage() {
     return () => {
       if (draftTimerRef.current) clearTimeout(draftTimerRef.current)
     }
-  }, [label, group, contractId, network, webhookUrl, rules])
+  }, [label, group, tags, contractId, network, webhookUrl, rules])
 
   function clearDraft() {
     if (draftTimerRef.current) clearTimeout(draftTimerRef.current)
@@ -190,6 +194,8 @@ export default function NewContractPage() {
     clearDraft()
     setLabel('')
     setGroup('')
+    setTags([])
+    setTagInput('')
     setContractId('')
     setNetwork('testnet')
     setWebhookUrl('')
@@ -233,6 +239,23 @@ export default function NewContractPage() {
 
   function removeSigner(key: string) {
     setSigners(signers.filter((s) => s !== key))
+  }
+
+  function handleTagKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault()
+      const trimmed = tagInput.trim().replace(/,$/, '')
+      if (trimmed && !tags.includes(trimmed)) {
+        setTags([...tags, trimmed])
+      }
+      setTagInput('')
+    } else if (e.key === 'Backspace' && tagInput === '' && tags.length > 0) {
+      setTags(tags.slice(0, -1))
+    }
+  }
+
+  function removeTag(tag: string) {
+    setTags(tags.filter((t) => t !== tag))
   }
 
   function validate(): FormErrors {
@@ -298,6 +321,7 @@ export default function NewContractPage() {
       id: crypto.randomUUID(),
       label: label.trim(),
       group: group.trim() || undefined,
+      tags: tags.length > 0 ? tags : undefined,
       contract_id: contractId.trim(),
       network,
       rules,
@@ -535,6 +559,38 @@ export default function NewContractPage() {
             ))}
           </datalist>
           <p className="mt-1.5 text-xs text-zinc-400">Organise contracts into named groups. Existing groups are suggested.</p>
+        </div>
+
+        {/* Tags */}
+        <div>
+          <label className="block text-sm font-medium text-zinc-300 mb-1.5">Tags <span className="text-zinc-500 font-normal">(Optional)</span></label>
+          <div className="flex flex-wrap gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 focus-within:border-indigo-500 transition-colors min-h-[42px]">
+            {tags.map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center gap-1 rounded-md bg-indigo-600/20 px-2 py-0.5 text-xs font-medium text-indigo-300 ring-1 ring-indigo-500/30"
+              >
+                {tag}
+                <button
+                  type="button"
+                  onClick={() => removeTag(tag)}
+                  aria-label={`Remove tag ${tag}`}
+                  className="text-indigo-400 hover:text-indigo-200 transition-colors"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            <input
+              type="text"
+              placeholder={tags.length === 0 ? 'Type a tag and press Enter' : ''}
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              onKeyDown={handleTagKeyDown}
+              className="flex-1 min-w-[120px] bg-transparent text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none"
+            />
+          </div>
+          <p className="mt-1.5 text-xs text-zinc-400">Press Enter or comma to add a tag. Backspace removes the last tag.</p>
         </div>
 
         {/* Contract ID */}

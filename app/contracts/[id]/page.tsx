@@ -19,9 +19,10 @@ import EditDetailsModal from '@/components/EditDetailsModal'
 import EditRulesModal from '@/components/EditRulesModal'
 import DeleteContractModal from '@/components/DeleteContractModal'
 import ContractDetailLoading from './loading'
+import ContractDetailErrorBoundary from '@/components/ContractDetailErrorBoundary'
 
 
-export default function ContractDetailPage({ params }: { params: { id: string } }) {
+function ContractDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const { trackEvent } = useAnalytics()
 
@@ -937,5 +938,13 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
         />
       )}
     </div>
+  )
+}
+
+export default function ContractDetailPageWithBoundary(props: { params: { id: string } }) {
+  return (
+    <ContractDetailErrorBoundary>
+      <ContractDetailPage {...props} />
+    </ContractDetailErrorBoundary>
   )
 }

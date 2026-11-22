@@ -337,6 +337,7 @@ export default function ContractsPage() {
               Add Contract
             </Link>
           }
+          quickStart
         />
       ) : !hasFilteredContracts ? (
         <EmptyState

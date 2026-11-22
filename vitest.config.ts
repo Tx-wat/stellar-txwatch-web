@@ -12,6 +12,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, '.'),
+      '@sentry/nextjs': path.resolve(__dirname, '__mocks__/@sentry/nextjs.ts'),
     },
   },
 })

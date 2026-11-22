@@ -1,14 +1,21 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
 export default function CopyButton({ text, className = '' }: { text: string; className?: string }) {
   const [copied, setCopied] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   async function copy() {
     await navigator.clipboard.writeText(text)
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current)
+    }
     setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
+    timerRef.current = setTimeout(() => {
+      setCopied(false)
+      timerRef.current = null
+    }, 2000)
   }
 
   return (
