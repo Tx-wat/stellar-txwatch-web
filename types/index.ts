@@ -23,7 +23,8 @@ export interface AppSettings {
  * Types must stay in sync with the Rust `AlertRule` struct in stellar-txwatch-core.
  */
 export interface AlertRule {
-  /** Rule type - one of: LargeTransfer, AdminFunctionCalled, AnyTransaction, FunctionCalled, TransactionFailed */
+  /** Rule type - one of: AnyTransaction, LargeTransfer, FunctionCalled, AdminFunctionCalled,
+   *  TransactionFailed, SorobanInvocation, InsufficientFunds, SourceAccountMatch, TimeWindow */
   type: AlertRuleType
   /** Optional user-supplied label for this rule (max 60 characters). */
   name?: string
@@ -33,6 +34,16 @@ export interface AlertRule {
   function_names?: string[]
   /** Single function name to monitor; rule triggers when this function is called */
   function_name?: string
+  // SourceAccountMatch
+  /** Stellar G-address to match against the transaction source account */
+  source_account?: string
+  // TimeWindow
+  /** UTC hours (0–23) during which the wrapped rule is active */
+  hours_utc?: number[]
+  /** Days of week (0 = Mon … 6 = Sun) during which the wrapped rule is active */
+  weekdays?: number[]
+  /** Rule type to wrap inside the TimeWindow constraint */
+  wrap_rule?: string
 }
 
 /** Watched contract configuration with associated alert rules.

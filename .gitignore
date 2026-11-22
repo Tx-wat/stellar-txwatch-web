@@ -8,6 +8,8 @@
 
 # testing
 /coverage
+**/__snapshots__
+*.snap
 
 # next.js
 /.next/
@@ -16,9 +18,13 @@
 # production
 /build
 
-# misc
+# editor & OS
 .DS_Store
 *.pem
+.idea/
+.vscode/
+*.swp
+*.swo
 
 # debug
 npm-debug.log*
