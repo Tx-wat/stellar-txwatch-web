@@ -64,10 +64,11 @@ export function contractListReducer(
   action: ContractListAction
 ): ContractListState {
   switch (action.type) {
+    // A new search or network filter drops the selection so bulk actions never hit hidden rows (#658)
     case 'setSearch':
-      return { ...state, search: action.search, page: 1 }
+      return { ...state, search: action.search, page: 1, selectedIds: [] }
     case 'setNetworkFilter':
-      return { ...state, networkFilter: action.networkFilter, page: 1 }
+      return { ...state, networkFilter: action.networkFilter, page: 1, selectedIds: [] }
     case 'setSortBy':
       return { ...state, sortBy: action.sortBy }
     case 'setViewMode':

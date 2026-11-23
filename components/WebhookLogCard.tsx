@@ -101,6 +101,28 @@ export function WebhookLogCard({ entry }: WebhookLogCardProps) {
           </a>
         </div>
       )}
+
+      {/* Explicit explorer links, so Horizon and Stellar Expert are always one click away (#659) */}
+      {entry.txHash && (
+        <div className="flex flex-wrap gap-3 text-xs">
+          <a
+            href={explorerTxUrl(entry.network ?? 'testnet', entry.txHash, 'horizon')}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline"
+          >
+            View on Horizon
+          </a>
+          <a
+            href={explorerTxUrl(entry.network ?? 'testnet', entry.txHash, 'stellar-expert')}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline"
+          >
+            View on Stellar Expert
+          </a>
+        </div>
+      )}
     </article>
   );
 }
