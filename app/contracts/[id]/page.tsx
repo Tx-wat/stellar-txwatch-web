@@ -399,6 +399,16 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div className="space-y-1 min-w-0">
           <div className="flex items-center gap-3 flex-wrap">
+            <button
+              onClick={() => router.push('/contracts')}
+              className="inline-flex items-center gap-1 text-sm text-zinc-400 hover:text-zinc-100 transition-colors"
+              aria-label="Back to contracts"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Back
+            </button>
             <h1 className="text-2xl font-bold text-zinc-100">{contract.label}</h1>
             <NetworkBadge network={contract.network} />
             {isPaused && (
@@ -827,9 +837,32 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
                   >
                     {showWebhookSecret ? 'Hide' : 'Show'}
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const array = new Uint8Array(32)
+                      crypto.getRandomValues(array)
+                      const newSecret = Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('')
+                      setEditedWebhookSecret(newSecret)
+                      setShowWebhookSecret(true)
+                    }}
+                    className="px-3 py-2 rounded-lg border border-amber-700 hover:border-amber-500 text-sm text-amber-400 hover:text-amber-300 transition-colors whitespace-nowrap"
+                    title="Generate a new random secret — save to apply"
+                  >
+                    Rotate
+                  </button>
                 </div>
+                {showWebhookSecret && editedWebhookSecret && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="text-xs font-mono text-zinc-400 break-all">{editedWebhookSecret}</span>
+                    <CopyButton text={editedWebhookSecret} />
+                  </div>
+                )}
                 <p className="text-xs text-zinc-500 mt-1">
                   Used to sign payloads with HMAC-SHA256. Receivers can verify the X-TxWatch-Signature header.
+                </p>
+                <p className="text-xs text-amber-500 mt-1">
+                  Rotating the secret will invalidate existing signatures — update your receiver before saving.
                 </p>
               </div>
             </div>

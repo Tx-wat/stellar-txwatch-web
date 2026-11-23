@@ -1,4 +1,5 @@
 import { HORIZON_URLS, isValidUrl } from '@/lib/stellar'
+import { env } from '@/lib/env'
 import type { Network } from '@/types'
 
 const BASE_URL = env.NEXT_PUBLIC_API_URL
@@ -23,14 +24,19 @@ export async function apiFetch<T>(
       Object.assign(headersRecord, options.headers)
     }
   }
-  for (const [name, value] of Object.entries(getAuthHeaders())) {
-    headers.set(name, value)
-  }
 
-  const res = await fetch(`${BASE_URL}${path}`, {
-    ...options,
-    headers: headersRecord,
-  })
+  let res: Response
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      ...options,
+      headers: headersRecord,
+    })
+  } catch (err) {
+    if (err instanceof TypeError) {
+      throw new Error('Network offline — check your internet connection')
+    }
+    throw err
+  }
 
   if (!res.ok) {
     const text = await res.text()
@@ -161,8 +167,8 @@ export async function sendTestWebhook(
   webhookUrl: string,
   contractId: string,
   network: Network = 'testnet',
-  timeoutMs = 10000
-): Promise<void> {
+  timeoutOrSignal: number | AbortSignal = 10000
+): Promise<{ status: number; ok: boolean }> {
   if (!webhookUrl || !isValidUrl(webhookUrl)) {
     throw new Error('Invalid webhook URL')
   }
@@ -176,7 +182,6 @@ export async function sendTestWebhook(
       'TEST_HASH_0000000000000000000000000000000000000000000000000000000000000000',
     timestamp: Date.now(),
     horizon_link: `${HORIZON_URLS[network]}/transactions/test`,
-    ...(signers && signers.length > 0 ? { signers } : {}),
   }
 
   let signal: AbortSignal | undefined
@@ -197,6 +202,9 @@ export async function sendTestWebhook(
       body: JSON.stringify(payload),
       signal,
     })
+    if (!res.ok) {
+      throw new Error(`Webhook returned ${res.status}`)
+    }
     return { status: res.status, ok: res.ok }
   } catch (error) {
     const err = error as { name?: string }

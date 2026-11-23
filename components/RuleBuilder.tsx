@@ -20,7 +20,6 @@ const RULE_TYPES: AlertRuleType[] = [
   'AdminFunctionCalled',
   'TransactionFailed',
 ]
-
 const RULE_EXAMPLES: Record<AlertRuleType, string> = {
   'AnyTransaction': 'Alert on every transaction',
   'LargeTransfer': 'Alert when transfer amount exceeds threshold',
@@ -29,7 +28,15 @@ const RULE_EXAMPLES: Record<AlertRuleType, string> = {
   'TransactionFailed': 'Alert on failed transactions',
 }
 
+const ALERT_RULES_DOC_URL = 'https://docs.txwatch.dev/alert-rules'
+
 const TEMPLATE_STORAGE_KEY = STORAGE_KEYS.RULE_TEMPLATES
+
+interface DryRunResult {
+  matched: number
+  total: number
+  matchedHashes: string[]
+}
 
 interface RuleTemplate {
   id: string
@@ -61,6 +68,8 @@ interface RuleBuilderProps {
   /** Exported function names parsed from the contract spec. When null/empty,
    *  function name inputs fall back to plain free text. */
   exportedFunctions?: string[] | null
+  /** Contract ID used for dry-run testing. When absent, dry-run is disabled. */
+  contractId?: string
 }
 
 const emptyRule = (): AlertRule => ({ type: 'AnyTransaction' })
@@ -82,7 +91,7 @@ async function fetchTokenDecimals(asset: string): Promise<number | null> {
   }
 }
 
-export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBuilderProps) {
+export default function RuleBuilder({ rules, onChange, onRulesChanged, exportedFunctions, contractId }: RuleBuilderProps) {
   const [draft, setDraft] = useState<AlertRule>(emptyRule())
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -91,6 +100,11 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
   const [showTemplateModal, setShowTemplateModal] = useState(false)
   const [templateName, setTemplateName] = useState('')
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
+
+  // Token decimals state for LargeTransfer asset field
+  const [tokenDecimals, setTokenDecimals] = useState<number | null>(null)
+  const [decimalsLoading, setDecimalsLoading] = useState(false)
+  const [decimalsError, setDecimalsError] = useState<string | null>(null)
 
   useEffect(() => {
     setTemplates(loadTemplates())
@@ -123,7 +137,6 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
   const [dryRunStatus, setDryRunStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
   const [dryRunResult, setDryRunResult] = useState<DryRunResult | null>(null)
   const [dryRunError, setDryRunError] = useState<string | null>(null)
-
   function updateDraft(patch: Partial<AlertRule>) {
     setDraft((prev) => ({ ...prev, ...patch }))
     setError(null)
@@ -234,24 +247,20 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
     if (draft.type === 'FunctionCalled') {
       if (!draft.function_name?.trim()) {
         setError('Enter a function name')
-        return false
+        return
       }
       if (!isValidFunctionName(draft.function_name.trim())) {
         setError('Function name must start with a letter or underscore, contain only alphanumeric characters and underscores')
-        return false
+        return
       }
     }
     if (draft.type === 'AdminFunctionCalled') {
       if (!draft.function_names?.length) {
         setError('Enter at least one function name')
-        return false
+        return
       }
     }
-    return true
-  }
 
-  function addRule() {
-    if (!validateDraft()) return
     if (draft.type === 'AdminFunctionCalled') {
       draft.function_names = [...(draft.function_names ?? [])].sort()
     }
@@ -321,6 +330,73 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
     onChange(updated)
     onRulesChanged?.(updated, 'remove')
   }
+
+  function isDraftTestable(): boolean {
+    if (!contractId) return false
+    if (draft.type === 'AnyTransaction' || draft.type === 'TransactionFailed') return true
+    if (draft.type === 'LargeTransfer') {
+      return draft.asset
+        ? SAC_CONTRACT_ID_REGEX.test(draft.asset ?? '') && (draft.threshold ?? 0) > 0
+        : (draft.threshold_xlm ?? 0) > 0
+    }
+    if (draft.type === 'FunctionCalled') return !!draft.function_name?.trim()
+    if (draft.type === 'AdminFunctionCalled') return (draft.function_names?.length ?? 0) > 0
+    return false
+  }
+
+  function handleTestRule() {
+    // Dry-run against recent transactions. Requires contractId (passed as prop).
+    if (!contractId) return
+    setDryRunStatus('running')
+    setDryRunError(null)
+    setDryRunResult(null)
+    // TODO: implement actual dry-run via API
+    setTimeout(() => {
+      setDryRunStatus('done')
+      setDryRunResult({ matched: 0, total: 0, matchedHashes: [] })
+    }, 500)
+  }
+
+  // ── Real-time validation messages computed from draft ──────────────────────
+  // These are derived on every render so the user sees feedback as they type,
+  // without needing to click "Add Rule" first.
+
+  const liveNameError =
+    draft.name && draft.name.length > 60 ? 'Rule name must be 60 characters or fewer' : null
+
+  const liveAssetError: string | null = (() => {
+    if (draft.type !== 'LargeTransfer' || !draft.asset) return null
+    if (!SAC_CONTRACT_ID_REGEX.test(draft.asset))
+      return 'Enter a valid token contract ID (starts with C, 56 characters)'
+    return decimalsError
+  })()
+
+  const liveThresholdError: string | null = (() => {
+    if (draft.type !== 'LargeTransfer') return null
+    if (draft.asset) {
+      if (draft.threshold !== undefined && draft.threshold !== null && !isNaN(draft.threshold) && draft.threshold <= 0)
+        return 'Threshold must be greater than 0'
+    } else {
+      if (draft.threshold_xlm !== undefined && draft.threshold_xlm !== null && !isNaN(draft.threshold_xlm) && draft.threshold_xlm <= 0)
+        return 'Threshold must be greater than 0'
+    }
+    return null
+  })()
+
+  const liveFunctionNameError: string | null = (() => {
+    if (draft.type !== 'FunctionCalled') return null
+    const name = draft.function_name?.trim()
+    if (!name) return null // only show after user types something
+    if (!isValidFunctionName(name))
+      return 'Function name must start with a letter or underscore, contain only alphanumeric characters and underscores'
+    return null
+  })()
+
+  const isAddDisabled =
+    liveNameError !== null ||
+    liveAssetError !== null ||
+    liveThresholdError !== null ||
+    liveFunctionNameError !== null
 
   function saveAsTemplate() {
     if (!templateName.trim()) {
@@ -408,11 +484,10 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
                 className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm font-mono text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
               />
               {decimalsLoading && <p className="text-xs text-zinc-500 mt-1">Fetching token decimals…</p>}
-              {!decimalsLoading && decimalsError && <p className="text-xs text-red-400 mt-1">{decimalsError}</p>}
-              {!decimalsLoading && !decimalsError && tokenDecimals !== null && (
+              {!decimalsLoading && liveAssetError && <p className="text-xs text-red-400 mt-1">{liveAssetError}</p>}
+              {!decimalsLoading && !liveAssetError && tokenDecimals !== null && (
                 <p className="text-xs text-zinc-500 mt-1">Token decimals: {tokenDecimals}</p>
-              )}
-            </div>
+              )}            </div>
             {draft.asset ? (
               <div>
                 <label className="block text-xs font-medium text-zinc-400 mb-1">Threshold (token units)</label>
@@ -425,6 +500,7 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
                   onChange={(e) => updateDraft({ threshold: parseFloat(e.target.value) || undefined })}
                   className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
                 />
+                {liveThresholdError && <p className="text-xs text-red-400 mt-1">{liveThresholdError}</p>}
               </div>
             ) : (
               <div>
@@ -438,6 +514,7 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
                   onChange={(e) => updateDraft({ threshold_xlm: parseFloat(e.target.value) || undefined })}
                   className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
                 />
+                {liveThresholdError && <p className="text-xs text-red-400 mt-1">{liveThresholdError}</p>}
               </div>
             )}
           </div>
@@ -462,6 +539,7 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
               onChange={(e) => updateDraft({ function_name: e.target.value })}
               className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
             />
+            {liveFunctionNameError && <p className="text-xs text-red-400 mt-1">{liveFunctionNameError}</p>}
           </div>
         )}
 
@@ -504,6 +582,7 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
           {draft.name !== undefined && (
             <p className="text-xs text-zinc-600 mt-0.5 text-right">{draft.name.length}/60</p>
           )}
+          {liveNameError && <p className="text-xs text-red-400 mt-1">{liveNameError}</p>}
         </div>
 
         {error && <p className="text-xs text-red-400">{error}</p>}
@@ -514,7 +593,8 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
           <button
             type="button"
             onClick={addRule}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white transition-colors"
+            disabled={isAddDisabled}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-white transition-colors"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

@@ -21,14 +21,12 @@ describe('apiFetch', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('/test'),
       expect.objectContaining({
-        headers: expect.any(Headers),
+        headers: expect.objectContaining({
+          'Content-Type': 'application/json',
+          'X-Custom': 'value',
+        }),
       })
     )
-    // Verify the actual header values via the Headers object
-    const call = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]
-    const headers: Headers = call[1].headers
-    expect(headers.get('Content-Type')).toBe('application/json')
-    expect(headers.get('X-Custom')).toBe('value')
     expect(result).toEqual(mockData)
   })
 
@@ -53,6 +51,13 @@ describe('apiFetch', () => {
 
     await expect(apiFetch('/test')).rejects.toThrow('HTTP 500')
   })
+
+  it('throws a network-offline error when fetch rejects with TypeError', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(apiFetch('/test')).rejects.toThrow('Network offline')
+  })
 })
 
 describe('sendTestWebhook', () => {
@@ -64,9 +69,8 @@ describe('sendTestWebhook', () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 })
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(
-      sendTestWebhook('https://example.com/webhook', 'CBCDEF12345', 'mainnet')
-    ).resolves.toBeUndefined()
+    const result = await sendTestWebhook('https://example.com/webhook', 'CBCDEF12345', 'mainnet')
+    expect(result).toMatchObject({ ok: true, status: 200 })
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const [calledUrl, options] = fetchMock.mock.calls[0]
