@@ -1,7 +1,25 @@
-import { sortContracts, StoredContract } from '../contractSort';
+import { sortContracts, sortByRuleCount, StoredContract } from '../contractSort';
 
 const make = (id: string, label: string, network: string): StoredContract => ({
   id, address: `G${id}`, label, network,
+});
+
+const makeWithRules = (id: string, label: string, ruleCount: number): StoredContract & { rules: unknown[] } => ({
+  id, address: `G${id}`, label, network: 'mainnet', rules: Array(ruleCount).fill({}),
+});
+
+describe('sortByRuleCount', () => {
+  it('sorts contracts by descending rule count', () => {
+    const input = [makeWithRules('1', 'Few', 1), makeWithRules('2', 'Many', 5), makeWithRules('3', 'None', 0)];
+    const sorted = sortByRuleCount(input);
+    expect(sorted.map((c) => c.label)).toEqual(['Many', 'Few', 'None']);
+  });
+
+  it('breaks ties by label when rule counts are equal', () => {
+    const input = [makeWithRules('1', 'Zebra', 2), makeWithRules('2', 'Apple', 2)];
+    const sorted = sortByRuleCount(input);
+    expect(sorted.map((c) => c.label)).toEqual(['Apple', 'Zebra']);
+  });
 });
 
 describe('sortContracts', () => {
