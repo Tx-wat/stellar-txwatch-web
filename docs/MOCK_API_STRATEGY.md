@@ -46,7 +46,9 @@ Run with: `node mock-server.js`
 Use `apiFetch()` from `lib/api.ts` for all API calls. Mock `fetch` in tests:
 
 ```typescript
-jest.mock('lib/api')
+import { vi } from 'vitest'
+
+vi.mock('@/lib/api')
 // or
-global.fetch = jest.fn().mockResolvedValue(...)
+global.fetch = vi.fn().mockResolvedValue(...)
 ```
