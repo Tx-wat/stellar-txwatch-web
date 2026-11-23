@@ -595,6 +595,11 @@ export default function NewContractPage() {
               placeholder="https://your-server.com/webhook"
               value={webhookUrl}
               onChange={(e) => {              setWebhookUrl(e.target.value); setErrors((prev) => ({ ...prev, webhook_url: undefined })); setTestStatus('idle'); setTestStatusCode(null) }}
+              onBlur={() => {
+                // Check the format as soon as the field loses focus (#656)
+                const url = webhookUrl.trim()
+                if (url && !isValidUrl(url)) setErrors((prev) => ({ ...prev, webhook_url: 'Must be a valid http/https URL' }))
+              }}
               className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
             />
             <Button
