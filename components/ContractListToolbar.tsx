@@ -13,6 +13,7 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: 'oldest', label: 'Oldest first' },
   { value: 'label-asc', label: 'Label A–Z' },
   { value: 'label-desc', label: 'Label Z–A' },
+  { value: 'rule-count-desc', label: 'Rule Count' },
 ]
 
 interface ContractListToolbarProps {
