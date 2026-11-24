@@ -3,7 +3,6 @@ import { renderHook, act } from '@testing-library/react'
 import { createElement } from 'react'
 import { renderToString } from 'react-dom/server'
 import { useContracts } from '@/hooks/useContracts'
-import { saveContract } from '@/lib/storage'
 import { WatchedContract } from '@/types'
 
 const CONTRACTS_KEY = 'txwatch_contracts'

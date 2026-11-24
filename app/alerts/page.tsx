@@ -3,11 +3,11 @@
 import { useEffect, useState, useMemo } from 'react'
 import Link from 'next/link'
 import { useContracts } from '@/hooks/useContracts'
-import { getAlerts, getContracts, getContracts as getAllContracts, onAlertsChange } from '@/lib/storage'
-import { WatchedContract, AlertPayload } from '@/types'
-import { formatDate, formatAmount } from '@/lib/format'
-import { truncateId, explorerTxUrl } from '@/lib/stellar'
-import { Network } from '@/types'
+import { onAlertsChange } from '@/lib/storage'
+import { WatchedContract, AlertPayload, Network } from '@/types'
+import { formatDate } from '@/lib/format'
+import { formatAmountValue } from '@/lib/formatAmount'
+import { truncateId } from '@/lib/stellar'
 import NetworkBadge from '@/components/NetworkBadge'
 import { STORAGE_KEYS } from '@/lib/storageKeys'
 
@@ -37,9 +37,9 @@ export default function GlobalAlertsPage() {
 
   const contractMap = useMemo(() => {
     const map: Record<string, WatchedContract> = {}
-    getAllContracts().forEach(c => { map[c.id] = c })
+    contracts.forEach((c: WatchedContract) => { map[c.id] = c })
     return map
-  }, [])
+  }, [contracts])
 
   const filteredAlerts = useMemo(() => {
     let filtered = [...allAlerts]
@@ -68,12 +68,12 @@ export default function GlobalAlertsPage() {
 
   const networks = useMemo(() => {
     const nets = new Set(allAlerts.map(a => a.network as Network))
-    return ['all', ...nets] as const
+    return ['all', ...Array.from(nets)] as const
   }, [allAlerts])
 
   const contractOptions = useMemo(() => {
     const contractsWithAlerts = new Set(allAlerts.map(a => a.contract_id))
-    return ['all', ...contractsWithAlerts]
+    return ['all', ...Array.from(contractsWithAlerts)]
   }, [allAlerts])
 
   if (!mounted) return null
@@ -202,14 +202,14 @@ export default function GlobalAlertsPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center">
-                      <NetworkBadge network={network} size="sm" />
+                      <NetworkBadge network={network} />
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-medium text-zinc-100 truncate">
                           {contract?.label || truncateId(alert.contract_id, 12)}
                         </p>
-                        <NetworkBadge network={network} size="xs" />
+                        <NetworkBadge network={network} />
                       </div>
                       <p className="text-xs text-zinc-500 truncate font-mono">
                         {alert.transaction_hash}
@@ -221,7 +221,7 @@ export default function GlobalAlertsPage() {
                       <p className="text-sm font-mono text-zinc-300">{alert.rule_triggered}</p>
                       {alert.amount !== undefined && (
                         <p className="text-xs text-indigo-400">
-                          {formatAmount(alert.amount)} XLM
+                          {formatAmountValue(alert.amount)} XLM
                         </p>
                       )}
                     </div>
@@ -252,5 +252,3 @@ function loadAllAlerts(): AlertPayload[] {
     return []
   }
 }
-
-import { AlertPayload } from '@/types'

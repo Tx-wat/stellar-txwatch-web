@@ -2,10 +2,38 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { getApiKey, setApiKey, clearApiKey } from '@/lib/storage'
-import { testApiConnection } from '@/lib/api'
 import Toast from '@/components/Toast'
 
 type TestStatus = 'idle' | 'testing' | 'ok' | 'error'
+
+/** Ping the configured backend's health endpoint with the current API key. */
+async function testApiConnection(signal?: AbortSignal): Promise<{ ok: boolean; message: string }> {
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL
+  if (!baseUrl) return { ok: false, message: 'NEXT_PUBLIC_API_URL is not configured' }
+
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  const apiKey = getApiKey()
+  if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
+
+  try {
+    let res = await fetch(`${baseUrl.replace(/\/$/, '')}/health`, { headers, signal })
+    if (res.status === 404) {
+      res = await fetch(baseUrl.replace(/\/$/, ''), { headers, signal })
+    }
+    return {
+      ok: res.ok,
+      message: res.ok
+        ? `Connected (${res.status})`
+        : `Server returned ${res.status}`,
+    }
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') throw err
+    return {
+      ok: false,
+      message: `Connection failed: ${err instanceof Error ? err.message : String(err)}`,
+    }
+  }
+}
 
 export default function SettingsPage() {
   const [mounted, setMounted] = useState(false)
@@ -86,7 +114,7 @@ export default function SettingsPage() {
     setTestMessage(null)
 
     try {
-      const result = await testApiConnection()
+      const result = await testApiConnection(controller.signal)
       setTestStatus(result.ok ? 'ok' : 'error')
       setTestMessage(result.message)
     } catch (err) {

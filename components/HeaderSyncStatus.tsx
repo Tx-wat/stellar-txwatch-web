@@ -8,7 +8,8 @@ import SyncIndicator from '@/components/SyncIndicator'
  * status badge when NEXT_PUBLIC_API_URL is configured.
  */
 export default function HeaderSyncStatus() {
-  const { apiEnabled, syncStatus } = useContracts()
+  const { syncStatus } = useContracts()
+  const apiEnabled = !!process.env.NEXT_PUBLIC_API_URL
 
   if (!apiEnabled) return null
 

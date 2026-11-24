@@ -19,9 +19,9 @@ export function useAlerts(contractId: string | undefined) {
     })
   }, [adapter, refresh])
 
-  function add(alert: AlertPayload): void {
-    addAlert(alert)
-    refresh()
+  async function add(alert: AlertPayload): Promise<void> {
+    await adapter.addAlert(alert)
+    await refresh()
   }
 
   return { alerts, add, refresh }

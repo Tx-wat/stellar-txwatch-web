@@ -24,7 +24,9 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@next/bundle-analyzer": "^14.2.35",
     "@playwright/test": "^1.42.1",
+    "@sentry/nextjs": "^8.55.2",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.8",
@@ -35,6 +37,7 @@
     "eslint": "^8",
     "eslint-config-next": "14.2.35",
     "eslint-config-prettier": "^9.1.0",
+    "jiti": "^2.7.0",
     "jsdom": "^30.1.3",
     "postcss": "^8",
     "prettier": "^3.2.5",

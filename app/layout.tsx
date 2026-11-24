@@ -5,9 +5,9 @@ import FreighterConnect from '@/components/FreighterConnect'
 import WalletStatusBadge from '@/components/WalletStatusBadge'
 import MobileNav from '@/components/MobileNav'
 import WebVitals from '@/components/WebVitals'
-import StorageContext from '@/lib/StorageContext'
-import ToastProvider from '@/components/ToastProvider'
-import TimezoneProvider from '@/components/TimezoneProvider'
+import { StorageProvider } from '@/lib/StorageContext'
+import { ToastProvider } from '@/components/ToastProvider'
+import { TimezoneProvider } from '@/components/TimezoneProvider'
 import OnboardingTour from '@/components/OnboardingTour'
 import HeaderSyncStatus from '@/components/HeaderSyncStatus'
 
@@ -26,7 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <WebVitals />
         <ToastProvider>
           <TimezoneProvider>
-            <StorageContext>
+            <StorageProvider>
               <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-sm sticky top-0 z-50">
                 <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
                   <Link href="/" className="flex items-center gap-2 font-bold text-lg tracking-tight">
@@ -64,7 +64,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </main>
 
               <OnboardingTour />
-            </StorageContext>
+            </StorageProvider>
           </TimezoneProvider>
         </ToastProvider>
       </body>

@@ -1,27 +1,31 @@
-import { HORIZON_URLS, isValidUrl } from '@/lib/stellar'
-import type { Network } from '@/types'
+import { HORIZON_URLS, SOROBAN_RPC_URLS, isValidUrl } from '@/lib/stellar'
+import { getApiKey } from '@/lib/storage'
+import type { Network, WatchedContract } from '@/types'
 
-const BASE_URL = env.NEXT_PUBLIC_API_URL
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? ''
+
+/** Returns true when the backend API is configured. */
+export function isApiConfigured(): boolean {
+  return BASE_URL.length > 0
+}
+
+/**
+ * Returns authentication headers when an API key has been saved.
+ * When `NEXT_PUBLIC_API_URL` is configured this header is included on
+ * every request made via `apiFetch`.
+ */
+function getAuthHeaders(): Record<string, string> {
+  const key = getApiKey()
+  return key ? { Authorization: `Bearer ${key}` } : {}
+}
 
 export async function apiFetch<T>(
   path: string,
   options?: RequestInit
 ): Promise<T> {
-  const headersRecord: Record<string, string> = {
-    'Content-Type': 'application/json',
-  }
-  if (options?.headers) {
-    if (options.headers instanceof Headers) {
-      options.headers.forEach((value, key) => {
-        headersRecord[key] = value
-      })
-    } else if (Array.isArray(options.headers)) {
-      options.headers.forEach(([key, value]) => {
-        headersRecord[key] = value
-      })
-    } else {
-      Object.assign(headersRecord, options.headers)
-    }
+  const headers = new Headers(options?.headers)
+  if (!headers.has('content-type')) {
+    headers.set('Content-Type', 'application/json')
   }
   for (const [name, value] of Object.entries(getAuthHeaders())) {
     headers.set(name, value)
@@ -29,7 +33,7 @@ export async function apiFetch<T>(
 
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
-    headers: headersRecord,
+    headers,
   })
 
   if (!res.ok) {
@@ -47,6 +51,68 @@ export async function apiFetch<T>(
   }
 
   return res.json() as Promise<T>
+}
+
+/** Fetch all contracts from the backend API (GET /contracts). */
+export async function fetchContractsFromApi(): Promise<WatchedContract[]> {
+  return apiFetch<WatchedContract[]>('/contracts')
+}
+
+/** Save (upsert) a contract to the backend API (POST /contracts). */
+export async function saveContractToApi(contract: WatchedContract): Promise<void> {
+  await apiFetch<WatchedContract>('/contracts', {
+    method: 'POST',
+    body: JSON.stringify(contract),
+  })
+}
+
+/** Delete a contract from the backend API (DELETE /contracts/:id). */
+export async function deleteContractFromApi(id: string): Promise<void> {
+  await apiFetch<void>(`/contracts/${id}`, { method: 'DELETE' })
+}
+
+/**
+ * Pings the txwatch-core health endpoint with the stored API key.
+ * Falls back to the root path when /health is not exposed.
+ */
+export async function testApiConnection(): Promise<{
+  ok: boolean
+  status: number
+  message: string
+}> {
+  if (!BASE_URL) {
+    return {
+      ok: false,
+      status: 0,
+      message: 'NEXT_PUBLIC_API_URL is not configured',
+    }
+  }
+
+  try {
+    const headers = new Headers({ 'Content-Type': 'application/json' })
+    for (const [name, value] of Object.entries(getAuthHeaders())) {
+      headers.set(name, value)
+    }
+
+    const res = await fetch(`${BASE_URL}/health`, { headers })
+    const target = res.status === 404 ? await fetch(`${BASE_URL}/`, { headers }) : res
+    const ok = target.ok
+    return {
+      ok,
+      status: target.status,
+      message: ok
+        ? `Connected (${target.status})`
+        : res.status === 404
+          ? `Server reachable but returned ${target.status}`
+          : `Server returned ${target.status}`,
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      status: 0,
+      message: error instanceof Error ? error.message : 'Connection failed',
+    }
+  }
 }
 
 interface SorobanRpcResponse<T> {
@@ -148,21 +214,32 @@ export async function fetchTokenDecimals(
     throw new Error('decimals() returned an unexpected value')
   }
   const tail = bytes.slice(-4)
-  const value =
+  return (
     ((parseInt(tail[0], 16) << 24) |
       (parseInt(tail[1], 16) << 16) |
       (parseInt(tail[2], 16) << 8) |
       parseInt(tail[3], 16)) >>>
     0
-  return value
+  )
 }
 
+export interface TestWebhookResult {
+  status: number
+  ok: boolean
+}
+
+/**
+ * Sends a mock alert payload to a webhook URL so users can verify delivery
+ * before going live. The fourth argument accepts either a timeout in
+ * milliseconds or an AbortSignal supplied by the caller.
+ */
 export async function sendTestWebhook(
   webhookUrl: string,
   contractId: string,
   network: Network = 'testnet',
-  timeoutMs = 10000
-): Promise<void> {
+  timeoutOrSignal: number | AbortSignal = 10000,
+  signers?: string[]
+): Promise<TestWebhookResult> {
   if (!webhookUrl || !isValidUrl(webhookUrl)) {
     throw new Error('Invalid webhook URL')
   }
@@ -197,6 +274,9 @@ export async function sendTestWebhook(
       body: JSON.stringify(payload),
       signal,
     })
+    if (!res.ok) {
+      throw new Error(`Webhook returned ${res.status}`)
+    }
     return { status: res.status, ok: res.ok }
   } catch (error) {
     const err = error as { name?: string }

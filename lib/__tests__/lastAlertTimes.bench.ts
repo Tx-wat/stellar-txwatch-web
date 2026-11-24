@@ -41,14 +41,14 @@ store.txwatch_alerts = JSON.stringify(
 describe(`last alert time for ${CONTRACTS} contracts x ${ALERTS_PER_CONTRACT} alerts`, () => {
   bench('per-card getAlerts(id)[0] (before)', () => {
     for (const id of contractIds) {
-      getAlerts(id)[0]?.timestamp
+      void getAlerts(id)[0]?.timestamp
     }
   })
 
   bench('getLastAlertTimes() (after, memoised)', () => {
     const times = getLastAlertTimes()
     for (const id of contractIds) {
-      times[id]
+      void times[id]
     }
   })
 })

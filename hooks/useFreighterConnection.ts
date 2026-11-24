@@ -1,7 +1,22 @@
-import { useState, useEffect } from 'react'
+'use client'
+
+import { useEffect, useState } from 'react'
 import { Networks } from '@stellar/stellar-sdk'
+import {
+  getPublicKey as sdkGetPublicKey,
+  getNetworkDetails as sdkGetNetworkDetails,
+  isConnected as sdkIsConnected,
+} from '@stellar/freighter-api'
 
 export type KnownNetwork = 'PUBLIC' | 'TESTNET' | 'FUTURENET' | 'CUSTOM'
+export type FreighterStatus =
+  | 'idle'
+  | 'disconnected'
+  | 'not-installed'
+  | 'locked'
+  | 'not-allowed'
+  | 'connected'
+  | 'error'
 
 export function getKnownNetworkFromPassphrase(
   passphrase: string | null | undefined
@@ -19,7 +34,15 @@ export function getKnownNetworkFromPassphrase(
   }
 }
 
-export function useFreighterConnection(): { isConnected: boolean; publicKey: string | null; loading: boolean } {
+function statusFromError(error: unknown): FreighterStatus {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  if (/lock/i.test(message)) return 'locked'
+  if (/allow|permission|denied|reject/i.test(message)) return 'not-allowed'
+  if (/install|not available/i.test(message)) return 'not-installed'
+  return 'error'
+}
+
+export function useFreighterConnection() {
   const [isConnected, setIsConnected] = useState(false)
   const [publicKey, setPublicKey] = useState<string | null>(null)
   const [networkPassphrase, setNetworkPassphrase] = useState<string | null>(null)
@@ -28,68 +51,70 @@ export function useFreighterConnection(): { isConnected: boolean; publicKey: str
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    checkConnection()
-  }, [])
+    let cancelled = false
 
-  async function checkConnection() {
-    setLoading(true)
-    setError(null)
-    try {
-      const connectionResult = await isConnected()
+    async function checkConnection() {
+      setLoading(true)
+      setError(null)
+      try {
+        const wallet = typeof window === 'undefined' ? undefined : window.freighter
+        const connected = wallet ? await wallet.isConnected() : await sdkIsConnected()
 
-      if (connectionResult.error) {
-        // Distinguish "not installed" from other connection errors.
-        const message = connectionResult.error.message || 'Freighter is not available'
-        if (/install/i.test(message)) {
-          setStatus('not-installed')
+        if (!connected) {
+          if (!cancelled) {
+            setIsConnected(false)
+            setPublicKey(null)
+            setStatus('disconnected')
+          }
+          return
+        }
+
+        const key = wallet ? await wallet.getPublicKey() : await sdkGetPublicKey()
+        if (!key) throw new Error('Freighter is locked')
+
+        let passphrase: string | null = null
+        if (wallet?.getNetworkDetails) {
+          passphrase = (await wallet.getNetworkDetails()).networkPassphrase
+        } else if (wallet?.getNetwork) {
+          passphrase = await wallet.getNetwork()
         } else {
-          setStatus('error')
+          passphrase = (await sdkGetNetworkDetails()).networkPassphrase
         }
-        setError(message)
-        setIsConnected(false)
-        setPublicKey(null)
-        return
-      }
-      const connected = await window.freighter?.isConnected()
-      if (connected) {
-        const key = await window.freighter?.getPublicKey()
-        setPublicKey(key ?? null)
-        setIsConnected(true)
-        try {
-          const details = await window.freighter.getNetworkDetails()
-          setNetworkPassphrase(details?.networkPassphrase ?? null)
-        } catch {
-          setNetworkPassphrase(null)
-        }
-      } else {
-        setIsConnected(false)
-        setPublicKey(null)
-        return
-      }
 
-      setPublicKey(keyResult.publicKey)
-      setIsConnected(true)
-      setStatus('connected')
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown Freighter error'
-      if (/lock/i.test(message)) {
-        setStatus('locked')
-      } else if (/allow|permission|denied/i.test(message)) {
-        setStatus('not-allowed')
-      } else if (/install/i.test(message)) {
-        setStatus('not-installed')
-      } else {
-        setStatus('error')
+        if (!cancelled) {
+          setPublicKey(key)
+          setIsConnected(true)
+          setNetworkPassphrase(passphrase)
+          setStatus('connected')
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown Freighter error'
+        if (!cancelled) {
+          setStatus(statusFromError(err))
+          setError(message)
+          setIsConnected(false)
+          setPublicKey(null)
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
       }
-      setError(message)
-      setIsConnected(false)
-      setPublicKey(null)
-    } finally {
-      setLoading(false)
     }
-  }
+
+    void checkConnection()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const knownNetwork = getKnownNetworkFromPassphrase(networkPassphrase)
 
-  return { isConnected, publicKey, networkPassphrase, knownNetwork, loading }
+  return {
+    isConnected,
+    publicKey,
+    networkPassphrase,
+    knownNetwork,
+    loading,
+    status,
+    error,
+  }
 }

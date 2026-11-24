@@ -1,7 +1,33 @@
 import { render, screen } from '@testing-library/react'
+import { vi } from 'vitest'
 import ContractDetail from '@/app/contracts/[id]/page'
 
-const DAYS = 24 * 60 * 60 * 1000
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+}))
+
+vi.mock('@/lib/storage', () => ({
+  getContract: () => ({
+    id: 'CABC',
+    label: 'Test Contract',
+    contract_id: 'CABC',
+    network: 'testnet',
+    rules: [],
+    webhook_url: 'https://example.com/webhook',
+    created_at: Date.UTC(2024, 0, 1),
+    updated_at: Date.UTC(2024, 0, 1),
+  }),
+  getAlerts: () => [],
+  saveContract: vi.fn(),
+  deleteContract: vi.fn(),
+  restoreContract: vi.fn(),
+  addAlert: vi.fn(),
+  getDailyAlertCounts: () => [],
+  getApiKey: () => null,
+  setApiKey: vi.fn(),
+  clearApiKey: vi.fn(),
+}))
+
 const LEDGERS_PER_DAY = 17280
 
 function mockContract(liveUntilLedgerSeq: number) {
@@ -23,7 +49,7 @@ describe('ContractDetail TTL display', () => {
     jest.restoreAllMocks()
   })
 
-  it('shows liveUntilLedgerSeq and estimated expiry', () => {
+  it('shows liveUntilLedgerSeq and estimated expiry', async () => {
     const liveUntilLedgerSeq = 1000 + LEDGERS_PER_DAY * 60
     jest.spyOn(global, 'fetch').mockResolvedValue({
       ok: true,
@@ -32,8 +58,8 @@ describe('ContractDetail TTL display', () => {
 
     render(<ContractDetail params={{ id: 'CABC' }} />)
 
-    expect(screen.getByText(String(liveUntilLedgerSeq))).toBeInTheDocument()
-    expect(screen.getByText(/estimated/i)).toBeInTheDocument()
+    expect(await screen.findByText(String(liveUntilLedgerSeq))).toBeInTheDocument()
+    expect(await screen.findByText(/estimated/i)).toBeInTheDocument()
   })
 
   it('shows amber warning under 30 days', async () => {
@@ -45,7 +71,7 @@ describe('ContractDetail TTL display', () => {
 
     render(<ContractDetail params={{ id: 'CABC' }} />)
 
-    const warning = await screen.findByText(/expir/i)
+    const warning = await screen.findByText(/expires in under/i)
     expect(warning).toHaveClass('amber')
   })
 
@@ -58,7 +84,7 @@ describe('ContractDetail TTL display', () => {
 
     render(<ContractDetail params={{ id: 'CABC' }} />)
 
-    const warning = await screen.findByText(/expir/i)
+    const warning = await screen.findByText(/expires in under/i)
     expect(warning).toHaveClass('red')
   })
 
@@ -71,7 +97,7 @@ describe('ContractDetail TTL display', () => {
 
     render(<ContractDetail params={{ id: 'CABC' }} />)
 
-    expect(screen.queryByText(/expir/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/expires in under/i)).not.toBeInTheDocument()
   })
 })
 

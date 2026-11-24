@@ -9,7 +9,7 @@ import {
   useFreighterStatus,
 } from '@/hooks/useFreighterStatus'
 
-const KNOWN_PASSPHRASES = [Networks.PUBLIC, Networks.TESTNET, Networks.FUTURENET]
+const KNOWN_PASSPHRASES: string[] = [Networks.PUBLIC, Networks.TESTNET, Networks.FUTURENET]
 
 function displayError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error ?? '')

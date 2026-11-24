@@ -116,9 +116,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useToast(): ToastContextValue {
-  const ctx = useContext(ToastContext)
+  const ctx = useToastOptional()
   if (!ctx) {
     throw new Error('useToast must be used within a ToastProvider')
   }
   return ctx
+}
+
+/** Like `useToast`, but safe for surfaces rendered outside a ToastProvider. */
+export function useToastOptional(): ToastContextValue | null {
+  return useContext(ToastContext)
 }

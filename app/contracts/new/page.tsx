@@ -1,12 +1,19 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useRef, useEffect, useMemo } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { AlertRule, Network, WatchedContract } from '@/types'
-import { isValidContractId, isValidUrl, isValidAccountId } from '@/lib/stellar'
+import {
+  isValidContractId,
+  isValidUrl,
+  isValidAccountId,
+  checkContractExists,
+} from '@/lib/stellar'
 import { saveContract, getContracts } from '@/lib/storage'
 import { STORAGE_KEYS } from '@/lib/storageKeys'
 import { sendTestWebhook } from '@/lib/api'
+import { useContracts } from '@/hooks/useContracts'
 import { useFreighterConnection } from '@/hooks/useFreighterConnection'
 import RuleBuilder from '@/components/RuleBuilder'
 import FreighterConnect from '@/components/FreighterConnect'
@@ -20,6 +27,7 @@ interface ContractDraft {
   contractId: string
   network: Network
   webhookUrl: string
+  fallbackWebhookUrl?: string
   rules: AlertRule[]
   group?: string
 }
@@ -61,6 +69,70 @@ interface ImportSummary {
 const VALID_NETWORKS: Network[] = ['testnet', 'mainnet', 'futurenet']
 const CSV_HEADER = ['contract_id', 'label', 'network', 'webhook_url']
 
+interface ConfirmDialogProps {
+  open: boolean
+  title: string
+  message: string
+  confirmLabel: string
+  cancelLabel: string
+  onConfirm: () => void
+  onCancel: () => void
+}
+
+/** Small local dialog so the form has no dependency on a removed component. */
+function ConfirmDialog({
+  open,
+  title,
+  message,
+  confirmLabel,
+  cancelLabel,
+  onConfirm,
+  onCancel,
+}: ConfirmDialogProps) {
+  useEffect(() => {
+    if (!open) return
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') onCancel()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [open, onCancel])
+
+  if (!open) return null
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onCancel()
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="leave-confirm-title"
+        aria-describedby="leave-confirm-message"
+        className="w-full max-w-md rounded-xl border border-zinc-700 bg-zinc-900 p-6 shadow-xl"
+      >
+        <h2 id="leave-confirm-title" className="text-lg font-semibold text-zinc-100">
+          {title}
+        </h2>
+        <p id="leave-confirm-message" className="mt-2 text-sm text-zinc-400">
+          {message}
+        </p>
+        <div className="mt-6 flex justify-end gap-3">
+          <Button onClick={onCancel} variant="ghost" size="lg">
+            {cancelLabel}
+          </Button>
+          <Button onClick={onConfirm} variant="secondary" size="lg">
+            {confirmLabel}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function parseCsvLine(line: string): string[] {
   const cells: string[] = []
   let current = ''
@@ -98,6 +170,7 @@ export default function NewContractPage() {
   const [contractId, setContractId] = useState('')
   const [network, setNetwork] = useState<Network>('testnet')
   const [webhookUrl, setWebhookUrl] = useState('')
+  const [fallbackWebhookUrl, setFallbackWebhookUrl] = useState('')
   const [webhookSecret, setWebhookSecret] = useState('')
   const [showSecret, setShowSecret] = useState(false)
   const [rules, setRules] = useState<AlertRule[]>([])
@@ -110,13 +183,127 @@ export default function NewContractPage() {
   const [testStatusCode, setTestStatusCode] = useState<number | null>(null)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [contractCheck, setContractCheck] = useState<'idle' | 'checking' | 'found' | 'not_found' | 'error'>('idle')
+  const [draftRestored, setDraftRestored] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
+  const [importSummary, setImportSummary] = useState<ImportSummary | null>(null)
+  const [importing, setImporting] = useState(false)
   const testAbortRef = useRef<AbortController | null>(null)
   const contractCheckSeqRef = useRef(0)
+  const draftLoadedRef = useRef(false)
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const pendingNavigationRef = useRef<string | null>(null)
+  const duplicateId = searchParams.get('duplicate')
+
+  interface FormSnapshot {
+    label: string
+    group: string
+    contractId: string
+    network: Network
+    webhookUrl: string
+    fallbackWebhookUrl: string
+    rules: AlertRule[]
+  }
+  const [initialValues, setInitialValues] = useState<FormSnapshot>({
+    label: '',
+    group: '',
+    contractId: '',
+    network: 'testnet',
+    webhookUrl: '',
+    fallbackWebhookUrl: '',
+    rules: [],
+  })
 
   useEffect(() => {
     document.title = 'Add Contract · TxWatch'
     return () => { testAbortRef.current?.abort() }
   }, [])
+
+  // Hydrate the form from an existing contract when opened via ?duplicate=<id>.
+  useEffect(() => {
+    if (!duplicateId) return
+    const source = getContracts().find((candidate) => candidate.id === duplicateId)
+    if (source) {
+      const hydrated: FormSnapshot = {
+        label: `${source.label} (copy)`,
+        group: source.group ?? '',
+        contractId: source.contract_id,
+        network: source.network,
+        webhookUrl: source.webhook_url,
+        fallbackWebhookUrl: source.fallback_webhook_url ?? '',
+        rules: source.rules,
+      }
+      setLabel(hydrated.label)
+      setGroup(hydrated.group)
+      setContractId(hydrated.contractId)
+      setNetwork(hydrated.network)
+      setWebhookUrl(hydrated.webhookUrl)
+      setFallbackWebhookUrl(hydrated.fallbackWebhookUrl)
+      setRules(hydrated.rules)
+      setInitialValues(hydrated)
+    }
+  }, [duplicateId])
+
+  const isDirty = useMemo(() => {
+    if (saved) return false
+    return (
+      label !== initialValues.label ||
+      group !== initialValues.group ||
+      contractId !== initialValues.contractId ||
+      network !== initialValues.network ||
+      webhookUrl !== initialValues.webhookUrl ||
+      fallbackWebhookUrl !== initialValues.fallbackWebhookUrl ||
+      JSON.stringify(rules) !== JSON.stringify(initialValues.rules)
+    )
+  }, [saved, label, group, contractId, network, webhookUrl, fallbackWebhookUrl, rules, initialValues])
+
+  const existingGroups = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          contracts
+            .map((contract) => contract.group?.trim())
+            .filter((value): value is string => Boolean(value))
+        )
+      ).sort((a, b) => a.localeCompare(b)),
+    [contracts]
+  )
+
+  useEffect(() => {
+    if (!isDirty) return
+    function handleBeforeUnload(event: BeforeUnloadEvent) {
+      event.preventDefault()
+      event.returnValue = ''
+      return ''
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [isDirty])
+
+  function requestNavigation(target: string | null) {
+    if (!isDirty) {
+      if (target) router.push(target)
+      else router.back()
+      return
+    }
+    pendingNavigationRef.current = target
+    setShowLeaveConfirm(true)
+  }
+
+  function handleLeaveConfirm() {
+    setShowLeaveConfirm(false)
+    const target = pendingNavigationRef.current
+    pendingNavigationRef.current = null
+    setSaved(true)
+    if (target) router.push(target)
+    else router.back()
+  }
+
+  function handleLeaveCancel() {
+    setShowLeaveConfirm(false)
+    pendingNavigationRef.current = null
+  }
 
   async function runContractCheck(id: string, net: Network) {
     const trimmed = id.trim()
@@ -149,7 +336,18 @@ export default function NewContractPage() {
           setNetwork(draft.network)
         }
         if (typeof draft.webhookUrl === 'string') setWebhookUrl(draft.webhookUrl)
+        if (typeof draft.fallbackWebhookUrl === 'string') setFallbackWebhookUrl(draft.fallbackWebhookUrl)
         if (Array.isArray(draft.rules)) setRules(draft.rules)
+        setInitialValues({
+          label: typeof draft.label === 'string' ? draft.label : '',
+          group: typeof draft.group === 'string' ? draft.group : '',
+          contractId: typeof draft.contractId === 'string' ? draft.contractId : '',
+          network:
+            draft.network === 'mainnet' || draft.network === 'futurenet' ? draft.network : 'testnet',
+          webhookUrl: typeof draft.webhookUrl === 'string' ? draft.webhookUrl : '',
+          fallbackWebhookUrl: typeof draft.fallbackWebhookUrl === 'string' ? draft.fallbackWebhookUrl : '',
+          rules: Array.isArray(draft.rules) ? draft.rules : [],
+        })
         setDraftRestored(true)
       }
     } catch {
@@ -166,7 +364,7 @@ export default function NewContractPage() {
       try {
         sessionStorage.setItem(
           DRAFT_STORAGE_KEY,
-          JSON.stringify({ label, group, contractId, network, webhookUrl, rules })
+          JSON.stringify({ label, group, contractId, network, webhookUrl, fallbackWebhookUrl, rules })
         )
       } catch {
         // ignore storage errors
@@ -175,7 +373,7 @@ export default function NewContractPage() {
     return () => {
       if (draftTimerRef.current) clearTimeout(draftTimerRef.current)
     }
-  }, [label, group, contractId, network, webhookUrl, rules])
+  }, [label, group, contractId, network, webhookUrl, fallbackWebhookUrl, rules])
 
   function clearDraft() {
     if (draftTimerRef.current) clearTimeout(draftTimerRef.current)
@@ -193,6 +391,7 @@ export default function NewContractPage() {
     setContractId('')
     setNetwork('testnet')
     setWebhookUrl('')
+    setFallbackWebhookUrl('')
     setRules([])
     setErrors({})
     setTestStatus('idle')
@@ -200,6 +399,16 @@ export default function NewContractPage() {
     setTestStatusCode(null)
     setNetworkWarning(null)
     setDraftRestored(false)
+    setSaved(false)
+    setInitialValues({
+      label: '',
+      group: '',
+      contractId: '',
+      network: 'testnet',
+      webhookUrl: '',
+      fallbackWebhookUrl: '',
+      rules: [],
+    })
   }
 
   // Pre-fill the connected wallet as the first signer (only when empty)
@@ -262,9 +471,9 @@ export default function NewContractPage() {
   }
 
   async function checkNetworkMismatch(selectedNetwork: Network) {
-    if (!window.freighter) return
+    if (!window.freighter?.getNetwork) return
     try {
-      const walletNetwork = await window.freighter?.getNetwork()
+      const walletNetwork = await window.freighter.getNetwork()
       const networkMap: Record<string, string> = {
         testnet: 'TESTNET',
         mainnet: 'PUBLIC',
@@ -293,7 +502,6 @@ export default function NewContractPage() {
     }
 
     setSaving(true)
-    const now = Date.now()
     const contract: WatchedContract = {
       id: crypto.randomUUID(),
       label: label.trim(),
@@ -302,6 +510,7 @@ export default function NewContractPage() {
       network,
       rules,
       webhook_url: webhookUrl.trim(),
+      fallback_webhook_url: fallbackWebhookUrl.trim() || undefined,
       webhook_secret: webhookSecret.trim() || undefined,
       created_at: Date.now(),
       updated_at: Date.now(),
@@ -432,6 +641,7 @@ export default function NewContractPage() {
           rules: [],
           webhook_url: rowWebhookUrl,
           created_at: Date.now(),
+          updated_at: Date.now(),
         }
         saveContract(contract)
         seen.add(`${rowContractId}:${rowNetwork}`)
@@ -479,10 +689,51 @@ export default function NewContractPage() {
           <li aria-current="page" className="text-zinc-300">New</li>
         </ol>
       </nav>
-      <div>
-        <h1 className="text-2xl font-bold text-zinc-100">Add Contract</h1>
-        <p className="text-sm text-zinc-500 mt-1">Register a Soroban contract to monitor</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-zinc-100">Add Contract</h1>
+          <p className="text-sm text-zinc-500 mt-1">Register a Soroban contract to monitor</p>
+        </div>
+        <div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            aria-label="Import contracts from CSV"
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              if (file) void handleCsvFile(file)
+            }}
+          />
+          <Button
+            onClick={handleImportClick}
+            disabled={importing}
+            variant="secondary"
+            size="lg"
+            className="whitespace-nowrap"
+          >
+            {importing ? 'Importing…' : 'Import CSV'}
+          </Button>
+        </div>
       </div>
+
+      {importSummary && (
+        <div className="rounded-lg border border-zinc-700 bg-zinc-900 p-4 space-y-2">
+          <p className="text-sm text-zinc-200">
+            {importSummary.imported} contract{importSummary.imported === 1 ? '' : 's'} imported, {importSummary.skipped} skipped
+          </p>
+          {importSummary.errors.length > 0 && (
+            <ul className="space-y-1">
+              {importSummary.errors.map((error, index) => (
+                <li key={index} className="text-xs text-red-400">
+                  {error.line > 0 ? `Row ${error.line}: ` : ''}{error.message}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {draftRestored && (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-indigo-500/20 bg-indigo-500/10 px-4 py-3">
@@ -572,7 +823,6 @@ export default function NewContractPage() {
               const newNetwork = e.target.value as Network
               setNetwork(newNetwork)
               checkNetworkMismatch(newNetwork)
-              checkNetworkMismatch(newNetwork)
             }}
             className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-indigo-500 transition-colors"
           >
@@ -614,6 +864,26 @@ export default function NewContractPage() {
           {testStatus === 'ok' && <p className="mt-1 text-xs text-emerald-400">Test payload delivered — {testStatusCode} received</p>}
         </div>
 
+        {/* Fallback Webhook URL */}
+        <div>
+          <label htmlFor="fallback-webhook-url" className="block text-sm font-medium text-zinc-300 mb-1.5">
+            Fallback Webhook <span className="text-zinc-500 font-normal">(optional)</span>
+          </label>
+          <input
+            id="fallback-webhook-url"
+            type="url"
+            placeholder="https://your-backup-server.com/webhook"
+            value={fallbackWebhookUrl}
+            onChange={(event) => {
+              setFallbackWebhookUrl(event.target.value)
+              setErrors((prev) => ({ ...prev, fallback_webhook_url: undefined }))
+            }}
+            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
+          />
+          <p className="mt-1.5 text-xs text-zinc-400">Used as an escalation endpoint if the primary webhook fails after retries.</p>
+          {errors.fallback_webhook_url && <p className="mt-1 text-xs text-red-400">{errors.fallback_webhook_url}</p>}
+        </div>
+
         {/* Webhook Secret */}
         <div>
           <label className="block text-sm font-medium text-zinc-300 mb-1.5">Webhook Secret (Optional)</label>
@@ -634,6 +904,47 @@ export default function NewContractPage() {
             </button>
           </div>
           <p className="mt-1.5 text-xs text-zinc-400">Used to sign payloads with HMAC-SHA256. Receivers can verify the X-TxWatch-Signature header.</p>
+        </div>
+
+        {/* Additional Signers */}
+        <div>
+          <label htmlFor="additional-signer" className="block text-sm font-medium text-zinc-300 mb-1.5">
+            Additional Signers <span className="text-zinc-500 font-normal">(optional)</span>
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="additional-signer"
+              type="text"
+              placeholder="G…"
+              value={signerInput}
+              onChange={(event) => setSignerInput(event.target.value)}
+              className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm font-mono text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
+            />
+            <Button onClick={addSigner} variant="secondary" size="lg" className="whitespace-nowrap">
+              Add signer
+            </Button>
+          </div>
+          {signers.length > 0 && (
+            <ul className="mt-2 flex flex-wrap gap-2">
+              {signers.map((signer) => (
+                <li
+                  key={signer}
+                  className="flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-800/60 px-3 py-1 text-xs font-mono text-zinc-300"
+                >
+                  <span>{signer}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeSigner(signer)}
+                    className="text-zinc-500 hover:text-red-400 transition-colors"
+                    aria-label={`Remove signer ${signer}`}
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {errors.signers && <p className="mt-1 text-xs text-red-400">{errors.signers}</p>}
         </div>
 
         {/* Alert Rules */}

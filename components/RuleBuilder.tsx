@@ -1,17 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { AlertRule, AlertRuleType } from '@/types'
+import { AlertRule, AlertRuleType, Network } from '@/types'
 import { formatRuleSummary } from '@/lib/format'
 import { HORIZON_URLS } from '@/lib/stellar'
 import { STORAGE_KEYS } from '@/lib/storageKeys'
 import AlertRuleBadge from './AlertRuleBadge'
-import {
-  getRuleTemplates,
-  saveRuleTemplate,
-  deleteRuleTemplate,
-  onRuleTemplatesChange,
-} from '@/lib/storage'
 
 const RULE_TYPES: AlertRuleType[] = [
   'AnyTransaction',
@@ -27,6 +21,64 @@ const RULE_EXAMPLES: Record<AlertRuleType, string> = {
   'FunctionCalled': 'Alert when a specific function is called',
   'AdminFunctionCalled': 'Alert when admin functions are called',
   'TransactionFailed': 'Alert on failed transactions',
+}
+
+const ALERT_RULES_DOC_URL = '/docs/ALERT_RULES.md'
+
+// Minimal Horizon shapes used by the rule dry-run.
+interface HorizonOperation {
+  type: string
+  amount?: string
+  to?: string
+  from?: string
+  funder?: string
+  into?: string
+  function_name?: string
+}
+
+interface HorizonTransaction {
+  hash: string
+  successful: boolean
+  created_at: string
+  source_account: string
+  _links?: { operations?: { href: string } }
+}
+
+/** Returns true if the rule would have fired for this transaction. */
+function evaluateRule(rule: AlertRule, tx: HorizonTransaction, ops: HorizonOperation[]): boolean {
+  switch (rule.type) {
+    case 'AnyTransaction':
+      return true
+    case 'TransactionFailed':
+      return !tx.successful
+    case 'LargeTransfer': {
+      const threshold = rule.asset ? rule.threshold ?? 0 : rule.threshold_xlm ?? 0
+      return ops.some((op) => {
+        if (op.type !== 'payment') return false
+        return parseFloat(op.amount ?? '0') >= threshold
+      })
+    }
+    case 'FunctionCalled': {
+      const target = rule.function_name?.toLowerCase()
+      return !!target && ops.some((op) => op.function_name?.toLowerCase() === target)
+    }
+    case 'AdminFunctionCalled': {
+      const names = (rule.function_names ?? []).map((name) => name.toLowerCase())
+      if (names.length === 0) return false
+      return ops.some((op) => {
+        const fn = op.function_name?.toLowerCase()
+        return !!fn && names.includes(fn)
+      })
+    }
+    default:
+      return false
+  }
+}
+
+interface DryRunResult {
+  total: number
+  matched: number
+  matchedHashes: string[]
 }
 
 const TEMPLATE_STORAGE_KEY = STORAGE_KEYS.RULE_TEMPLATES
@@ -61,6 +113,9 @@ interface RuleBuilderProps {
   /** Exported function names parsed from the contract spec. When null/empty,
    *  function name inputs fall back to plain free text. */
   exportedFunctions?: string[] | null
+  /** Contract ID and network used by the Test Rule dry-run. */
+  contractId?: string
+  network?: Network
 }
 
 const emptyRule = (): AlertRule => ({ type: 'AnyTransaction' })
@@ -82,7 +137,14 @@ async function fetchTokenDecimals(asset: string): Promise<number | null> {
   }
 }
 
-export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBuilderProps) {
+export default function RuleBuilder({
+  rules,
+  onChange,
+  onRulesChanged,
+  exportedFunctions,
+  contractId,
+  network = 'testnet',
+}: RuleBuilderProps) {
   const [draft, setDraft] = useState<AlertRule>(emptyRule())
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -123,6 +185,11 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
   const [dryRunStatus, setDryRunStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
   const [dryRunResult, setDryRunResult] = useState<DryRunResult | null>(null)
   const [dryRunError, setDryRunError] = useState<string | null>(null)
+
+  // Token decimals state for SAC/token thresholds
+  const [tokenDecimals, setTokenDecimals] = useState<number | null>(null)
+  const [decimalsError, setDecimalsError] = useState<string | null>(null)
+  const [decimalsLoading, setDecimalsLoading] = useState(false)
 
   function updateDraft(patch: Partial<AlertRule>) {
     setDraft((prev) => ({ ...prev, ...patch }))
@@ -197,37 +264,38 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
     return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)
   }
 
-  function addRule() {
+  /** Validate the current draft; sets an error message and returns false when invalid. */
+  function validateDraft(): boolean {
     if (draft.name && draft.name.length > 60) {
       setError('Rule name must be 60 characters or fewer')
-      return
+      return false
     }
     if (draft.type === 'LargeTransfer') {
       if (draft.asset) {
         if (!SAC_CONTRACT_ID_REGEX.test(draft.asset)) {
           setError('Enter a valid token contract ID (starts with C, 56 characters)')
-          return
+          return false
         }
         if (decimalsError) {
           setError(decimalsError)
-          return
+          return false
         }
         if (draft.threshold === undefined || draft.threshold === null || isNaN(draft.threshold)) {
           setError('Enter a valid token threshold')
-          return
+          return false
         }
         if (draft.threshold <= 0) {
           setError('Threshold must be greater than 0')
-          return
+          return false
         }
       } else {
         if (draft.threshold_xlm === undefined || draft.threshold_xlm === null || isNaN(draft.threshold_xlm)) {
           setError('Enter a valid XLM threshold')
-          return
+          return false
         }
         if (draft.threshold_xlm <= 0) {
           setError('Threshold must be greater than 0')
-          return
+          return false
         }
       }
     }
@@ -333,7 +401,7 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
     }
     const templates = loadTemplates()
     const newTemplate: RuleTemplate = {
-      id: `template_${Date.now()}`,
+      id: newTemplateId(),
       name: templateName.trim(),
       rules: [...rules],
       created_at: Date.now(),
@@ -365,6 +433,65 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
       return
     }
     setShowTemplateModal(true)
+  }
+
+  /** Fetch the last 20 transactions for the contract from Horizon. */
+  async function fetchRecentTransactions(): Promise<HorizonTransaction[]> {
+    if (!contractId) return []
+    const horizonBase = HORIZON_URLS[network]
+    const url = `${horizonBase}/accounts/${contractId}/transactions?order=desc&limit=20`
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`Horizon returned ${res.status}`)
+    const data = await res.json()
+    return (data?.records ?? []) as HorizonTransaction[]
+  }
+
+  /** Fetch operations for a single transaction. */
+  async function fetchOperations(tx: HorizonTransaction): Promise<HorizonOperation[]> {
+    if (!contractId) return []
+    const horizonBase = HORIZON_URLS[network]
+    const opsUrl = tx._links?.operations?.href ?? `${horizonBase}/transactions/${tx.hash}/operations`
+    const cleanUrl = opsUrl.replace(/\{[^}]+\}/, '')
+    const res = await fetch(cleanUrl)
+    if (!res.ok) return []
+    const data = await res.json()
+    return (data?.records ?? []) as HorizonOperation[]
+  }
+
+  async function handleTestRule() {
+    if (!validateDraft()) return
+    if (!contractId) {
+      setError('Enter a contract ID first to test the rule against recent transactions')
+      return
+    }
+
+    setDryRunStatus('running')
+    setDryRunResult(null)
+    setDryRunError(null)
+
+    try {
+      const txs = await fetchRecentTransactions()
+      const matchedHashes: string[] = []
+      for (const tx of txs) {
+        const ops = await fetchOperations(tx)
+        if (evaluateRule(draft, tx, ops)) matchedHashes.push(tx.hash)
+      }
+      setDryRunResult({ total: txs.length, matched: matchedHashes.length, matchedHashes })
+      setDryRunStatus('done')
+    } catch (err) {
+      setDryRunError(err instanceof Error ? err.message : 'Failed to fetch transactions')
+      setDryRunStatus('error')
+    }
+  }
+
+  /** Show Test Rule only when the draft has enough configuration to evaluate. */
+  function isDraftTestable(): boolean {
+    if (draft.type === 'LargeTransfer') {
+      return draft.asset ? (draft.threshold ?? 0) > 0 : (draft.threshold_xlm ?? 0) > 0
+    }
+    if (draft.type === 'FunctionCalled') return !!draft.function_name?.trim()
+    if (draft.type === 'AdminFunctionCalled') return (draft.function_names?.length ?? 0) > 0
+    return true
   }
 
   return (
@@ -674,14 +801,14 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-medium text-zinc-300">Rule Templates ({templates.length})</h4>
             <button
-              onClick={() => setSelectedTemplateId(templates[0]?.id || null)}
+              onClick={() => setSelectedTemplateId(selectedTemplateId ? null : templates[0]?.id || null)}
               className="text-xs text-indigo-400 hover:text-indigo-300"
             >
-              View All
+              {selectedTemplateId ? 'Show Less' : 'View All'}
             </button>
           </div>
           <div className="flex flex-wrap gap-2">
-            {templates.slice(0, 3).map((template) => (
+            {(selectedTemplateId ? templates : templates.slice(0, 3)).map((template) => (
               <button
                 key={template.id}
                 onClick={() => loadTemplate(template.id)}

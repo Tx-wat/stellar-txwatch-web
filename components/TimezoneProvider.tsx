@@ -87,9 +87,14 @@ export function TimezoneProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useTimezone(): TimezoneContextValue {
-  const ctx = useContext(TimezoneContext)
+  const ctx = useTimezoneOptional()
   if (!ctx) {
     throw new Error('useTimezone must be used within a TimezoneProvider')
   }
   return ctx
+}
+
+/** Like `useTimezone`, but safe for components also rendered outside a provider. */
+export function useTimezoneOptional(): TimezoneContextValue | null {
+  return useContext(TimezoneContext)
 }

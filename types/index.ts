@@ -53,6 +53,12 @@ export interface WatchedContract {
   instanceLiveUntilLedgerSeq?: number
   /** Free-text folder/group name used to organise contracts (e.g. "Production", "Client A"). */
   group?: string
+  /** Whether alerts are currently enabled for this contract. Missing means enabled. */
+  enabled?: boolean
+  /** Free-text notes attached to the contract. */
+  notes?: string
+  /** Optional secondary webhook endpoint used as a fallback. */
+  fallback_webhook_url?: string
 }
 
 export type DeliveryStatus = 'delivered' | 'retrying' | 'failed'
