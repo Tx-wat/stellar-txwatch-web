@@ -1,11 +1,17 @@
 import { z } from 'zod'
-import { WatchedContract, AlertPayload, Network } from '@/types'
+import { WatchedContract, AlertPayload, Network, AppSettings } from '@/types'
+import { AlertPayloadSchema, WatchedContractSchema } from '@/lib/schemas'
 import { STORAGE_KEYS } from '@/lib/storageKeys'
+import { safeParseStorage, emitStorageError } from '@/lib/storageLogger'
 import {
   STORAGE_QUOTA_BYTES,
   MAX_ALERTS_PER_CONTRACT,
   ALERTS_RETENTION_DAYS,
 } from './constants'
+
+const DEFAULT_SETTINGS: AppSettings = {
+  explorer: 'stellar-expert',
+}
 
 const CONTRACTS_KEY = STORAGE_KEYS.CONTRACTS
 const ALERTS_KEY = STORAGE_KEYS.ALERTS
@@ -374,14 +380,6 @@ export function getAlerts(contractId: string): AlertPayload[] {
     (a) => a.contract_id === contractId
   )
 }
-are 
-function deterministicSuffix(contractId: string, sequence: number): string {
-  let h = sequence * 2654435761
-  for (let i = 0; i < contractId.length; i++) {
-    h = Math.imul(h ^ contractId.charCodeAt(i), 2246822519)
-  }
-  return (h >>> 0).toString(16).padStart(8, '0').repeat(2)
-}
 
 function deterministicSuffix(contractId: string, sequence: number): string {
   let h = sequence * 2654435761
@@ -453,13 +451,27 @@ export interface DailyAlertCount {
   count: number
 }
 
+/**
+ * Formats a Date as a UTC date key "YYYY-MM-DD".
+ *
+ * Alert timestamps are always UTC (Unix ms from the txwatch-core engine).
+ * Using UTC methods here ensures that an alert at e.g. 2024-01-15T01:00:00Z
+ * is counted on 2024-01-15 regardless of the user's local timezone.
+ */
 function formatDateKey(d: Date): string {
-  const year = d.getFullYear()
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
+  const year = d.getUTCFullYear()
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(d.getUTCDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
 }
 
+/**
+ * Returns `days` consecutive UTC date buckets (oldest first) with alert counts.
+ *
+ * All date arithmetic uses UTC so that the heatmap is consistent across
+ * timezones — a bucket labelled "2024-01-15" always covers the UTC calendar
+ * day 2024-01-15T00:00:00Z – 2024-01-15T23:59:59.999Z.
+ */
 export function getDailyAlertCounts(
   contractIdOrAlerts: string | AlertPayload[],
   days = 30
@@ -477,12 +489,15 @@ export function getDailyAlertCounts(
   }
 
   const result: DailyAlertCount[] = []
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  // Anchor "today" to midnight UTC so the grid is timezone-stable.
+  const nowUtc = new Date()
+  const todayUtc = new Date(
+    Date.UTC(nowUtc.getUTCFullYear(), nowUtc.getUTCMonth(), nowUtc.getUTCDate())
+  )
 
   for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(today)
-    d.setDate(d.getDate() - i)
+    const d = new Date(todayUtc)
+    d.setUTCDate(d.getUTCDate() - i)
     const key = formatDateKey(d)
     result.push({
       date: key,
