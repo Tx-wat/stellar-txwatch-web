@@ -32,7 +32,7 @@ const ruleTypes: AlertRuleType[] = [
 // CSV export always operates on the full filtered set, not just the visible window.
 function exportCSV(alerts: AlertPayload[]) {
   const rows = [
-    ['Time', 'Rule', 'Rule Name', 'Tx Hash', 'Function', 'Amount', 'Latency'],
+    ['Time', 'Rule', 'Rule Name', 'Tx Hash', 'Function', 'Amount', 'Delivery Status', 'Retry Count', 'Last Attempt', 'Latency'],
     ...alerts.map((a) => [
       new Date(a.timestamp).toLocaleString(),
       a.rule_triggered,

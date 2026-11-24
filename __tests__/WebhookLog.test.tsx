@@ -153,7 +153,7 @@ describe('WebhookLog', () => {
     expect(blob.type).toBe('text/csv')
 
     return blob.text().then((text) => {
-      expect(text).toContain('"Time","Rule","Tx Hash","Function","Amount"')
+      expect(text).toContain('"Time","Rule","Rule Name","Tx Hash","Function","Amount","Delivery Status","Retry Count","Last Attempt","Latency"')
       expect(text).toContain('LargeTransfer')
       expect(text).not.toContain('FunctionCalled')
       expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock-url')
