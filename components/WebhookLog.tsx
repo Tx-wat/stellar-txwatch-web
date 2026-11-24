@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useRef, useState } from 'react'
+import React, { useRef, useState, useEffect } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { AlertPayload, AlertRuleType, Network } from '@/types'
 import { explorerTxUrl, truncateId } from '@/lib/stellar'
@@ -9,6 +9,13 @@ import { formatDateTime as defaultFormatDateTime } from '@/lib/format'
 import { useTimezone } from './TimezoneProvider'
 import AlertRuleBadge from './AlertRuleBadge'
 import CopyButton from './CopyButton'
+
+/** Network values shown in the filter dropdown, plus the "all" sentinel. */
+const NETWORK_OPTIONS = ['all', 'mainnet', 'testnet', 'futurenet'] as const
+type NetworkFilter = (typeof NETWORK_OPTIONS)[number]
+
+/** URL query-param key used to persist the network filter across page loads. */
+const NETWORK_PARAM = 'network'
 
 interface WebhookLogProps {
   alerts: AlertPayload[]
@@ -76,6 +83,30 @@ export default function WebhookLog({
   const [selectedFilter, setSelectedFilter] = useState<AlertRuleType | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
 
+  // ── Network filter ──────────────────────────────────────────────────────────
+  // Initialise from the URL query param so the filter survives page loads and
+  // can be shared via URL.  Falls back to 'all' when the param is absent or
+  // has an unrecognised value.
+  function readNetworkParam(): NetworkFilter {
+    if (typeof window === 'undefined') return 'all'
+    const param = new URLSearchParams(window.location.search).get(NETWORK_PARAM)
+    return (NETWORK_OPTIONS as readonly string[]).includes(param ?? '') ? (param as NetworkFilter) : 'all'
+  }
+
+  const [networkFilter, setNetworkFilter] = useState<NetworkFilter>(readNetworkParam)
+
+  // Persist network filter changes to the URL without triggering a navigation.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const url = new URL(window.location.href)
+    if (networkFilter === 'all') {
+      url.searchParams.delete(NETWORK_PARAM)
+    } else {
+      url.searchParams.set(NETWORK_PARAM, networkFilter)
+    }
+    window.history.replaceState(null, '', url.toString())
+  }, [networkFilter])
+
   let formatDateTime = defaultFormatDateTime
   try {
     const tz = useTimezone()
@@ -86,6 +117,7 @@ export default function WebhookLog({
 
   // Filtering operates on the full alerts array; only rendering is virtualised.
   const filteredAlerts = alerts.filter((a: AlertPayload) => {
+    if (networkFilter !== 'all' && a.network !== networkFilter) return false
     if (selectedFilter && a.rule_triggered !== selectedFilter) return false
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase()
@@ -158,7 +190,20 @@ export default function WebhookLog({
       )}
 
       {/* Filter Controls */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 items-center">
+        {/* Network filter dropdown — persisted in URL query param */}
+        <select
+          aria-label="Filter by network"
+          value={networkFilter}
+          onChange={(e) => setNetworkFilter(e.target.value as NetworkFilter)}
+          className="px-3 py-1.5 rounded-lg text-xs bg-zinc-900 border border-zinc-700 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="all">All Networks</option>
+          <option value="mainnet">Mainnet</option>
+          <option value="testnet">Testnet</option>
+          <option value="futurenet">Futurenet</option>
+        </select>
+
         <div className="flex-1 min-w-[200px]">
           <input
             type="text"
@@ -221,7 +266,7 @@ export default function WebhookLog({
 
         {filteredAlerts.length === 0 && !sharedTimestamps ? (
           <p className="text-sm text-zinc-500 py-4">
-            No matching alerts{searchQuery ? ` for "${searchQuery}"` : ''}.
+          No matching alerts{searchQuery ? ` for "${searchQuery}"` : networkFilter !== 'all' ? ` on ${networkFilter}` : ''}.
           </p>
         ) : (
           /*

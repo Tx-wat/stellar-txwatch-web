@@ -132,7 +132,7 @@ describe('WebhookLog', () => {
     render(<WebhookLog alerts={[largeTransferAlert]} network="testnet" />)
     fireEvent.click(screen.getByRole('button', { name: 'FunctionCalled' }))
     expect(
-      screen.getByText('No alerts match the selected filter.')
+      screen.getByText('No matching alerts.')
     ).toBeInTheDocument()
     expect(screen.queryByText('Large Transfer')).not.toBeInTheDocument()
   })
@@ -198,5 +198,95 @@ describe('WebhookLog', () => {
     )
     expect(screen.getByText(/No alert at this timestamp/i)).toBeInTheDocument()
     expect(screen.getByText('large_transfer')).toBeInTheDocument()
+  })
+
+  describe('network filter (issue #589)', () => {
+    const mainnetAlert: AlertPayload = {
+      ...baseAlert,
+      network: 'mainnet',
+      rule_triggered: 'AnyTransaction',
+      transaction_hash: 'mainnet_tx_abcdef1234567890abcdef1234567890abcdef1234567890abcdef12',
+    }
+    const testnetAlert: AlertPayload = {
+      ...baseAlert,
+      network: 'testnet',
+      rule_triggered: 'LargeTransfer',
+      transaction_hash: 'testnet_tx_abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+    }
+    const futurenetAlert: AlertPayload = {
+      ...baseAlert,
+      network: 'futurenet',
+      rule_triggered: 'TransactionFailed',
+      transaction_hash: 'futurenet_x_abcdef1234567890abcdef1234567890abcdef1234567890abcde',
+    }
+
+    it('shows all alerts when "All Networks" is selected (default)', () => {
+      render(
+        <WebhookLog alerts={[mainnetAlert, testnetAlert, futurenetAlert]} network="mainnet" />
+      )
+      expect(screen.getByText('3 of 3 alerts')).toBeInTheDocument()
+    })
+
+    it('filters to mainnet alerts when mainnet is selected', () => {
+      render(
+        <WebhookLog alerts={[mainnetAlert, testnetAlert, futurenetAlert]} network="mainnet" />
+      )
+      fireEvent.change(screen.getByRole('combobox', { name: /filter by network/i }), {
+        target: { value: 'mainnet' },
+      })
+      expect(screen.getByText('1 of 3 alerts')).toBeInTheDocument()
+    })
+
+    it('filters to testnet alerts when testnet is selected', () => {
+      render(
+        <WebhookLog alerts={[mainnetAlert, testnetAlert, futurenetAlert]} network="testnet" />
+      )
+      fireEvent.change(screen.getByRole('combobox', { name: /filter by network/i }), {
+        target: { value: 'testnet' },
+      })
+      expect(screen.getByText('1 of 3 alerts')).toBeInTheDocument()
+    })
+
+    it('filters to futurenet alerts when futurenet is selected', () => {
+      render(
+        <WebhookLog alerts={[mainnetAlert, testnetAlert, futurenetAlert]} network="futurenet" />
+      )
+      fireEvent.change(screen.getByRole('combobox', { name: /filter by network/i }), {
+        target: { value: 'futurenet' },
+      })
+      expect(screen.getByText('1 of 3 alerts')).toBeInTheDocument()
+    })
+
+    it('shows a no-match message when the network filter returns zero results', () => {
+      render(
+        <WebhookLog alerts={[mainnetAlert]} network="mainnet" />
+      )
+      fireEvent.change(screen.getByRole('combobox', { name: /filter by network/i }), {
+        target: { value: 'testnet' },
+      })
+      expect(screen.getByText(/No matching alerts on testnet/i)).toBeInTheDocument()
+    })
+
+    it('persists the network filter to the URL query param', () => {
+      render(
+        <WebhookLog alerts={[mainnetAlert, testnetAlert]} network="mainnet" />
+      )
+      fireEvent.change(screen.getByRole('combobox', { name: /filter by network/i }), {
+        target: { value: 'mainnet' },
+      })
+      expect(window.location.search).toContain('network=mainnet')
+    })
+
+    it('removes the network query param when "All Networks" is selected', () => {
+      // First set a network param so we can clear it.
+      window.history.pushState({}, '', '?network=mainnet')
+      render(
+        <WebhookLog alerts={[mainnetAlert, testnetAlert]} network="mainnet" />
+      )
+      fireEvent.change(screen.getByRole('combobox', { name: /filter by network/i }), {
+        target: { value: 'all' },
+      })
+      expect(window.location.search).not.toContain('network=')
+    })
   })
 })
