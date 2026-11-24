@@ -33,6 +33,7 @@ export const WatchedContractSchema = z.object({
   instanceLiveUntilLedgerSeq: z.number().optional(),
   enabled: z.boolean().optional(),
   group: z.string().optional(),
+  tags: z.array(z.string()).optional(),
 })
 
 export const AlertPayloadSchema = z.object({

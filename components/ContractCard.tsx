@@ -131,6 +131,19 @@ function ContractCard({ contract, lastAlertTime, highlight, missing }: ContractC
           </div>
         )}
 
+        {contract.tags && contract.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-2">
+            {contract.tags.map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center rounded-md bg-indigo-600/15 px-1.5 py-0.5 text-xs font-medium text-indigo-400 ring-1 ring-inset ring-indigo-500/20"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+
         <div className="flex items-center justify-between text-xs text-zinc-500">
           <span>
             <span className="text-zinc-300 font-medium">{contract.rules.length}</span>{' '}

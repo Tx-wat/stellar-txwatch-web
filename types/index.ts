@@ -59,6 +59,8 @@ export interface WatchedContract {
   instanceLiveUntilLedgerSeq?: number
   /** Free-text folder/group name used to organise contracts (e.g. "Production", "Client A"). */
   group?: string
+  /** User-defined tags for categorising the contract (e.g. "defi", "audit"). */
+  tags?: string[]
 }
 
 export type DeliveryStatus = 'delivered' | 'retrying' | 'failed'
