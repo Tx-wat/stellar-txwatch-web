@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { getApiKey, setApiKey, clearApiKey } from '@/lib/storage'
+import { getApiKey, setApiKey, clearApiKey, getStorageUsage } from '@/lib/storage'
 import { testApiConnection } from '@/lib/api'
 import Toast from '@/components/Toast'
 
@@ -20,6 +20,9 @@ export default function SettingsPage() {
   const [testMessage, setTestMessage] = useState<string | null>(null)
   const testAbortRef = useRef<AbortController | null>(null)
 
+  const [storageUsed, setStorageUsed] = useState(0)
+  const [storageQuota, setStorageQuota] = useState(1)
+
   const apiConfigured = !!process.env.NEXT_PUBLIC_API_URL
 
   // Hydrate stored key on client mount
@@ -29,6 +32,9 @@ export default function SettingsPage() {
       setApiKeyState(stored)
       setInputKey(stored)
     }
+    const { usedBytes, quotaBytes } = getStorageUsage()
+    setStorageUsed(usedBytes)
+    setStorageQuota(quotaBytes)
     setMounted(true)
   }, [])
 
@@ -260,6 +266,55 @@ export default function SettingsPage() {
             </p>
           )}
         </div>
+
+        {/* Storage Usage card */}
+        {(() => {
+          const usedKB = Math.round(storageUsed / 1024)
+          const totalKB = Math.round(storageQuota / 1024)
+          const pct = storageQuota > 0 ? Math.min(100, (storageUsed / storageQuota) * 100) : 0
+          const isWarning = pct >= 80
+          return (
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4">
+              <div>
+                <h2 className="text-lg font-semibold text-zinc-100">Storage Usage</h2>
+                <p className="text-sm text-zinc-500 mt-1">
+                  How much of your browser&apos;s localStorage quota this app is using.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className={isWarning ? 'text-amber-400' : 'text-zinc-400'}>
+                    {usedKB} KB used
+                  </span>
+                  <span className="text-zinc-500">{totalKB} KB total</span>
+                </div>
+
+                <div
+                  role="progressbar"
+                  aria-valuenow={Math.round(pct)}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label="Storage usage"
+                  className="h-2 w-full rounded-full bg-zinc-800 overflow-hidden"
+                >
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      isWarning ? 'bg-amber-500' : 'bg-indigo-500'
+                    }`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+
+                {isWarning && (
+                  <p className="text-xs text-amber-400">
+                    ⚠ Storage is above 80% capacity. Consider clearing old alert history.
+                  </p>
+                )}
+              </div>
+            </div>
+          )
+        })()}
       </div>
     </>
   )

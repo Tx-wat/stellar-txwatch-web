@@ -116,6 +116,16 @@ function getStorageSize(): number {
   return size
 }
 
+/**
+ * Returns the current localStorage usage and quota in bytes.
+ * `usedBytes` counts all keys/values as UTF-16 code units (2 bytes each),
+ * matching how browsers account for storage. `quotaBytes` is the app's
+ * configured quota from constants.
+ */
+export function getStorageUsage(): { usedBytes: number; quotaBytes: number } {
+  return { usedBytes: getStorageSize() * 2, quotaBytes: STORAGE_QUOTA_BYTES }
+}
+
 function pruneOldAlerts(): void {
   const storage = getStorage()
   if (!storage) return
@@ -373,14 +383,6 @@ export function getAlerts(contractId: string): AlertPayload[] {
   return load(ALERTS_KEY, AlertPayloadSchema).filter(
     (a) => a.contract_id === contractId
   )
-}
-are 
-function deterministicSuffix(contractId: string, sequence: number): string {
-  let h = sequence * 2654435761
-  for (let i = 0; i < contractId.length; i++) {
-    h = Math.imul(h ^ contractId.charCodeAt(i), 2246822519)
-  }
-  return (h >>> 0).toString(16).padStart(8, '0').repeat(2)
 }
 
 function deterministicSuffix(contractId: string, sequence: number): string {
