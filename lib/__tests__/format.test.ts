@@ -71,6 +71,23 @@ describe('formatRuleSummary', () => {
     expect(formatRuleSummary(rule)).toBe('>= 0 XLM')
   })
 
+  it('formats token-denominated LargeTransfer with asset and threshold', () => {
+    const asset = 'CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA'
+    const rule: AlertRule = { type: 'LargeTransfer', asset, threshold: 500 }
+    const result = formatRuleSummary(rule)
+    // Should show the threshold value and a truncated version of the contract ID
+    expect(result).toContain('500')
+    expect(result).not.toContain('undefined')
+    expect(result).not.toContain('XLM')
+    expect(result).toMatch(/^>= 500 \(/)
+  })
+
+  it('does not show "undefined XLM" when asset is set but threshold_xlm is absent', () => {
+    const asset = 'CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA'
+    const rule: AlertRule = { type: 'LargeTransfer', asset, threshold: 100 }
+    expect(formatRuleSummary(rule)).not.toBe('>= undefined XLM')
+  })
+
   it('formats FunctionCalled with a function name', () => {
     const rule: AlertRule = { type: 'FunctionCalled', function_name: 'transfer' }
     expect(formatRuleSummary(rule)).toBe('transfer')
