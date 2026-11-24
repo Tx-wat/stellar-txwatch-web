@@ -68,9 +68,16 @@ export function useWebSocket({
         }
       }
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         setIsConnected(false)
         onDisconnectRef.current?.()
+
+        // Auth failure codes must not retry — the server rejected the credentials.
+        const AUTH_CLOSE_CODES = [4001, 4003]
+        if (AUTH_CLOSE_CODES.includes(event.code)) {
+          setConnectionError(`Authentication failed (code ${event.code}). Check your API key in Settings.`)
+          return
+        }
 
         if (reconnectAttempts < maxReconnectAttempts) {
           const timeout = setTimeout(() => {
