@@ -28,7 +28,7 @@ export default function OnboardingTour() {
       observer.disconnect()
       window.removeEventListener('resize', updateTargetRect)
     }
-  }, [tour.currentStep, tour.showTour, tour.mounted])
+  }, [tour.currentStep, tour.showTour, tour.mounted, tour.steps])
 
   if (!tour.mounted || !tour.showTour) return null
 

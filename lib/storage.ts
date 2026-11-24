@@ -1,6 +1,8 @@
 import { z } from 'zod'
-import { WatchedContract, AlertPayload, Network } from '@/types'
+import { WatchedContract, AlertPayload, Network, ExplorerId, RuleTemplate } from '@/types'
 import { STORAGE_KEYS } from '@/lib/storageKeys'
+import { AlertRuleSchema, AlertPayloadSchema, WatchedContractSchema } from '@/lib/schemas'
+import { emitStorageError, safeParseStorage } from '@/lib/storageLogger'
 import {
   STORAGE_QUOTA_BYTES,
   MAX_ALERTS_PER_CONTRACT,
@@ -10,8 +12,18 @@ import {
 const CONTRACTS_KEY = STORAGE_KEYS.CONTRACTS
 const ALERTS_KEY = STORAGE_KEYS.ALERTS
 const SETTINGS_KEY = STORAGE_KEYS.SETTINGS
+const RULE_TEMPLATES_KEY = STORAGE_KEYS.RULE_TEMPLATES
 const STORAGE_VERSION_KEY = STORAGE_KEYS.STORAGE_VERSION
-const CURRENT_STORAGE_VERSION = 2
+export const CURRENT_STORAGE_VERSION = 2
+
+const MAX_NOTES_LENGTH = 1000
+
+/** Local definition keeps this module usable without importing UI types. */
+export interface AppSettings {
+  explorer: ExplorerId
+}
+
+const DEFAULT_SETTINGS: AppSettings = { explorer: 'stellar-expert' }
 
 /**
  * Same-tab pub/sub registry. The browser `storage` event only fires in *other*
@@ -116,7 +128,7 @@ function getStorageSize(): number {
   return size
 }
 
-function pruneOldAlerts(): void {
+export function pruneOldAlerts(): void {
   const storage = getStorage()
   if (!storage) return
   const cutoff = Date.now() - ALERTS_RETENTION_DAYS * 24 * 60 * 60 * 1000
@@ -124,16 +136,6 @@ function pruneOldAlerts(): void {
   const pruned = alerts.filter((a) => a.timestamp >= cutoff)
   if (pruned.length < alerts.length) {
     storage.setItem(ALERTS_KEY, JSON.stringify(pruned))
-  }
-}
-
-function trimAlertsToCutoff(cutoff: number): void {
-  const storage = getStorage()
-  if (!storage) return
-  const alerts = load(ALERTS_KEY, AlertPayloadSchema)
-  const trimmed = alerts.filter((a) => a.timestamp >= cutoff)
-  if (trimmed.length < alerts.length) {
-    storage.setItem(ALERTS_KEY, JSON.stringify(trimmed))
   }
 }
 
@@ -209,12 +211,8 @@ export function migrateToV2() {
   const contracts = load(CONTRACTS_KEY, WatchedContractSchema)
   let changed = false
   const migrated = contracts.map((contract) => {
-    const rules = (contract as { rules?: unknown }).rules
-    if (!Array.isArray(rules)) return contract
-
     let rulesChanged = false
-    const nextRules = rules.map((rule) => {
-      if (!rule || typeof rule !== 'object') return rule
+    const nextRules = contract.rules.map((rule) => {
       const r = rule as Record<string, unknown>
       if (r.type !== 'LargeTransfer') return rule
 
@@ -226,18 +224,17 @@ export function migrateToV2() {
 
       rulesChanged = true
       return {
-        ...r,
+        ...rule,
         // Keep threshold_xlm for backwards compatibility.
-        threshold_xlm: hasThresholdXlm ? r.threshold_xlm : undefined,
         // Default to native XLM when no asset was specified.
-        asset: hasAsset ? r.asset : 'native',
-        threshold: hasThreshold ? r.threshold : r.threshold_xlm,
+        asset: hasAsset ? (r.asset as string) : 'native',
+        threshold: hasThreshold ? (r.threshold as number) : (r.threshold_xlm as number),
       }
     })
 
     if (!rulesChanged) return contract
     changed = true
-    return { ...contract, rules: nextRules } as WatchedContract
+    return { ...contract, rules: nextRules }
   })
 
   if (changed) {
@@ -275,6 +272,39 @@ export function onSettingsChange(callback: () => void): () => void {
   return onStorageKeyChange(SETTINGS_KEY, callback)
 }
 
+// ── Rule Templates ────────────────────────────────────────────────────────────
+
+const RuleTemplateSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  rules: z.array(AlertRuleSchema),
+  created_at: z.number(),
+})
+
+export function getRuleTemplates(): RuleTemplate[] {
+  return load(RULE_TEMPLATES_KEY, RuleTemplateSchema)
+}
+
+export function saveRuleTemplate(template: RuleTemplate): void {
+  const templates = getRuleTemplates()
+  const existing = templates.findIndex((t) => t.id === template.id)
+  const updated = existing >= 0
+    ? templates.map((t) => (t.id === template.id ? template : t))
+    : [...templates, template]
+  save(RULE_TEMPLATES_KEY, updated)
+  notify(RULE_TEMPLATES_KEY)
+}
+
+export function deleteRuleTemplate(id: string): void {
+  const templates = getRuleTemplates()
+  save(RULE_TEMPLATES_KEY, templates.filter((t) => t.id !== id))
+  notify(RULE_TEMPLATES_KEY)
+}
+
+export function onRuleTemplatesChange(callback: () => void): () => void {
+  return onStorageKeyChange(RULE_TEMPLATES_KEY, callback)
+}
+
 export function getContracts(): WatchedContract[] {
   return load(CONTRACTS_KEY, WatchedContractSchema)
 }
@@ -283,7 +313,7 @@ export function migrateContractsEnabled() {
   const contracts = load(CONTRACTS_KEY, WatchedContractSchema)
   let changed = false
   const migrated = contracts.map((contract) => {
-    if (typeof contract.enabled === 'boolean') return contract
+    if (typeof (contract as { enabled?: boolean }).enabled === 'boolean') return contract
     changed = true
     return { ...contract, enabled: true }
   })
@@ -312,8 +342,24 @@ export function getContractByIdAndNetwork(
 
 export function saveContract(contract: WatchedContract): void {
   const contracts = getContracts().filter((c) => c.id !== contract.id)
-  const updated: WatchedContract = { ...contract, updated_at: Date.now() }
+  const withExtras = contract as WatchedContract & { notes?: string; enabled?: boolean }
+  const updated: WatchedContract & { notes?: string; enabled?: boolean } = {
+    ...contract,
+    updated_at: Date.now(),
+    // Contracts are enabled unless the caller explicitly disables them.
+    enabled: withExtras.enabled ?? true,
+  }
+  if (typeof withExtras.notes === 'string') {
+    updated.notes = withExtras.notes.slice(0, MAX_NOTES_LENGTH)
+  }
   save(CONTRACTS_KEY, [...contracts, updated])
+  notify(CONTRACTS_KEY)
+}
+
+/** Re-insert a previously removed contract without changing its snapshot. */
+export function restoreContract(contract: WatchedContract): void {
+  const contracts = getContracts().filter((c) => c.id !== contract.id)
+  save(CONTRACTS_KEY, [...contracts, contract])
   notify(CONTRACTS_KEY)
 }
 
@@ -326,11 +372,25 @@ export function deleteContract(id: string): void {
   }
 }
 
+/**
+ * Delete every selected contract (and its alerts) in one operation.
+ * Returns the number of contracts that were removed.
+ */
+export function deleteContracts(ids: string[]): number {
+  const uniqueIds = Array.from(new Set(ids))
+  for (const id of uniqueIds) {
+    deleteContract(id)
+  }
+  return uniqueIds.length
+}
+
 export function deleteAlerts(contractId: string): void {
   const alerts = load(ALERTS_KEY, AlertPayloadSchema)
   save(ALERTS_KEY, alerts.filter((a) => a.contract_id !== contractId))
   notify(ALERTS_KEY)
 }
+
+export const deleteAlertsByContractId = deleteAlerts
 
 export function deleteAlert(alertId: string): void {
   const alerts = load(ALERTS_KEY, AlertPayloadSchema)
@@ -369,18 +429,12 @@ export function getAllAlerts(): AlertPayload[] {
   return load(ALERTS_KEY, AlertPayloadSchema)
 }
 
-export function getAlerts(contractId: string): AlertPayload[] {
-  return load(ALERTS_KEY, AlertPayloadSchema).filter(
-    (a) => a.contract_id === contractId
-  )
-}
-are 
-function deterministicSuffix(contractId: string, sequence: number): string {
-  let h = sequence * 2654435761
-  for (let i = 0; i < contractId.length; i++) {
-    h = Math.imul(h ^ contractId.charCodeAt(i), 2246822519)
-  }
-  return (h >>> 0).toString(16).padStart(8, '0').repeat(2)
+export function getAlerts(): AlertPayload[]
+export function getAlerts(contractId: string): AlertPayload[]
+export function getAlerts(contractId?: string): AlertPayload[] {
+  const alerts = load(ALERTS_KEY, AlertPayloadSchema)
+  if (contractId === undefined) return alerts
+  return alerts.filter((a) => a.contract_id === contractId)
 }
 
 function deterministicSuffix(contractId: string, sequence: number): string {

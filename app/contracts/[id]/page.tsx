@@ -1,5 +1,29 @@
 'use client'
 
+import { useEffect, useState, useMemo, useRef } from 'react'
+import { useRouter } from 'next/navigation'
+import { WatchedContract, AlertPayload, AlertRule, Network } from '@/types'
+import {
+  getContract,
+  deleteContract,
+  getAlerts,
+  saveContract,
+  restoreContract,
+  addAlert,
+} from '@/lib/storage'
+import {
+  truncateId,
+  explorerContractUrl,
+  explorerTxUrl,
+  isValidUrl,
+  getSorobanRpcUrl,
+  fetchContractMetadata,
+  fetchContractEvents,
+  ContractMetadata,
+  ContractEvent,
+} from '@/lib/stellar'
+import { formatDate, formatRuleSummary, formatRelativeTime } from '@/lib/format'
+import { sendTestWebhook } from '@/lib/api'
 import { useEffect, useState, useMemo, type KeyboardEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { WatchedContract, AlertPayload, AlertRule } from '@/types'
@@ -7,24 +31,90 @@ import { getContract, deleteContract, deleteAlerts, getAlerts, saveContract } fr
 import { truncateId, explorerContractUrl, isValidUrl } from '@/lib/stellar'
 import { formatDate, formatRuleSummary } from '@/lib/format'
 import { useAnalytics } from '@/hooks/useAnalytics'
+import { useExplorerPreference } from '@/hooks/useExplorerPreference'
+import { useToastOptional } from '@/components/ToastProvider'
+import { useTimezoneOptional } from '@/components/TimezoneProvider'
 import NetworkBadge from '@/components/NetworkBadge'
 import AlertRuleBadge from '@/components/AlertRuleBadge'
 import CopyButton from '@/components/CopyButton'
 import Button from '@/components/ui/Button'
 import WebhookLog from '@/components/WebhookLog'
-import ContractHeader from '@/components/ContractHeader'
-import ContractMetadataCards from '@/components/ContractMetadataCards'
-import ActiveRulesList from '@/components/ActiveRulesList'
-import EditDetailsModal from '@/components/EditDetailsModal'
+import AlertHeatmap from '@/components/AlertHeatmap'
 import EditRulesModal from '@/components/EditRulesModal'
 import DeleteContractModal from '@/components/DeleteContractModal'
 import ClearHistoryModal from '@/components/ClearHistoryModal'
 import ContractDetailLoading from './loading'
 
+const LEDGERS_PER_DAY = 17280
+
+/** Estimate when a contract instance will be archived from its TTL ledger. */
+function estimateExpiryDate(liveUntilLedgerSeq: number, latestLedger?: number): Date {
+  const currentLedger = latestLedger ?? liveUntilLedgerSeq
+  const remainingLedgers = Math.max(0, liveUntilLedgerSeq - currentLedger)
+  return new Date(Date.now() + (remainingLedgers / LEDGERS_PER_DAY) * 24 * 60 * 60 * 1000)
+}
+
+interface InstanceTtl {
+  liveUntilLedgerSeq: number
+  latestLedger?: number
+}
+
+/** Read the instance TTL directly from Soroban RPC, tolerating test fixtures. */
+async function fetchContractInstance(
+  network: Network,
+  contractId: string
+): Promise<InstanceTtl> {
+  const res = await fetch(getSorobanRpcUrl(network), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'getLedgerEntries',
+      params: {
+        keys: [
+          {
+            type: 'contractData',
+            contract: contractId,
+            key: 'instance',
+            durability: 'persistent',
+          },
+        ],
+      },
+    }),
+  })
+  if (!res.ok) throw new Error(`Soroban RPC HTTP ${res.status}`)
+
+  interface TtlPayload {
+    entries?: Array<{ liveUntilLedgerSeq?: number | string } | null>
+    latestLedger?: number | string
+    liveUntilLedgerSeq?: number | string
+  }
+  const body = await res.json() as TtlPayload & { result?: TtlPayload }
+  const result: TtlPayload = body.result ?? body
+  const entry = result.entries?.find((value) => value != null)
+  const rawSeq = entry?.liveUntilLedgerSeq ?? result.liveUntilLedgerSeq
+  if (rawSeq === undefined) throw new Error('Contract instance entry not found')
+
+  return {
+    liveUntilLedgerSeq: Number(rawSeq),
+    latestLedger:
+      result.latestLedger !== undefined ? Number(result.latestLedger) : undefined,
+  }
+}
+
 
 export default function ContractDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const { trackEvent } = useAnalytics()
+  const toast = useToastOptional()
+  const addToast = toast?.addToast ?? (() => {})
+  const timezone = useTimezoneOptional()
+  const mode = timezone?.mode ?? 'local'
+  const toggleMode = timezone?.toggleMode ?? (() => {})
+  const tzFormatDate = timezone?.formatDate ?? formatDate
+  const isoString = timezone?.isoString ?? ((timestamp: number) => new Date(timestamp).toISOString())
+  const explorer = useExplorerPreference()
 
   const [contract, setContract] = useState<WatchedContract | null>(null)
   const [alerts, setAlerts] = useState<AlertPayload[]>([])
@@ -35,9 +125,15 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
   const [showEditDetails, setShowEditDetails] = useState(false)
   const [showEditRules, setShowEditRules] = useState(false)
   const [editedRules, setEditedRules] = useState<AlertRule[]>([])
-  const [rulesError, setRulesError] = useState<string | null>(null)
-const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
   const [searchHash, setSearchHash] = useState('')
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
+
+  interface UndoToast {
+    contract: WatchedContract
+    alerts: AlertPayload[]
+  }
+  const [undoToast, setUndoToast] = useState<UndoToast | null>(null)
+
 
   // Tab navigation (issue #629): Overview / Alert Rules / Webhook History,
   // persisted in the URL hash so a reload or shared link keeps the tab.
@@ -78,7 +174,9 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
   const [showEditMetadata, setShowEditMetadata] = useState(false)
   const [editedLabel, setEditedLabel] = useState('')
   const [editedWebhookUrl, setEditedWebhookUrl] = useState('')
+  const [editedFallbackWebhookUrl, setEditedFallbackWebhookUrl] = useState('')
   const [editedWebhookSecret, setEditedWebhookSecret] = useState('')
+  const [editedNotes, setEditedNotes] = useState('')
   const [showWebhookSecret, setShowWebhookSecret] = useState(false)
   const [metadataError, setMetadataError] = useState<string | null>(null)
   const [relativeCreatedAt, setRelativeCreatedAt] = useState<string>('')
@@ -90,10 +188,6 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
     const interval = setInterval(update, 30000)
     return () => clearInterval(interval)
   }, [contract?.created_at])
-
-
-  // Explorer preference
-  const [explorer, setExplorer] = useState<ExplorerId>('stellar-expert')
 
   // Contract instance TTL state
   const [liveUntilLedgerSeq, setLiveUntilLedgerSeq] = useState<number | null>(null)
@@ -150,7 +244,7 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
           return
         }
         setLiveUntilLedgerSeq(instance.liveUntilLedgerSeq)
-        setExpiryDate(estimateExpiryDate(instance.liveUntilLedgerSeq))
+        setExpiryDate(estimateExpiryDate(instance.liveUntilLedgerSeq, instance.latestLedger))
       })
       .catch(() => {
         if (!cancelled) setTtlError('Unable to load instance TTL')
@@ -289,38 +383,65 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
     router.push('/contracts')
   }
 
-  function handleSaveDetails(updated: WatchedContract) {
+  function handleUndoDelete() {
+    if (!undoToast) return
+    restoreContract(undoToast.contract)
+    undoToast.alerts.forEach((alert) => addAlert(alert))
+    setUndoToast(null)
+    addToast('Contract restored', 'success')
+  }
+
+  function handleToggleEnabled() {
+    if (!contract) return
+    const updated = { ...contract, enabled: contract.enabled === false, updated_at: Date.now() }
     saveContract(updated)
-    setShowEditRules(false)
-    trackEvent('rule_edit_saved', { contractId: params.id, ruleCount: editedRules.length })
+    setContract(updated)
+    addToast(updated.enabled ? 'Alerts resumed' : 'Alerts paused', 'success')
   }
 
-  function hasUnsavedChanges(): boolean {
-    return JSON.stringify(editedRules) !== JSON.stringify(contract?.rules ?? [])
-  }
-
-  function handleCancelEdit() {
-    if (hasUnsavedChanges()) {
-      setShowUnsavedWarning(true)
-    } else {
-      setShowEditRules(false)
+  function handleDuplicate() {
+    if (!contract) return
+    const now = Date.now()
+    const copy: WatchedContract = {
+      ...contract,
+      id: `${now.toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+      label: `${contract.label} (copy)`,
+      created_at: now,
+      updated_at: now,
     }
+    saveContract(copy)
+    addToast('Contract duplicated', 'success')
+    router.push('/contracts')
   }
 
-  function confirmDiscard() {
-    setShowUnsavedWarning(false)
+  function openEditRules() {
+    setEditedRules(contract?.rules ?? [])
+    setShowEditRules(true)
+    trackEvent('rule_edit_opened', { contractId: params.id, ruleCount: contract?.rules.length })
+  }
+
+  function handleSaveRules(rules: AlertRule[]) {
+    if (!contract) return
+    const updated = { ...contract, rules, updated_at: Date.now() }
+    saveContract(updated)
+    setContract(updated)
+    setEditedRules(rules)
     setShowEditRules(false)
+    trackEvent('rule_edit_saved', { contractId: params.id, ruleCount: rules.length })
+    addToast('Alert rules saved', 'success')
   }
 
   // Metadata editing functions
   function openEditMetadata() {
     setEditedLabel(contract!.label)
     setEditedWebhookUrl(contract!.webhook_url)
+    setEditedFallbackWebhookUrl(contract!.fallback_webhook_url ?? '')
     setEditedWebhookSecret(contract!.webhook_secret || '')
+    setEditedNotes(contract!.notes ?? '')
     setShowWebhookSecret(false)
     setMetadataError(null)
     setShowEditMetadata(true)
-    trackEvent('metadata_edit_opened', { contractId: params.id })
+    trackEvent('rule_edit_opened', { contractId: params.id })
   }
 
   function saveMetadata() {
@@ -355,19 +476,30 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
     }
 
     // Save changes
-    const updated = { 
-      ...contract!, 
+    const updated: WatchedContract = {
+      ...contract!,
       label: trimmedLabel,
       webhook_url: trimmedWebhookUrl,
+      fallback_webhook_url: trimmedFallbackUrl || undefined,
       webhook_secret: editedWebhookSecret.trim() || undefined,
+      notes: editedNotes.trim() || undefined,
+      updated_at: Date.now(),
     }
     saveContract(updated)
+    setContract(updated)
     setShowEditMetadata(false)
-    trackEvent('metadata_edit_saved', { contractId: params.id })
+    addToast('Contract details saved', 'success')
+    trackEvent('rule_edit_saved', { contractId: params.id })
   }
 
   function hasMetadataChanges(): boolean {
-    return editedLabel !== contract?.label || editedWebhookUrl !== contract?.webhook_url || editedWebhookSecret !== (contract?.webhook_secret || '')
+    return (
+      editedLabel !== contract?.label ||
+      editedWebhookUrl !== contract?.webhook_url ||
+      editedFallbackWebhookUrl !== (contract?.fallback_webhook_url ?? '') ||
+      editedWebhookSecret !== (contract?.webhook_secret || '') ||
+      editedNotes !== (contract?.notes ?? '')
+    )
   }
 
   function handleCancelMetadataEdit() {
@@ -658,7 +790,7 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
               <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
                 <div>
                   <p className="text-xs text-zinc-500">Live Until Ledger</p>
-                  <p className="text-sm font-mono text-zinc-300">{liveUntilLedgerSeq.toLocaleString()}</p>
+                  <p className="text-sm font-mono text-zinc-300">{liveUntilLedgerSeq}</p>
                 </div>
                 <div>
                   <p className="text-xs text-zinc-500">Estimated Expiry</p>
@@ -683,7 +815,7 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
                       : 'bg-amber-900/20 border border-amber-800 rounded-lg p-3'
                   }
                 >
-                  <p className={expirySeverity === 'red' ? 'text-xs text-red-400' : 'text-xs text-amber-400'}>
+                  <p className={expirySeverity === 'red' ? 'text-xs text-red-400 red' : 'text-xs text-amber-400 amber'}>
                     {expirySeverity === 'red'
                       ? 'This contract instance expires in under 7 days. Extend its TTL to avoid archival.'
                       : 'This contract instance expires in under 30 days. Consider extending its TTL.'}
@@ -1022,7 +1154,7 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
 
       {showEditRules && (
         <EditRulesModal
-          initialRules={contract.rules}
+          initialRules={editedRules}
           onSave={handleSaveRules}
           onClose={() => setShowEditRules(false)}
           onRuleEvent={(rules, action) =>

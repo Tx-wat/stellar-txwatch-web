@@ -6,16 +6,20 @@ import {
   explorerContractUrl,
   STELLAR_EXPERT_BASE,
 } from '@/lib/stellar'
+import { StrKey } from '@stellar/stellar-sdk'
 import { Network } from '@/types'
 import { vi } from 'vitest'
 
 describe('isValidContractId', () => {
   it('accepts valid C-addresses', () => {
-    expect(isValidContractId('C' + 'A'.repeat(55))).toBe(true)
-    expect(isValidContractId('C' + 'B'.repeat(55))).toBe(true)
-    const mixed =
-      'C' + 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567' + 'ABCDEFGHIJKLMNOPQRSTUVW'
-    expect(mixed.length).toBe(56)
+    const validA = StrKey.encodeContract(Buffer.alloc(32, 0xa1))
+    const validB = StrKey.encodeContract(Buffer.alloc(32, 0xb2))
+    const mixed = StrKey.encodeContract(
+      Buffer.from('a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90', 'hex')
+    )
+    expect(validA.length).toBe(56)
+    expect(isValidContractId(validA)).toBe(true)
+    expect(isValidContractId(validB)).toBe(true)
     expect(isValidContractId(mixed)).toBe(true)
   })
 
@@ -141,8 +145,8 @@ describe('explorer URLs', () => {
 
 const mockScValToNative = vi.fn((val: unknown) => val)
 
-vi.mock('@stellar/stellar-sdk', () => {
-  const actual = vi.importActual('@stellar/stellar-sdk')
+vi.mock('@stellar/stellar-sdk', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@stellar/stellar-sdk')>()
   return {
     ...actual,
     scValToNative: (val: unknown) => mockScValToNative(val),
@@ -156,7 +160,7 @@ import {
   fetchContractEvents,
 } from '@/lib/stellar'
 
-const CONTRACT_ID = 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA7'
+const CONTRACT_ID = StrKey.encodeContract(Buffer.alloc(32, 0xc3))
 
 function jsonResponse(body: unknown, ok = true, status = 200) {
   return {
@@ -348,7 +352,7 @@ describe('fetchContractEvents', () => {
 
     expect(global.fetch).toHaveBeenCalledTimes(1)
 
-    const [, init] = (global.fetch as jest.Mock).mock.calls[0]
+    const [, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]
     const body = JSON.parse(init.body)
     const startLedger = body.params.startLedger
 

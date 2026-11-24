@@ -3,8 +3,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { WatchedContract } from '@/types'
 import { getContracts, saveContract, deleteContract } from '@/lib/storage'
+import { STORAGE_KEYS } from '@/lib/storageKeys'
 import { checkContractExists } from '@/lib/stellar'
-import { useStorageAdapter } from '@/lib/useStorageAdapter'
 import {
   isApiConfigured,
   fetchContractsFromApi,
@@ -33,26 +33,21 @@ export async function checkContractsExistence(
   contracts: WatchedContract[]
 ): Promise<Map<string, ExistenceResult>> {
   const results = new Map<string, ExistenceResult>()
-
   const targets = contracts.filter((c) => isTestnetNetwork(c.network))
 
   for (let i = 0; i < targets.length; i += BATCH_SIZE) {
     const batch = targets.slice(i, i + BATCH_SIZE)
-
     await Promise.all(
       batch.map(async (contract) => {
         try {
-          const exists = await checkContractExists(contract.contract_id, contract.network)
-          results.set(contract.contract_id, exists)
+          const result = await checkContractExists(contract.contract_id, contract.network)
+          results.set(contract.contract_id, result.exists)
         } catch {
           results.set(contract.contract_id, 'unknown')
         }
       })
     )
-
-    if (i + BATCH_SIZE < targets.length) {
-      await delay(BATCH_DELAY_MS)
-    }
+    if (i + BATCH_SIZE < targets.length) await delay(BATCH_DELAY_MS)
   }
 
   return results
@@ -61,77 +56,65 @@ export async function checkContractsExistence(
 const UNDO_WINDOW_MS = 8000
 
 export function useContracts() {
-  const adapter = useStorageAdapter()
-  const [contracts, setContracts] = useState<WatchedContract[]>([])
+  const [contracts, setContracts] = useState<WatchedContract[]>(() =>
+    typeof window === 'undefined' ? [] : getContracts()
+  )
   const [missingIds, setMissingIds] = useState<string[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle')
 
-  const refresh = useCallback(async () => {
-    setContracts(await adapter.getContracts())
+  const refresh = useCallback(() => {
+    setContracts(getContracts())
     setLoading(false)
-  }, [adapter])
+  }, [])
 
-  /**
-   * When the API is configured, fetch the authoritative list from the server
-   * and reconcile it into localStorage (server is source of truth).
-   */
   const syncFromApi = useCallback(async () => {
     if (!isApiConfigured()) return
     setSyncStatus('syncing')
     try {
       const remote = await fetchContractsFromApi()
-      // Write each remote contract into localStorage
-      for (const c of remote) {
-        saveContract(c)
-      }
-      setContracts(getContracts())
+      for (const contract of remote) saveContract(contract)
+      refresh()
       setSyncStatus('synced')
     } catch {
       setSyncStatus('error')
     }
-  }, [])
+  }, [refresh])
 
   useEffect(() => {
     refresh()
-    return adapter.subscribe((change) => {
-      if (change === 'contracts') refresh()
-    })
-  }, [adapter, refresh])
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === STORAGE_KEYS.CONTRACTS || event.key === null) refresh()
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [refresh])
 
-  async function add(contract: WatchedContract): Promise<void> {
+  function add(contract: WatchedContract) {
     saveContract(contract)
-    await refresh()
-    // Mirror to API
+    refresh()
     if (isApiConfigured()) {
       setSyncStatus('syncing')
-      try {
-        await saveContractToApi(contract)
-        setSyncStatus('synced')
-      } catch {
-        setSyncStatus('error')
-      }
+      void saveContractToApi(contract)
+        .then(() => setSyncStatus('synced'))
+        .catch(() => setSyncStatus('error'))
     }
   }
 
-  async function remove(id: string): Promise<void> {
+  function remove(id: string) {
     deleteContract(id)
-    await refresh()
-    // Mirror to API
+    refresh()
     if (isApiConfigured()) {
       setSyncStatus('syncing')
-      try {
-        await deleteContractFromApi(id)
-        setSyncStatus('synced')
-      } catch {
-        setSyncStatus('error')
-      }
+      void deleteContractFromApi(id)
+        .then(() => setSyncStatus('synced'))
+        .catch(() => setSyncStatus('error'))
     }
   }
 
-  async function update(contract: WatchedContract): Promise<void> {
+  function update(contract: WatchedContract) {
     saveContract(contract)
-    await refresh()
+    refresh()
   }
 
   function removeMissing() {
@@ -153,3 +136,5 @@ export function useContracts() {
     syncFromApi,
   }
 }
+
+export { UNDO_WINDOW_MS }

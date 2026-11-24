@@ -3,8 +3,9 @@ import { useRouter } from 'next/navigation'
 import { AlertRule, Network, WatchedContract } from '@/types'
 import { isValidContractId, isValidUrl } from '@/lib/stellar'
 import { saveContract, getContracts } from '@/lib/storage'
+import { STORAGE_KEYS } from '@/lib/storageKeys'
 import { sendTestWebhook } from '@/lib/api'
-import { useFreighterConnection } from '@/lib/useFreighterConnection'
+import { useFreighterConnection } from '@/hooks/useFreighterConnection'
 
 interface FormErrors {
   label?: string
@@ -91,7 +92,11 @@ export function useNewContractForm() {
   async function checkNetworkMismatch(selectedNetwork: Network) {
     if (!window.freighter) return
     try {
-      const walletNetwork = await window.freighter.getNetwork()
+      const walletNetwork = await window.freighter.getNetwork?.()
+      if (!walletNetwork) {
+        setNetworkWarning(null)
+        return
+      }
       const networkMap: Record<string, string> = {
         testnet: 'TESTNET',
         mainnet: 'PUBLIC',
@@ -131,10 +136,11 @@ export function useNewContractForm() {
       rules,
       webhook_url: webhookUrl.trim(),
       created_at: Date.now(),
+      updated_at: Date.now(),
     }
     saveContract(contract)
     try {
-      sessionStorage.setItem('txwatch_last_created_contract', contract.id)
+      sessionStorage.setItem(STORAGE_KEYS.LAST_CREATED_CONTRACT, contract.id)
     } catch {
       // ignore storage errors
     }

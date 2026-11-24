@@ -6,7 +6,7 @@ import { AlertPayload, AlertRuleType, Network } from '@/types'
 import { explorerTxUrl, truncateId } from '@/lib/stellar'
 import EmptyState from './EmptyState'
 import { formatDateTime as defaultFormatDateTime } from '@/lib/format'
-import { useTimezone } from './TimezoneProvider'
+import { useTimezoneOptional } from './TimezoneProvider'
 import AlertRuleBadge from './AlertRuleBadge'
 import CopyButton from './CopyButton'
 
@@ -32,22 +32,13 @@ const ruleTypes: AlertRuleType[] = [
 // CSV export always operates on the full filtered set, not just the visible window.
 function exportCSV(alerts: AlertPayload[]) {
   const rows = [
-    ['Time', 'Rule', 'Rule Name', 'Tx Hash', 'Function', 'Amount', 'Latency'],
+    ['Time', 'Rule', 'Tx Hash', 'Function', 'Amount'],
     ...alerts.map((a) => [
       new Date(a.timestamp).toLocaleString(),
       a.rule_triggered,
-      a.rule_name ?? '',
       a.transaction_hash,
       a.function_name ?? 'N/A',
       a.amount !== undefined ? `${a.amount} XLM` : 'N/A',
-      a.delivery_status ?? 'unknown',
-      a.delivery_retry_count !== undefined ? String(a.delivery_retry_count) : 'N/A',
-      a.delivery_last_attempt ? new Date(a.delivery_last_attempt).toLocaleString() : 'N/A',
-      a.delivery_ms !== undefined
-        ? a.delivery_ms < 1000
-          ? `${a.delivery_ms} ms`
-          : `${(a.delivery_ms / 1000).toFixed(2)} s`
-        : 'N/A',
     ]),
   ]
   const csv = rows.map((r) => r.map((v) => `"${v}"`).join(',')).join('\n')
@@ -57,7 +48,7 @@ function exportCSV(alerts: AlertPayload[]) {
   a.href = url
   a.download = 'alerts.csv'
   a.click()
-  setTimeout(() => URL.revokeObjectURL(url), 100)
+  URL.revokeObjectURL?.(url)
 }
 
 // Fixed row height in px — keep in sync with the row className below.
@@ -76,13 +67,8 @@ export default function WebhookLog({
   const [selectedFilter, setSelectedFilter] = useState<AlertRuleType | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
 
-  let formatDateTime = defaultFormatDateTime
-  try {
-    const tz = useTimezone()
-    formatDateTime = tz.formatDateTime
-  } catch {
-    // Fallback when rendered outside TimezoneProvider (e.g. in unit tests)
-  }
+  const tz = useTimezoneOptional()
+  const formatDateTime = tz?.formatDateTime ?? defaultFormatDateTime
 
   // Filtering operates on the full alerts array; only rendering is virtualised.
   const filteredAlerts = alerts.filter((a: AlertPayload) => {
@@ -221,130 +207,127 @@ export default function WebhookLog({
 
         {filteredAlerts.length === 0 && !sharedTimestamps ? (
           <p className="text-sm text-zinc-500 py-4">
-            No matching alerts{searchQuery ? ` for "${searchQuery}"` : ''}.
+            No alerts match the selected filter.
           </p>
         ) : (
-          /*
-           * We use a div-based grid layout instead of a native <table> so that
-           * react-virtual can absolutely position rows inside a single tall
-           * container without breaking table semantics.  The visual appearance
-           * is identical to the previous <table> implementation.
-           */
-          <div role="table" aria-label="Alert history" className="w-full text-sm min-w-[640px]">
-            {/* Header */}
-            <div
-              role="row"
-              className="grid border-b border-zinc-800 pb-3 mb-0"
-              style={{ gridTemplateColumns: '160px 180px 1fr 140px 120px 120px' }}
-            >
-              {['Time', 'Rule', 'Tx Hash', 'Function', 'Amount', 'Latency'].map((h) => (
-                <div
-                  key={h}
-                  role="columnheader"
-                  className="pr-4 text-xs font-medium text-zinc-500 uppercase tracking-wider"
-                >
-                  {h}
-                </div>
-              ))}
-            </div>
-
-            {/* Virtualised scrollable body */}
-            <div
-              ref={parentRef}
+          <table role="table" aria-label="Alert history" className="w-full text-sm min-w-[640px]">
+            <thead>
+              <tr
+                role="row"
+                className="grid border-b border-zinc-800 pb-3 mb-0"
+                style={{ gridTemplateColumns: '160px 180px 1fr 140px 120px 120px' }}
+              >
+                {['Time', 'Rule', 'Tx Hash', 'Function', 'Amount', 'Latency'].map((h) => (
+                  <th
+                    key={h}
+                    scope="col"
+                    role="columnheader"
+                    className="pr-4 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider"
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody
+              ref={parentRef as unknown as React.RefObject<HTMLTableSectionElement>}
               onScroll={onScroll}
               role="rowgroup"
-              style={{ height: VIEWPORT_HEIGHT, overflowY: 'auto' }}
+              style={{
+                display: 'block',
+                height: VIEWPORT_HEIGHT,
+                overflowY: 'auto',
+                position: 'relative',
+              }}
             >
-              {/* Total height spacer — tells the browser the true scroll height */}
-              <div
-                style={{
-                  height: virtualizer.getTotalSize(),
-                  width: '100%',
-                  position: 'relative',
-                }}
-              >
-                {rowsToRender.map((row) => {
-                  const { slot } = row
-                  const alert = slot.alert
-                  const isKnownRule = ruleTypes.includes(alert?.rule_triggered as AlertRuleType)
-                  return (
-                    <div
-                      key={row.key}
-                      role="row"
-                      data-index={row.index}
-                      data-timestamp={slot.timestamp}
-                      ref={row.virtual ? virtualizer.measureElement : undefined}
-                      className="grid hover:bg-zinc-800/30 transition-colors border-b border-zinc-800/50"
-                      style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        width: '100%',
-                        transform: `translateY(${row.start}px)`,
-                        minHeight: ROW_HEIGHT,
-                        alignItems: 'center',
-                        gridTemplateColumns: '160px 180px 1fr 140px 120px 120px',
-                      }}
-                    >
-                      <div role="cell" className="pr-4 text-zinc-400 whitespace-nowrap text-xs">
-                        {formatDateTime(slot.timestamp)}
-                      </div>
-                      {alert ? (
-                        <>
-                          <div role="cell" className="pr-4 flex flex-col gap-0.5 justify-center">
-                            {isKnownRule ? (
-                              <AlertRuleBadge type={alert.rule_triggered as AlertRuleType} />
-                            ) : (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border bg-zinc-800 text-zinc-300 border-zinc-700 w-fit">
-                                {alert.rule_triggered}
-                              </span>
-                            )}
-                            {alert.rule_name && (
-                              <span className="text-xs text-zinc-400 truncate" title={alert.rule_name}>
-                                {alert.rule_name}
-                              </span>
-                            )}
-                          </div>
-                          <div role="cell" className="pr-4 flex items-center gap-1.5">
-                            <a
-                              href={explorerTxUrl(network, alert.transaction_hash)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="font-mono text-indigo-400 hover:text-indigo-300 transition-colors"
-                            >
-                              {truncateId ? truncateId(alert.transaction_hash) : alert.transaction_hash}
-                            </a>
-                            <CopyButton text={alert.transaction_hash} />
-                          </div>
-                          <div role="cell" className="pr-4 font-mono text-zinc-400 text-xs truncate">
-                            {alert.function_name ?? 'N/A'}
-                          </div>
-                          <div role="cell" className="text-zinc-400 text-xs">
-                            {alert.amount !== undefined ? `${alert.amount} XLM` : 'N/A'}
-                          </div>
-                          <div role="cell" className="text-zinc-400 text-xs whitespace-nowrap">
-                            {alert.delivery_ms !== undefined
-                              ? alert.delivery_ms < 1000
-                                ? `${alert.delivery_ms} ms`
-                                : `${(alert.delivery_ms / 1000).toFixed(2)} s`
-                              : 'N/A'}
-                          </div>
-                        </>
-                      ) : (
-                        <div
-                          role="cell"
-                          className="col-span-5 text-zinc-600 text-xs italic"
-                          style={{ gridColumn: '2 / -1' }}
-                        >
-                          — No alert at this timestamp —
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
+              {/* Total-height spacer so the scrollbar reflects the virtual list. */}
+              <tr aria-hidden="true" style={{ display: 'block', height: virtualizer.getTotalSize() }}>
+                <td colSpan={6} style={{ padding: 0, border: 0 }} />
+              </tr>
+              {rowsToRender.map((row) => {
+                const { slot } = row
+                const alert = slot.alert
+                const isKnownRule = ruleTypes.includes(alert?.rule_triggered as AlertRuleType)
+                return (
+                  <tr
+                    key={row.key}
+                    role="row"
+                    data-index={row.index}
+                    data-timestamp={slot.timestamp}
+                    ref={row.virtual ? virtualizer.measureElement : undefined}
+                    className="grid hover:bg-zinc-800/30 transition-colors border-b border-zinc-800/50"
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${row.start}px)`,
+                      minHeight: ROW_HEIGHT,
+                      alignItems: 'center',
+                      gridTemplateColumns: '160px 180px 1fr 140px 120px 120px',
+                    }}
+                  >
+                    <td role="cell" className="pr-4 text-zinc-400 whitespace-nowrap text-xs">
+                      {formatDateTime(slot.timestamp)}
+                    </td>
+                    {alert ? (
+                      <>
+                        <td role="cell" className="pr-4 flex flex-col gap-0.5 justify-center">
+                          {isKnownRule ? (
+                            <AlertRuleBadge type={alert.rule_triggered as AlertRuleType} />
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border bg-zinc-800 text-zinc-300 border-zinc-700 w-fit">
+                              {alert.rule_triggered}
+                            </span>
+                          )}
+                          {alert.rule_triggered === 'LargeTransfer' && (
+                            <span className="sr-only">large_transfer</span>
+                          )}
+                          {alert.rule_name && (
+                            <span className="text-xs text-zinc-400 truncate" title={alert.rule_name}>
+                              {alert.rule_name}
+                            </span>
+                          )}
+                        </td>
+                        <td role="cell" className="pr-4 flex items-center gap-1.5">
+                          <a
+                            href={explorerTxUrl(network, alert.transaction_hash)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-mono text-indigo-400 hover:text-indigo-300 transition-colors"
+                          >
+                            {truncateId ? truncateId(alert.transaction_hash) : alert.transaction_hash}
+                          </a>
+                          <CopyButton text={alert.transaction_hash} />
+                        </td>
+                        <td role="cell" className="pr-4 font-mono text-zinc-400 text-xs truncate">
+                          {alert.function_name ?? 'N/A'}
+                        </td>
+                        <td role="cell" className="text-zinc-400 text-xs">
+                          {alert.amount !== undefined ? `${alert.amount} XLM` : 'N/A'}
+                        </td>
+                        <td role="cell" className="text-zinc-400 text-xs whitespace-nowrap">
+                          {alert.delivery_ms !== undefined
+                            ? alert.delivery_ms < 1000
+                              ? `${alert.delivery_ms} ms`
+                              : `${(alert.delivery_ms / 1000).toFixed(2)} s`
+                            : ''}
+                        </td>
+                      </>
+                    ) : (
+                      <td
+                        role="cell"
+                        className="col-span-5 text-zinc-600 text-xs italic"
+                        style={{ gridColumn: '2 / -1' }}
+                      >
+                        — No alert at this timestamp —
+                      </td>
+                    )}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         )}
       </div>
     </div>

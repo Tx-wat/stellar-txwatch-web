@@ -36,7 +36,7 @@ describe('accessibility', () => {
   })
 
   it('FreighterConnect has no automated axe violations', async () => {
-    delete (window as any).freighter
+    delete window.freighter
     const { container } = render(<FreighterConnect />)
     const results = await axe(container)
     expect(results).toHaveNoViolations()

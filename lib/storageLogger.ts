@@ -1,62 +1,66 @@
-import { env } from '@/lib/env';
+import { captureException } from '@sentry/nextjs'
 
-export type StorageErrorHandler = (context: StorageErrorContext) => void;
+export type StorageErrorHandler = (context: StorageErrorContext) => void
 
 export interface StorageErrorContext {
-  key: string;
-  rawValue: string | null;
-  error: unknown;
-  timestamp: string;
+  key: string
+  rawValue: string | null
+  error: unknown
+  timestamp: string
 }
 
-const errorHandlers: StorageErrorHandler[] = [];
+const errorHandlers: StorageErrorHandler[] = []
 
 export function onStorageError(handler: StorageErrorHandler): void {
-  errorHandlers.push(handler);
+  errorHandlers.push(handler)
 }
 
 export function clearStorageErrorHandlers(): void {
-  errorHandlers.length = 0;
+  errorHandlers.length = 0
 }
 
 function forwardToSentry(ctx: StorageErrorContext): void {
-  try {
-    const client = Sentry.getClient();
-    if (!client) {
-      return;
-    }
+  // Read the DSN at call time so tests (and runtime configuration changes)
+  // are honoured without re-importing the module.
+  if (!process.env.NEXT_PUBLIC_SENTRY_DSN) return
 
-    Sentry.captureException(ctx.error, {
+  try {
+    captureException(ctx.error, {
       tags: { source: 'storageLogger' },
       extra: {
         key: ctx.key,
         timestamp: ctx.timestamp,
         rawValue: (ctx.rawValue ?? '').slice(0, 200),
       },
-    });
+    })
   } catch {
     // Never let Sentry reporting crash the app
   }
 }
 
-function emitStorageError(ctx: StorageErrorContext): void {
-  const isDev = env.NODE_ENV !== 'production';
-  const debugEnabled = env.DEBUG_STORAGE;
+function isDevelopment(): boolean {
+  return typeof process === 'undefined' || process.env.NODE_ENV !== 'production'
+}
 
-  if (isDev || debugEnabled) {
+/** Report a storage error to the console, Sentry, and registered handlers. */
+export function emitStorageError(ctx: StorageErrorContext): void {
+  const debugEnabled =
+    typeof process !== 'undefined' && process.env.DEBUG_STORAGE === 'true'
+
+  if (isDevelopment() || debugEnabled) {
     console.warn(
       `[storage] Parse error for key "${ctx.key}" at ${ctx.timestamp}:`,
       ctx.error,
       '\nRaw value (first 200 chars):',
       (ctx.rawValue ?? '').slice(0, 200),
-    );
+    )
   }
 
-  forwardToSentry(ctx);
+  forwardToSentry(ctx)
 
   for (const handler of errorHandlers) {
     try {
-      handler(ctx);
+      handler(ctx)
     } catch {
       // Never let a handler crash the app
     }
@@ -68,21 +72,21 @@ export function safeParseStorage<T>(
   fallback: T,
   storage: Pick<Storage, 'getItem'> = localStorage,
 ): T {
-  const raw = storage.getItem(key);
+  const raw = storage.getItem(key)
 
   if (raw === null) {
-    return fallback;
+    return fallback
   }
 
   try {
-    return JSON.parse(raw) as T;
+    return JSON.parse(raw) as T
   } catch (error) {
     emitStorageError({
       key,
       rawValue: raw,
       error,
       timestamp: new Date().toISOString(),
-    });
-    return fallback;
+    })
+    return fallback
   }
 }

@@ -12,9 +12,44 @@ interface ContractCardProps {
   lastAlertTime?: number
   highlight?: boolean
   missing?: boolean
+  /** Current list search, used to emphasise matching label / contract ID text. */
+  searchQuery?: string
 }
 
-function ContractCard({ contract, lastAlertTime, highlight, missing }: ContractCardProps) {
+/** Split text around a case-insensitive match and wrap the match in <mark>. */
+function highlightMatch(text: string, query: string): React.ReactNode {
+  const trimmed = query.trim()
+  if (!trimmed) return text
+
+  const lowerText = text.toLowerCase()
+  const lowerQuery = trimmed.toLowerCase()
+  const parts: React.ReactNode[] = []
+  let cursor = 0
+  let matchIndex = lowerText.indexOf(lowerQuery, cursor)
+
+  while (matchIndex !== -1) {
+    if (matchIndex > cursor) parts.push(text.slice(cursor, matchIndex))
+    parts.push(
+      <mark key={`${matchIndex}-${parts.length}`} className="rounded bg-amber-400/30 px-0.5 text-amber-100">
+        {text.slice(matchIndex, matchIndex + trimmed.length)}
+      </mark>
+    )
+    cursor = matchIndex + trimmed.length
+    matchIndex = lowerText.indexOf(lowerQuery, cursor)
+  }
+
+  if (cursor === 0) return text
+  if (cursor < text.length) parts.push(text.slice(cursor))
+  return parts
+}
+
+function ContractCard({
+  contract,
+  lastAlertTime,
+  highlight,
+  missing,
+  searchQuery = '',
+}: ContractCardProps) {
   const router = useRouter()
   const hasWebhook = Boolean(contract.webhook_url)
   const isPaused = (contract as WatchedContract & { enabled?: boolean }).enabled === false
@@ -83,10 +118,10 @@ function ContractCard({ contract, lastAlertTime, highlight, missing }: ContractC
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="min-w-0">
             <h3 className="font-semibold text-zinc-100 truncate group-hover:text-white">
-              {contract.label}
+              {highlightMatch(contract.label, searchQuery)}
             </h3>
             <p className="text-xs font-mono text-zinc-500 mt-0.5">
-              {truncateId(contract.contract_id)}
+              {highlightMatch(truncateId(contract.contract_id), searchQuery)}
             </p>
             <p className="text-xs text-zinc-500 mt-0.5">
               Updated {formatRelativeTime(contract.updated_at)}

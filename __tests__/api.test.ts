@@ -60,13 +60,13 @@ describe('sendTestWebhook', () => {
     vi.restoreAllMocks()
   })
 
-  it('resolves without error on success (200) and includes network parameter in payload', async () => {
+  it('returns the status on success (200) and includes network parameter in payload', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 })
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(
       sendTestWebhook('https://example.com/webhook', 'CBCDEF12345', 'mainnet')
-    ).resolves.toBeUndefined()
+    ).resolves.toEqual({ status: 200, ok: true })
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const [calledUrl, options] = fetchMock.mock.calls[0]

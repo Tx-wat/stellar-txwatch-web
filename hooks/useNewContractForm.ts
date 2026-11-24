@@ -92,7 +92,7 @@ export function useNewContractForm() {
   async function checkNetworkMismatch(selectedNetwork: Network) {
     if (!window.freighter) return
     try {
-      const walletNetwork = await window.freighter.getNetwork()
+      const walletNetwork = await window.freighter.getNetwork?.()
       const networkMap: Record<string, string> = {
         testnet: 'TESTNET',
         mainnet: 'PUBLIC',
@@ -132,6 +132,7 @@ export function useNewContractForm() {
       rules,
       webhook_url: webhookUrl.trim(),
       created_at: Date.now(),
+      updated_at: Date.now(),
     }
     saveContract(contract)
     try {

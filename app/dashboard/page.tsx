@@ -81,7 +81,7 @@ export default function DashboardPage() {
           { label: 'Active Webhooks', value: activeWebhooks, href: '/contracts?filter=webhooks' },
           {
             label: 'Alert Rules Active',
-            value: contracts.reduce((sum, c) => sum + c.rules.length, 0),
+            value: activeRules,
             href: '/contracts?filter=rules',
           },
         ].map((stat) => (

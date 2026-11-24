@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { WatchedContract, Network } from '@/types'
-import { getContracts, deleteContract, saveContract } from '@/lib/storage'
+import { getContracts, deleteContracts, saveContract } from '@/lib/storage'
 import { STORAGE_KEYS } from '@/lib/storageKeys'
 import { useContractListState } from '@/hooks/useContractListState'
 import { useLastAlertTimes } from '@/hooks/useAlerts'
@@ -261,9 +261,7 @@ export default function ContractsPage() {
   }, [])
 
   const handleDeleteSelected = () => {
-    for (const id of list.selectedIds) {
-      deleteContract(id)
-    }
+    deleteContracts(list.selectedIds)
     list.clearSelection()
     setAllContracts(getContracts())
   }
@@ -297,6 +295,7 @@ export default function ContractsPage() {
           contract={contract}
           lastAlertTime={lastAlertTimes[contract.contract_id]}
           highlight={highlightedId === contract.id}
+          searchQuery={list.search}
         />
         <input
           type="checkbox"
@@ -399,7 +398,7 @@ export default function ContractsPage() {
         />
       ) : !hasFilteredContracts ? (
         <EmptyState
-          title={search.trim() ? 'No contracts match your search' : 'No contracts found'}
+          title={list.search.trim() ? 'No contracts match your search' : 'No contracts found'}
           description="No contracts match the active search or network filter. Try clearing the search or selecting a different network."
           action={
             <button

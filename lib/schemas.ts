@@ -20,34 +20,39 @@ export const AlertRuleSchema = z.object({
   function_name: z.string().optional(),
 })
 
-export const WatchedContractSchema = z.object({
-  id: z.string(),
-  label: z.string(),
-  contract_id: z.string(),
-  network: NetworkSchema,
-  rules: z.array(AlertRuleSchema),
-  webhook_url: z.string(),
-  webhook_secret: z.string().optional(),
-  created_at: z.number(),
-  updated_at: z.number(),
-  instanceLiveUntilLedgerSeq: z.number().optional(),
-  enabled: z.boolean().optional(),
-  group: z.string().optional(),
-})
+export const WatchedContractSchema = z
+  .object({
+    id: z.string(),
+    label: z.string(),
+    contract_id: z.string(),
+    network: NetworkSchema,
+    rules: z.array(AlertRuleSchema),
+    webhook_url: z.string(),
+    webhook_secret: z.string().optional(),
+    created_at: z.number(),
+    updated_at: z.number(),
+    instanceLiveUntilLedgerSeq: z.number().optional(),
+    enabled: z.boolean().optional().default(true),
+    group: z.string().optional(),
+    notes: z.string().max(1000).optional(),
+  })
+  .passthrough()
 
-export const AlertPayloadSchema = z.object({
-  id: z.string().optional(),
-  label: z.string(),
-  contract_id: z.string(),
-  network: z.string(),
-  rule_triggered: z.string(),
-  rule_name: z.string().optional(),
-  transaction_hash: z.string(),
-  function_name: z.string().optional(),
-  amount: z.number().optional(),
-  timestamp: z.number(),
-  horizon_link: z.string(),
-  delivery_status: z.enum(['delivered', 'retrying', 'failed']).optional(),
-  delivery_retry_count: z.number().optional(),
-  delivery_last_attempt: z.number().optional(),
-})
+export const AlertPayloadSchema = z
+  .object({
+    id: z.string().optional(),
+    label: z.string(),
+    contract_id: z.string(),
+    network: z.string(),
+    rule_triggered: z.string(),
+    rule_name: z.string().optional(),
+    transaction_hash: z.string(),
+    function_name: z.string().optional(),
+    amount: z.number().optional(),
+    timestamp: z.number(),
+    horizon_link: z.string(),
+    delivery_status: z.enum(['delivered', 'retrying', 'failed']).optional(),
+    delivery_retry_count: z.number().optional(),
+    delivery_last_attempt: z.number().optional(),
+  })
+  .passthrough()

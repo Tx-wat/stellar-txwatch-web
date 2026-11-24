@@ -1,11 +1,5 @@
 import { z } from 'zod'
-import {
-  NetworkSchema,
-  AlertRuleTypeSchema,
-  AlertRuleSchema,
-  WatchedContractSchema,
-  AlertPayloadSchema,
-} from '@/lib/schemas'
+import { NetworkSchema, AlertRuleTypeSchema } from '@/lib/schemas'
 
 // Types are inferred from the zod schemas in lib/schemas.ts, which are the
 // single source of truth for both compile-time types and runtime validation.
@@ -59,6 +53,12 @@ export interface WatchedContract {
   instanceLiveUntilLedgerSeq?: number
   /** Free-text folder/group name used to organise contracts (e.g. "Production", "Client A"). */
   group?: string
+  /** Whether alerts are currently enabled for this contract. Missing means enabled. */
+  enabled?: boolean
+  /** Free-text notes attached to the contract. */
+  notes?: string
+  /** Optional secondary webhook endpoint used as a fallback. */
+  fallback_webhook_url?: string
 }
 
 export type DeliveryStatus = 'delivered' | 'retrying' | 'failed'
@@ -100,7 +100,12 @@ declare global {
     freighter?: {
       isConnected: () => Promise<boolean>
       getPublicKey: () => Promise<string>
-      getNetwork: () => Promise<string>
+      getNetwork?: () => Promise<string>
+      getNetworkDetails?: () => Promise<{
+        network?: string
+        networkPassphrase: string
+      }>
+      requestAccess?: () => Promise<string>
       signTransaction?: (xdr: string, options: { networkPassphrase: string }) => Promise<string>
     }
     __freighterPublicKey?: string | null
