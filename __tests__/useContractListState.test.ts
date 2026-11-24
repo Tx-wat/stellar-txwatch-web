@@ -81,6 +81,12 @@ describe('useContractListState — derivations', () => {
     expect(filterContracts(contracts, 'all', '   ')).toHaveLength(3)
   })
 
+  it('matches a contract_id substring (#581)', () => {
+    expect(filterContracts(contracts, 'all', 'PAY').map((c) => c.id)).toEqual(['2'])
+    expect(filterContracts(contracts, 'all', 'escrow').map((c) => c.id)).toEqual(['1'])
+    expect(filterContracts(contracts, 'all', 'ZZZZ')).toHaveLength(0)
+  })
+
   it('combines network and search filters', () => {
     expect(filterContracts(contracts, 'testnet', 'escrow')).toHaveLength(0)
   })

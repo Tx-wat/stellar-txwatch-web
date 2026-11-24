@@ -56,6 +56,25 @@ describe('ContractCard', () => {
     ).toBeInTheDocument()
   })
 
+  it('highlights matching label and contract ID substrings (#581)', () => {
+    const { container } = render(
+      <ContractCard contract={baseContract} searchQuery="vault" />
+    )
+    expect(Array.from(container.querySelectorAll('mark')).map((el) => el.textContent)).toContain(
+      'Vault'
+    )
+
+    const idMarks = render(
+      <ContractCard contract={baseContract} searchQuery="234567" />
+    ).container.querySelectorAll('mark')
+    expect(Array.from(idMarks).map((el) => el.textContent)).toContain('234567')
+  })
+
+  it('does not add highlights without a search query', () => {
+    const { container } = render(<ContractCard contract={baseContract} />)
+    expect(container.querySelector('mark')).toBeNull()
+  })
+
   it('renders the network badge', () => {
     render(<ContractCard contract={baseContract} />)
     expect(screen.getByText('Testnet')).toBeInTheDocument()

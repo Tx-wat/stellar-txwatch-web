@@ -238,6 +238,7 @@ export default function ContractsPage() {
           contract={contract}
           lastAlertTime={lastAlertTimes[contract.contract_id]}
           highlight={highlightedId === contract.id}
+          searchQuery={list.search}
         />
         <input
           type="checkbox"
