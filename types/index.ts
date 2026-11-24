@@ -1,11 +1,5 @@
 import { z } from 'zod'
-import {
-  NetworkSchema,
-  AlertRuleTypeSchema,
-  AlertRuleSchema,
-  WatchedContractSchema,
-  AlertPayloadSchema,
-} from '@/lib/schemas'
+import { NetworkSchema, AlertRuleTypeSchema } from '@/lib/schemas'
 
 // Types are inferred from the zod schemas in lib/schemas.ts, which are the
 // single source of truth for both compile-time types and runtime validation.
@@ -100,7 +94,12 @@ declare global {
     freighter?: {
       isConnected: () => Promise<boolean>
       getPublicKey: () => Promise<string>
-      getNetwork: () => Promise<string>
+      getNetwork?: () => Promise<string>
+      getNetworkDetails?: () => Promise<{
+        network?: string
+        networkPassphrase: string
+      }>
+      requestAccess?: () => Promise<string>
       signTransaction?: (xdr: string, options: { networkPassphrase: string }) => Promise<string>
     }
     __freighterPublicKey?: string | null
