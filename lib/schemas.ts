@@ -20,6 +20,13 @@ export const AlertRuleSchema = z.object({
   function_name: z.string().optional(),
 })
 
+export const RuleTemplateSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1).max(50),
+  rules: z.array(AlertRuleSchema),
+  created_at: z.number(),
+})
+
 export const WatchedContractSchema = z.object({
   id: z.string(),
   label: z.string(),

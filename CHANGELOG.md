@@ -17,3 +17,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Horizon REST and Soroban RPC client helpers in `lib/stellar.ts` for network queries, contract validation, and explorer links.
 - Vitest unit test suite with coverage for storage management, network distribution, and helper utilities.
 - Mock API strategy and alert seeding mechanism for offline development and testing.
+- Save alert rules as named templates in the RuleBuilder and reapply them to other contracts; templates persist in localStorage.

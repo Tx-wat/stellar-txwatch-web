@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { AlertRule, AlertRuleType } from '@/types'
+import { AlertRule, AlertRuleType, RuleTemplate } from '@/types'
 import { formatRuleSummary } from '@/lib/format'
 import { HORIZON_URLS } from '@/lib/stellar'
-import { STORAGE_KEYS } from '@/lib/storageKeys'
+import { MAX_TEMPLATE_NAME_LENGTH } from '@/lib/constants'
 import AlertRuleBadge from './AlertRuleBadge'
 import { fetchContractFunctions } from '@/lib/api'
 import type { Network } from '@/types'
@@ -13,7 +13,7 @@ import {
   saveRuleTemplate,
   deleteRuleTemplate,
   onRuleTemplatesChange,
-} from '@/lib/storage'
+} from '@/lib/ruleTemplates'
 
 const RULE_TYPES: AlertRuleType[] = [
   'AnyTransaction',
@@ -31,29 +31,6 @@ const RULE_EXAMPLES: Record<AlertRuleType, string> = {
   'TransactionFailed': 'Alert on failed transactions',
 }
 
-const TEMPLATE_STORAGE_KEY = STORAGE_KEYS.RULE_TEMPLATES
-
-interface RuleTemplate {
-  id: string
-  name: string
-  rules: AlertRule[]
-  created_at: number
-}
-
-function loadTemplates(): RuleTemplate[] {
-  if (typeof window === 'undefined') return []
-  try {
-    return JSON.parse(window.localStorage.getItem(TEMPLATE_STORAGE_KEY) ?? '[]')
-  } catch {
-    return []
-  }
-}
-
-function saveTemplates(templates: RuleTemplate[]) {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(templates))
-}
-
 interface RuleBuilderProps {
   rules: AlertRule[]
   onChange: (rules: AlertRule[]) => void
@@ -68,7 +45,6 @@ interface RuleBuilderProps {
 }
 
 const emptyRule = (): AlertRule => ({ type: 'AnyTransaction' })
-const newTemplateId = () => `tpl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
 
 const SAC_CONTRACT_ID_REGEX = /^C[A-Z2-7]{55}$/
 
@@ -105,7 +81,9 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
 
   useEffect(() => {
-    setTemplates(loadTemplates())
+    const refresh = () => setTemplates(getRuleTemplates())
+    refresh()
+    return onRuleTemplatesChange(refresh)
   }, [])
 
   // Shared contract-function autocomplete for FunctionCalled and
@@ -375,40 +353,52 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
   }
 
   function saveAsTemplate() {
-    if (!templateName.trim()) {
+    const name = templateName.trim()
+    if (!name) {
       setError('Enter a template name')
+      return
+    }
+    if (name.length > MAX_TEMPLATE_NAME_LENGTH) {
+      setError(`Template name must be ${MAX_TEMPLATE_NAME_LENGTH} characters or fewer`)
       return
     }
     if (rules.length === 0) {
       setError('No rules to save as template')
       return
     }
-    const templates = loadTemplates()
-    const newTemplate: RuleTemplate = {
-      id: `template_${Date.now()}`,
-      name: templateName.trim(),
-      rules: [...rules],
-      created_at: Date.now(),
+    try {
+      saveRuleTemplate(name, rules)
+      setTemplates(getRuleTemplates())
+      setTemplateName('')
+      setError(null)
+      setShowTemplateModal(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save template')
     }
-    saveTemplates([...templates, newTemplate])
-    setTemplates([...templates, newTemplate])
-    setTemplateName('')
-    setShowTemplateModal(false)
   }
 
+  /** Adds the template's rules to the current list, skipping rules already present. */
   function loadTemplate(templateId: string) {
-    const template = templates.find(t => t.id === templateId)
-    if (template) {
-      onChange([...template.rules])
-      onRulesChanged?.([...template.rules], 'add')
-      setSelectedTemplateId(null)
+    const template = templates.find((t) => t.id === templateId)
+    if (!template) return
+
+    const additions = template.rules.filter((rule) => !isDuplicateLabel(rule))
+    if (additions.length === 0) {
+      setWarning('All rules from this template are already added')
+      return
     }
+
+    const updated = [...rules, ...additions.map((rule) => ({ ...rule }))]
+    onChange(updated)
+    onRulesChanged?.(updated, 'add')
+    setError(null)
+    setWarning(null)
   }
 
   function deleteTemplate(templateId: string) {
-    const templates = loadTemplates().filter(t => t.id !== templateId)
-    saveTemplates(templates)
-    setTemplates(templates)
+    deleteRuleTemplate(templateId)
+    setTemplates(getRuleTemplates())
+    setSelectedTemplateId(null)
   }
 
   function openSaveTemplateModal() {
@@ -425,6 +415,7 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
         <div>
           <label className="block text-xs font-medium text-zinc-400 mb-1">Rule Type</label>
           <select
+            aria-label="Rule type"
             value={draft.type}
             onChange={(e) => handleTypeChange(e.target.value as AlertRuleType)}
             className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-indigo-500"
@@ -562,7 +553,7 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
           )}
         </div>
 
-        {error && <p className="text-xs text-red-400">{error}</p>}
+        {error && !showTemplateModal && <p className="text-xs text-red-400">{error}</p>}
         {warning && <p className="text-xs text-amber-400">{warning}</p>}
         {specWarning && <p className="text-xs text-amber-400">{specWarning}</p>}
 
@@ -685,8 +676,15 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
       {/* Template Modal */}
       {showTemplateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 max-w-lg w-full space-y-4">
-            <h3 className="text-lg font-semibold text-zinc-100">Save Rule Template</h3>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="save-template-title"
+            className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 max-w-lg w-full space-y-4"
+          >
+            <h3 id="save-template-title" className="text-lg font-semibold text-zinc-100">
+              Save Rule Template
+            </h3>
             <p className="text-sm text-zinc-400">
               Save the current {rules.length} rule{rules.length !== 1 ? 's' : ''} as a reusable template.
             </p>
@@ -701,11 +699,15 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
                   value={templateName}
                   onChange={(e) => setTemplateName(e.target.value)}
                   placeholder="e.g. High Value Transfers, Admin Functions"
-                  maxLength={50}
+                  maxLength={MAX_TEMPLATE_NAME_LENGTH}
                   className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 />
+                <p className="text-xs text-zinc-500 mt-1">
+                  {templateName.trim().length}/{MAX_TEMPLATE_NAME_LENGTH} characters
+                </p>
               </div>
             </div>
+            {error && <p className="text-xs text-red-400">{error}</p>}
             <div className="flex gap-3 pt-2">
               <button
                 onClick={saveAsTemplate}
@@ -724,41 +726,50 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
         </div>
       )}
 
-      {/* Load Template Modal */}
-      {templates.length > 0 && (
-        <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h4 className="text-sm font-medium text-zinc-300">Rule Templates ({templates.length})</h4>
-            <button
-              onClick={() => setSelectedTemplateId(templates[0]?.id || null)}
-              className="text-xs text-indigo-400 hover:text-indigo-300"
-            >
-              View All
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {templates.slice(0, 3).map((template) => (
-              <button
-                key={template.id}
-                onClick={() => loadTemplate(template.id)}
-                className="flex items-center gap-2 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-300 hover:bg-zinc-700 hover:border-zinc-600 transition-colors"
-              >
-                <span className="font-medium text-zinc-100">{template.name}</span>
-                <span className="text-xs text-zinc-500">{template.rules.length} rule{template.rules.length !== 1 ? 's' : ''}</span>
-                <button
-                  onClick={(e) => { e.stopPropagation(); deleteTemplate(template.id) }}
-                  className="text-zinc-600 hover:text-red-400 ml-1"
-                  aria-label="Delete template"
-                >
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </button>
+      {/* Template selector */}
+      <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4 space-y-3">
+        <h4 className="text-sm font-medium text-zinc-300">Rule Templates ({templates.length})</h4>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <label htmlFor="template-select" className="sr-only">
+            Load a rule template
+          </label>
+          <select
+            id="template-select"
+            value={selectedTemplateId ?? ''}
+            onChange={(e) => setSelectedTemplateId(e.target.value || null)}
+            disabled={templates.length === 0}
+            className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            <option value="">
+              {templates.length === 0 ? 'No templates saved yet' : 'Select a template…'}
+            </option>
+            {templates.map((template) => (
+              <option key={template.id} value={template.id}>
+                {template.name} ({template.rules.length} rule{template.rules.length !== 1 ? 's' : ''})
+              </option>
             ))}
-          </div>
+          </select>
+          <button
+            type="button"
+            onClick={() => selectedTemplateId && loadTemplate(selectedTemplateId)}
+            disabled={!selectedTemplateId}
+            className="px-3 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-sm font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Apply template
+          </button>
+          <button
+            type="button"
+            onClick={() => selectedTemplateId && deleteTemplate(selectedTemplateId)}
+            disabled={!selectedTemplateId}
+            className="px-3 py-2 rounded-lg border border-zinc-700 hover:border-red-500/60 hover:text-red-300 text-sm text-zinc-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Delete template
+          </button>
         </div>
-      )}
+        <p className="text-xs text-zinc-500">
+          Templates are saved in this browser and can be reused on any contract.
+        </p>
+      </div>
     </div>
   )
 }

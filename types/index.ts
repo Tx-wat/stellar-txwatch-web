@@ -5,6 +5,7 @@ import {
   AlertRuleSchema,
   WatchedContractSchema,
   AlertPayloadSchema,
+  RuleTemplateSchema,
 } from '@/lib/schemas'
 
 // Types are inferred from the zod schemas in lib/schemas.ts, which are the
@@ -107,9 +108,5 @@ declare global {
   }
 }
 
-export interface RuleTemplate {
-  id: string
-  name: string
-  rules: AlertRule[]
-  created_at: number
-}
+/** Reusable set of alert rules saved from the RuleBuilder (max 50-char name). */
+export type RuleTemplate = z.infer<typeof RuleTemplateSchema>
