@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import { WatchedContract, AlertPayload, Network } from '@/types'
 import { STORAGE_KEYS } from '@/lib/storageKeys'
+import { AlertPayloadSchema, WatchedContractSchema } from '@/lib/schemas'
+import { safeParseStorage } from '@/lib/storageLogger'
 import {
   STORAGE_QUOTA_BYTES,
   MAX_ALERTS_PER_CONTRACT,
@@ -124,16 +126,6 @@ function pruneOldAlerts(): void {
   const pruned = alerts.filter((a) => a.timestamp >= cutoff)
   if (pruned.length < alerts.length) {
     storage.setItem(ALERTS_KEY, JSON.stringify(pruned))
-  }
-}
-
-function trimAlertsToCutoff(cutoff: number): void {
-  const storage = getStorage()
-  if (!storage) return
-  const alerts = load(ALERTS_KEY, AlertPayloadSchema)
-  const trimmed = alerts.filter((a) => a.timestamp >= cutoff)
-  if (trimmed.length < alerts.length) {
-    storage.setItem(ALERTS_KEY, JSON.stringify(trimmed))
   }
 }
 
@@ -326,14 +318,26 @@ export function deleteContract(id: string): void {
   }
 }
 
+/**
+ * Delete every selected contract (and its alerts) in one operation.
+ * Returns the number of contracts that were removed.
+ */
+export function deleteContracts(ids: string[]): number {
+  const uniqueIds = Array.from(new Set(ids))
+  for (const id of uniqueIds) {
+    deleteContract(id)
+  }
+  return uniqueIds.length
+}
+
 export function deleteAlerts(contractId: string): void {
-  const alerts = load<AlertPayload>(ALERTS_KEY)
+  const alerts = load(ALERTS_KEY, AlertPayloadSchema)
   save(ALERTS_KEY, alerts.filter((a) => a.contract_id !== contractId))
   notify(ALERTS_KEY)
 }
 
 export function deleteAlert(alertId: string): void {
-  const alerts = load<AlertPayload & { id?: string }>(ALERTS_KEY)
+  const alerts = load(ALERTS_KEY, AlertPayloadSchema)
   save(ALERTS_KEY, alerts.filter((a) => a.id !== alertId))
   notify(ALERTS_KEY)
 }
@@ -374,15 +378,6 @@ export function getAlerts(contractId: string): AlertPayload[] {
     (a) => a.contract_id === contractId
   )
 }
-are 
-function deterministicSuffix(contractId: string, sequence: number): string {
-  let h = sequence * 2654435761
-  for (let i = 0; i < contractId.length; i++) {
-    h = Math.imul(h ^ contractId.charCodeAt(i), 2246822519)
-  }
-  return (h >>> 0).toString(16).padStart(8, '0').repeat(2)
-}
-
 function deterministicSuffix(contractId: string, sequence: number): string {
   let h = sequence * 2654435761
   for (let i = 0; i < contractId.length; i++) {

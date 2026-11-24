@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { WatchedContract, Network } from '@/types'
-import { getContracts, deleteContract, saveContract } from '@/lib/storage'
+import { getContracts, deleteContracts, saveContract } from '@/lib/storage'
 import { STORAGE_KEYS } from '@/lib/storageKeys'
 import { useContractListState } from '@/hooks/useContractListState'
 import { useLastAlertTimes } from '@/hooks/useAlerts'
@@ -211,9 +211,7 @@ export default function ContractsPage() {
   }, [])
 
   const handleDeleteSelected = () => {
-    for (const id of list.selectedIds) {
-      deleteContract(id)
-    }
+    deleteContracts(list.selectedIds)
     list.clearSelection()
     setAllContracts(getContracts())
   }
