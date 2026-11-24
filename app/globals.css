@@ -2,9 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Light theme (base / default) */
 :root {
+  --background: #ffffff;
+  --foreground: #09090b;
+  --card-bg: #f4f4f5;
+  --card-border: #e4e4e7;
+  --muted: #71717a;
+  --muted-fg: #52525b;
+}
+
+/* Dark theme — applied when <html> carries the "dark" class */
+html.dark {
   --background: #09090b;
   --foreground: #fafafa;
+  --card-bg: #18181b;
+  --card-border: #27272a;
+  --muted: #71717a;
+  --muted-fg: #a1a1aa;
 }
 
 body {
@@ -12,6 +27,7 @@ body {
   background: var(--background);
   font-family: ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 @layer utilities {
