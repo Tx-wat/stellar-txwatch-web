@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { MAX_NOTES_LENGTH } from '@/lib/constants'
 
 export const NetworkSchema = z.enum(['mainnet', 'testnet', 'futurenet'])
 
@@ -33,6 +34,7 @@ export const WatchedContractSchema = z.object({
   instanceLiveUntilLedgerSeq: z.number().optional(),
   enabled: z.boolean().optional(),
   group: z.string().optional(),
+  notes: z.string().max(MAX_NOTES_LENGTH).optional(),
 })
 
 export const AlertPayloadSchema = z.object({

@@ -59,6 +59,8 @@ export interface WatchedContract {
   instanceLiveUntilLedgerSeq?: number
   /** Free-text folder/group name used to organise contracts (e.g. "Production", "Client A"). */
   group?: string
+  /** Free-text notes about what the contract does (max 1000 characters). */
+  notes?: string
 }
 
 export type DeliveryStatus = 'delivered' | 'retrying' | 'failed'
