@@ -26,7 +26,12 @@ export function useSortedLog<T extends SortableEntry>(
       const ta = Date.parse(a[timestampKey] as string);
       const tb = Date.parse(b[timestampKey] as string);
       if (isNaN(ta) || isNaN(tb)) return 0;
-      return sortDirection === 'desc' ? tb - ta : ta - tb;
+      if (ta !== tb) return sortDirection === 'desc' ? tb - ta : ta - tb;
+      // Identical timestamps: break ties on transaction_hash so the order is stable (#657)
+      const ha = String(a.transaction_hash ?? '');
+      const hb = String(b.transaction_hash ?? '');
+      const tie = ha < hb ? -1 : ha > hb ? 1 : 0;
+      return sortDirection === 'desc' ? -tie : tie;
     });
   }, [entries, sortDirection, timestampKey]);
 

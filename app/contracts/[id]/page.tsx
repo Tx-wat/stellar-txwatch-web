@@ -24,6 +24,12 @@ import {
 } from '@/lib/stellar'
 import { formatDate, formatRuleSummary, formatRelativeTime } from '@/lib/format'
 import { sendTestWebhook } from '@/lib/api'
+import { useEffect, useState, useMemo, type KeyboardEvent } from 'react'
+import { useRouter } from 'next/navigation'
+import { WatchedContract, AlertPayload, AlertRule } from '@/types'
+import { getContract, deleteContract, deleteAlerts, getAlerts, saveContract } from '@/lib/storage'
+import { truncateId, explorerContractUrl, isValidUrl } from '@/lib/stellar'
+import { formatDate, formatRuleSummary } from '@/lib/format'
 import { useAnalytics } from '@/hooks/useAnalytics'
 import { useExplorerPreference } from '@/hooks/useExplorerPreference'
 import { useToastOptional } from '@/components/ToastProvider'
@@ -36,6 +42,7 @@ import WebhookLog from '@/components/WebhookLog'
 import AlertHeatmap from '@/components/AlertHeatmap'
 import EditRulesModal from '@/components/EditRulesModal'
 import DeleteContractModal from '@/components/DeleteContractModal'
+import ClearHistoryModal from '@/components/ClearHistoryModal'
 import ContractDetailLoading from './loading'
 
 const LEDGERS_PER_DAY = 17280
@@ -114,6 +121,8 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
   const [contractNotFound, setContractNotFound] = useState(false)
 
   const [showDelete, setShowDelete] = useState(false)
+  const [showClearHistory, setShowClearHistory] = useState(false)
+  const [showEditDetails, setShowEditDetails] = useState(false)
   const [showEditRules, setShowEditRules] = useState(false)
   const [editedRules, setEditedRules] = useState<AlertRule[]>([])
   const [searchHash, setSearchHash] = useState('')
@@ -125,6 +134,42 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
   }
   const [undoToast, setUndoToast] = useState<UndoToast | null>(null)
 
+
+  // Tab navigation (issue #629): Overview / Alert Rules / Webhook History,
+  // persisted in the URL hash so a reload or shared link keeps the tab.
+  const TABS = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'rules', label: 'Alert Rules' },
+    { id: 'webhooks', label: 'Webhook History' },
+  ] as const
+  type TabId = (typeof TABS)[number]['id']
+  const [activeTab, setActiveTab] = useState<TabId>('overview')
+
+  useEffect(() => {
+    const fromHash = window.location.hash.replace('#', '')
+    if (TABS.some((t) => t.id === fromHash)) {
+      setActiveTab(fromHash as TabId)
+    }
+  }, [])
+
+  function selectTab(id: TabId) {
+    setActiveTab(id)
+    window.location.hash = id
+  }
+
+  function handleTabKeyDown(e: KeyboardEvent, index: number) {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft' && e.key !== 'Home' && e.key !== 'End') return
+    e.preventDefault()
+    let nextIndex = index
+    if (e.key === 'ArrowRight') nextIndex = (index + 1) % TABS.length
+    if (e.key === 'ArrowLeft') nextIndex = (index - 1 + TABS.length) % TABS.length
+    if (e.key === 'Home') nextIndex = 0
+    if (e.key === 'End') nextIndex = TABS.length - 1
+    selectTab(TABS[nextIndex].id)
+    const nextTabEl = document.getElementById(`contract-tab-${TABS[nextIndex].id}`)
+    nextTabEl?.focus()
+  }
+   
   // Metadata editing state
   const [showEditMetadata, setShowEditMetadata] = useState(false)
   const [editedLabel, setEditedLabel] = useState('')
@@ -320,6 +365,13 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
       setTestError(err instanceof Error ? err.message : 'Request failed')
       addToast(`Test webhook failed: ${err instanceof Error ? err.message : 'Request failed'}`, 'error')
     }
+  }
+
+  // Alerts are keyed by the on-chain contract ID, not the route ID (#661)
+  function handleClearHistory() {
+    deleteAlerts(contract!.contract_id)
+    setAlerts(getAlerts(contract!.contract_id))
+    setShowClearHistory(false)
   }
 
   function handleDelete() {
@@ -567,6 +619,14 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
             Edit Rules
           </Button>
           <Button
+            onClick={() => setShowClearHistory(true)}
+            variant="secondary"
+            size="sm"
+            className="flex-1 sm:flex-none"
+          >
+            Clear History
+          </Button>
+          <Button
             onClick={() => setShowDelete(true)}
             variant="danger"
             size="sm"
@@ -577,6 +637,38 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
         </div>
       </div>
 
+      {/* Tab navigation (#629) */}
+      <div role="tablist" aria-label="Contract detail sections" className="flex gap-1 border-b border-zinc-800">
+        {TABS.map((tab, index) => (
+          <button
+            key={tab.id}
+            id={`contract-tab-${tab.id}`}
+            role="tab"
+            type="button"
+            aria-selected={activeTab === tab.id}
+            aria-controls={`contract-tabpanel-${tab.id}`}
+            tabIndex={activeTab === tab.id ? 0 : -1}
+            onClick={() => selectTab(tab.id)}
+            onKeyDown={(e) => handleTabKeyDown(e, index)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
+              activeTab === tab.id
+                ? 'border-indigo-500 text-zinc-100'
+                : 'border-transparent text-zinc-500 hover:text-zinc-300'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Overview tab */}
+      <div
+        id="contract-tabpanel-overview"
+        role="tabpanel"
+        aria-labelledby="contract-tab-overview"
+        hidden={activeTab !== 'overview'}
+        className="space-y-8"
+      >
       {/* Metadata */}
       <div className="grid sm:grid-cols-3 gap-4">
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
@@ -749,7 +841,17 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
         <span className="text-zinc-600">·</span>
         <span>Hover any timestamp to see full ISO-8601</span>
       </div>
+      </div>
+      {/* end Overview tab */}
 
+      {/* Alert Rules tab */}
+      <div
+        id="contract-tabpanel-rules"
+        role="tabpanel"
+        aria-labelledby="contract-tab-rules"
+        hidden={activeTab !== 'rules'}
+        className="space-y-8"
+      >
       {/* Active Rules */}
       <div>
         <h2 className="text-lg font-semibold text-zinc-100 mb-3">Active Rules</h2>
@@ -779,7 +881,17 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
           <AlertHeatmap alerts={alerts} contractId={contract.contract_id} />
         </div>
       </div>
+      </div>
+      {/* end Alert Rules tab */}
 
+      {/* Webhook History tab */}
+      <div
+        id="contract-tabpanel-webhooks"
+        role="tabpanel"
+        aria-labelledby="contract-tab-webhooks"
+        hidden={activeTab !== 'webhooks'}
+        className="space-y-8"
+      >
       {/* Alert History */}
       <div>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
@@ -881,6 +993,8 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
           )}
         </div>
       </div>
+      </div>
+      {/* end Webhook History tab */}
 
       {/* Edit Metadata Modal */}
       {showEditMetadata && (
@@ -1058,6 +1172,15 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
           alertCount={alerts.length}
           onConfirm={handleDelete}
           onClose={() => setShowDelete(false)}
+        />
+      )}
+
+      {showClearHistory && (
+        <ClearHistoryModal
+          contractLabel={contract.label}
+          alertCount={getAlerts(contract.contract_id).length}
+          onConfirm={handleClearHistory}
+          onClose={() => setShowClearHistory(false)}
         />
       )}
     </div>

@@ -25,6 +25,13 @@ function validOverride(value: string | undefined): string | undefined {
     return undefined
   }
 }
+// Used by explorerTxUrl and explorerContractUrl; was referenced but never defined (#659).
+export const HORIZON_URLS: Record<Network, string> = DEFAULT_HORIZON_URLS
+
+const mainnetRpcUrl =
+  process.env.NEXT_PUBLIC_SOROBAN_RPC_URL_MAINNET ||
+  process.env.NEXT_PUBLIC_SOROBAN_RPC_URL ||
+  'https://mainnet.sorobanrpc.com'
 
 function horizonUrl(network: Network): string {
   const specific = validOverride(

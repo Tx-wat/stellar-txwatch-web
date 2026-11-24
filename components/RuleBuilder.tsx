@@ -6,6 +6,14 @@ import { formatRuleSummary } from '@/lib/format'
 import { HORIZON_URLS } from '@/lib/stellar'
 import { STORAGE_KEYS } from '@/lib/storageKeys'
 import AlertRuleBadge from './AlertRuleBadge'
+import { fetchContractFunctions } from '@/lib/api'
+import type { Network } from '@/types'
+import {
+  getRuleTemplates,
+  saveRuleTemplate,
+  deleteRuleTemplate,
+  onRuleTemplatesChange,
+} from '@/lib/storage'
 
 const RULE_TYPES: AlertRuleType[] = [
   'AnyTransaction',
@@ -114,6 +122,9 @@ interface RuleBuilderProps {
    *  function name inputs fall back to plain free text. */
   exportedFunctions?: string[] | null
   /** Contract ID and network used by the Test Rule dry-run. */
+  /** Contract ID whose Soroban spec should be fetched for function-name
+   *  autocomplete. Shared across the FunctionCalled and AdminFunctionCalled
+   *  inputs. When omitted, those inputs fall back to plain free text. */
   contractId?: string
   network?: Network
 }
@@ -122,6 +133,14 @@ const emptyRule = (): AlertRule => ({ type: 'AnyTransaction' })
 const newTemplateId = () => `tpl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
 
 const SAC_CONTRACT_ID_REGEX = /^C[A-Z2-7]{55}$/
+
+const ALERT_RULES_DOC_URL = 'https://github.com/Tx-wat/stellar-txwatch-web/wiki/alert-rules'
+
+interface DryRunResult {
+  matched: number
+  total: number
+  matchedHashes: string[]
+}
 
 /** Fetches the number of decimals for a token contract via its `decimals()` function.
  *  Returns null when the value cannot be determined. */
@@ -145,6 +164,7 @@ export default function RuleBuilder({
   contractId,
   network = 'testnet',
 }: RuleBuilderProps) {
+export default function RuleBuilder({ rules, onChange, onRulesChanged, contractId, network = 'testnet' }: RuleBuilderProps) {
   const [draft, setDraft] = useState<AlertRule>(emptyRule())
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -158,10 +178,39 @@ export default function RuleBuilder({
     setTemplates(loadTemplates())
   }, [])
 
-  const specFunctions = exportedFunctions ?? []
+  // Shared contract-function autocomplete for FunctionCalled and
+  // AdminFunctionCalled inputs (issue #626). Cached per contract_id inside
+  // fetchContractFunctions, so switching rule type doesn't re-fetch.
+  const [specFunctions, setSpecFunctions] = useState<string[]>([])
+  const [specLoading, setSpecLoading] = useState(false)
+
+  useEffect(() => {
+    if (!contractId) {
+      setSpecFunctions([])
+      return
+    }
+    let cancelled = false
+    setSpecLoading(true)
+    fetchContractFunctions(contractId, network)
+      .then((names) => {
+        if (!cancelled) setSpecFunctions(names)
+      })
+      .finally(() => {
+        if (!cancelled) setSpecLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [contractId, network])
+
   const hasSpec = specFunctions.length > 0
   const specFunctionSet = new Set(specFunctions)
   const datalistId = 'rule-builder-function-names'
+
+  // LargeTransfer token-decimals lookup state (kept local; unrelated to #626).
+  const [tokenDecimals, setTokenDecimals] = useState<number | null>(null)
+  const [decimalsError, setDecimalsError] = useState<string | null>(null)
+  const [decimalsLoading, setDecimalsLoading] = useState(false)
 
   function unknownFunctionNames(): string[] {
     if (!hasSpec) return []
@@ -344,6 +393,17 @@ export default function RuleBuilder({
     setWarning(null)
     setDryRunResult(null)
     setDryRunStatus('idle')
+  }
+
+  // Dry-run evaluation against recent transactions is not implemented yet;
+  // keep the hook point stubbed so the UI doesn't offer a non-functional
+  // action (out of scope for #626).
+  function isDraftTestable(): boolean {
+    return false
+  }
+
+  function handleTestRule() {
+    // no-op: see isDraftTestable above
   }
 
   function startEdit(index: number) {
@@ -576,6 +636,10 @@ export default function RuleBuilder({
               <option key={name} value={name} />
             ))}
           </datalist>
+        )}
+
+        {(draft.type === 'FunctionCalled' || draft.type === 'AdminFunctionCalled') && specLoading && (
+          <p className="text-xs text-zinc-500">Loading contract functions…</p>
         )}
 
         {draft.type === 'FunctionCalled' && (

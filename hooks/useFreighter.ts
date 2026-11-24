@@ -7,6 +7,10 @@ import {
   getNetworkDetails as sdkGetNetworkDetails,
   isConnected as sdkIsConnected,
   requestAccess as sdkRequestAccess,
+  isConnected,
+  requestAccess,
+  getPublicKey,
+  getNetworkDetails,
 } from '@stellar/freighter-api'
 
 export type KnownNetwork = 'PUBLIC' | 'TESTNET' | 'FUTURENET' | 'custom'
@@ -81,6 +85,33 @@ export function useFreighter() {
         loading: false,
         error: isLockError(error) ? 'Freighter is locked' : 'Freighter not available',
       })
+      const { isConnected: connected, error: connectedError } = await isConnected()
+      if (connectedError) {
+        setState((prev) => ({ ...prev, error: 'Freighter not installed' }))
+        return
+      }
+      if (connected) {
+        const [keyResult, networkResult] = await Promise.all([
+          getPublicKey(),
+          getNetworkDetails(),
+        ])
+        if (keyResult.error) {
+          setState((prev) => ({ ...prev, error: 'Connection rejected' }))
+          return
+        }
+        if (networkResult.error) {
+          setState((prev) => ({ ...prev, error: 'Failed to initialize Freighter' }))
+          return
+        }
+        setState({
+          publicKey: keyResult.publicKey,
+          network: networkResult.network,
+          loading: false,
+          error: null,
+        })
+      }
+    } catch {
+      setState((prev) => ({ ...prev, error: 'Failed to initialize Freighter' }))
     }
   }, [readWallet])
 
@@ -103,6 +134,35 @@ export function useFreighter() {
       setState({
         publicKey: null,
         network: null,
+
+      const accessResult = await requestAccess()
+      if (accessResult.error) {
+        const message = accessResult.error.code ?? ''
+        const isLocked = message === 'LOCKED'
+        setState((prev) => ({
+          ...prev,
+          loading: false,
+          error: isLocked ? 'Freighter is locked' : 'Connection rejected',
+        }))
+        return
+      }
+
+      const [keyResult, networkResult] = await Promise.all([
+        getPublicKey(),
+        getNetworkDetails(),
+      ])
+      if (keyResult.error) {
+        setState((prev) => ({ ...prev, loading: false, error: 'Connection rejected' }))
+        return
+      }
+      if (networkResult.error) {
+        setState((prev) => ({ ...prev, loading: false, error: 'Failed to initialize Freighter' }))
+        return
+      }
+
+      setState({
+        publicKey: keyResult.publicKey,
+        network: networkResult.network,
         loading: false,
         error: isLockError(error) ? 'Freighter is locked' : 'Connection rejected',
       })

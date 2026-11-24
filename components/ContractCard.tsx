@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { WatchedContract } from '@/types'
 import NetworkBadge from './NetworkBadge'
 import { truncateId } from '@/lib/stellar'
-import { formatDate as defaultFormatDate } from '@/lib/format'
+import { formatDate as defaultFormatDate, formatRelativeTime } from '@/lib/format'
 import { useTimezone } from './TimezoneProvider'
 
 interface ContractCardProps {
@@ -122,6 +122,9 @@ function ContractCard({
             </h3>
             <p className="text-xs font-mono text-zinc-500 mt-0.5">
               {highlightMatch(truncateId(contract.contract_id), searchQuery)}
+            </p>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              Updated {formatRelativeTime(contract.updated_at)}
             </p>
           </div>
           <div className="flex flex-col items-end gap-1.5 flex-shrink-0">

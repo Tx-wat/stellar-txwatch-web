@@ -6,6 +6,9 @@ import {
   getPublicKey as sdkGetPublicKey,
   getNetworkDetails as sdkGetNetworkDetails,
   isConnected as sdkIsConnected,
+  isConnected as freighterIsConnected,
+  getPublicKey,
+  getNetworkDetails,
 } from '@stellar/freighter-api'
 
 export type KnownNetwork = 'PUBLIC' | 'TESTNET' | 'FUTURENET' | 'CUSTOM'
@@ -45,10 +48,7 @@ function statusFromError(error: unknown): FreighterStatus {
 export function useFreighterConnection() {
   const [isConnected, setIsConnected] = useState(false)
   const [publicKey, setPublicKey] = useState<string | null>(null)
-  const [networkPassphrase, setNetworkPassphrase] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [status, setStatus] = useState<FreighterStatus>('idle')
-  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -103,6 +103,35 @@ export function useFreighterConnection() {
     void checkConnection()
     return () => {
       cancelled = true
+  async function checkConnection() {
+    setLoading(true)
+    try {
+      const { isConnected: connected, error: checkError } = await freighterIsConnected()
+
+      if (checkError) {
+        setIsConnected(false)
+        setPublicKey(null)
+        return
+      }
+
+      if (connected) {
+        const { publicKey: key, error: keyError } = await getPublicKey()
+        if (!keyError && key) {
+          setPublicKey(key)
+          setIsConnected(true)
+        } else {
+          setIsConnected(false)
+          setPublicKey(null)
+        }
+      } else {
+        setIsConnected(false)
+        setPublicKey(null)
+      }
+    } catch {
+      setIsConnected(false)
+      setPublicKey(null)
+    } finally {
+      setLoading(false)
     }
   }, [])
 
@@ -117,4 +146,6 @@ export function useFreighterConnection() {
     status,
     error,
   }
+}
+  return { isConnected, publicKey, loading }
 }
