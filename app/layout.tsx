@@ -10,6 +10,7 @@ import ToastProvider from '@/components/ToastProvider'
 import TimezoneProvider from '@/components/TimezoneProvider'
 import OnboardingTour from '@/components/OnboardingTour'
 import HeaderSyncStatus from '@/components/HeaderSyncStatus'
+import NewContractShortcut from '@/components/NewContractShortcut'
 
 export const metadata: Metadata = {
   title: {
@@ -24,6 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="dark">
       <body className="min-h-screen bg-zinc-950 text-zinc-100">
         <WebVitals />
+        <NewContractShortcut />
         <ToastProvider>
           <TimezoneProvider>
             <StorageContext>

@@ -12,6 +12,7 @@ import ContractCard from '@/components/ContractCard'
 import ContractListToolbar from '@/components/ContractListToolbar'
 import BulkActionBar from '@/components/BulkActionBar'
 import EmptyState from '@/components/EmptyState'
+import { NEW_CONTRACT_SHORTCUT_LABEL } from '@/components/NewContractShortcut'
 
 const NETWORK_LABELS: Record<Network, string> = {
   mainnet: 'Mainnet',
@@ -388,6 +389,7 @@ export default function ContractsPage() {
         <EmptyState
           title="No contracts yet"
           description="Add a contract to start monitoring its activity, or import a CSV to register many at once."
+          shortcutHint={NEW_CONTRACT_SHORTCUT_LABEL}
           action={
             <Link
               href="/contracts/new"
