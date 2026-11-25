@@ -3,12 +3,12 @@ import { WatchedContract, Network } from '@/types'
 
 export type ViewMode = 'flat' | 'grouped'
 export type NetworkFilter = 'all' | Network
-export type SortOption = 'newest' | 'oldest' | 'label-asc' | 'label-desc' | 'rule-count-desc'
+export type SortOption = 'newest' | 'oldest' | 'label-asc' | 'label-desc' | 'rule-count-desc' | 'last-alert'
 
 export const PAGE_SIZE = 12
 
 const SORT_STORAGE_KEY = 'txwatch:contract-list-sort'
-const SORT_OPTIONS: SortOption[] = ['newest', 'oldest', 'label-asc', 'label-desc']
+const SORT_OPTIONS: SortOption[] = ['newest', 'oldest', 'label-asc', 'label-desc', 'rule-count-desc', 'last-alert']
 
 // Storage can be unavailable (private mode, blocked site data), so every access is guarded (#666).
 function readStoredSort(): SortOption | null {
@@ -113,7 +113,15 @@ export function filterContracts(
   )
 }
 
-export function sortContractList(contracts: WatchedContract[], sortBy: SortOption): WatchedContract[] {
+/**
+ * `lastAlertTimes` is keyed by contract_id (the shape returned by getLastAlertTimes()).
+ * It is only read for the 'last-alert' sort.
+ */
+export function sortContractList(
+  contracts: WatchedContract[],
+  sortBy: SortOption,
+  lastAlertTimes: Record<string, number> = {}
+): WatchedContract[] {
   const sorted = [...contracts]
   switch (sortBy) {
     case 'oldest':
@@ -125,6 +133,12 @@ export function sortContractList(contracts: WatchedContract[], sortBy: SortOptio
     case 'rule-count-desc':
       return sorted.sort((a, b) => {
         const diff = (b.rules?.length ?? 0) - (a.rules?.length ?? 0)
+        return diff !== 0 ? diff : b.created_at - a.created_at
+      })
+    // Most recent alert first; contracts that never alerted go last, newest-created first (#598)
+    case 'last-alert':
+      return sorted.sort((a, b) => {
+        const diff = (lastAlertTimes[b.contract_id] ?? 0) - (lastAlertTimes[a.contract_id] ?? 0)
         return diff !== 0 ? diff : b.created_at - a.created_at
       })
     case 'newest':
@@ -166,14 +180,21 @@ export function countByNetwork(contracts: WatchedContract[]): Record<NetworkFilt
   return counts
 }
 
-export function useContractListState(contracts: WatchedContract[], initialSearch = '') {
+export function useContractListState(
+  contracts: WatchedContract[],
+  initialSearch = '',
+  lastAlertTimes: Record<string, number> = {}
+) {
   const [state, dispatch] = useReducer(contractListReducer, initialSearch, createInitialState)
 
   const filtered = useMemo(
     () => filterContracts(contracts, state.networkFilter, state.search),
     [contracts, state.networkFilter, state.search]
   )
-  const sorted = useMemo(() => sortContractList(filtered, state.sortBy), [filtered, state.sortBy])
+  const sorted = useMemo(
+    () => sortContractList(filtered, state.sortBy, lastAlertTimes),
+    [filtered, state.sortBy, lastAlertTimes]
+  )
   const totalPages = getTotalPages(sorted.length)
   const paginated = useMemo(() => paginate(sorted, state.page), [sorted, state.page])
   const grouped = useMemo(() => groupByNetwork(sorted), [sorted])

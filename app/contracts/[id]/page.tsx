@@ -13,6 +13,9 @@ import CopyButton from '@/components/CopyButton'
 import Button from '@/components/ui/Button'
 import WebhookLog from '@/components/WebhookLog'
 import ContractHeader from '@/components/ContractHeader'
+import ContractExpiryBanner from '@/components/ContractExpiryBanner'
+import { fetchContractInstance, fetchLatestLedger } from '@/lib/api'
+import { estimateExpiryDate } from '@/lib/contractExpiry'
 import ContractMetadataCards from '@/components/ContractMetadataCards'
 import ActiveRulesList from '@/components/ActiveRulesList'
 import EditDetailsModal from '@/components/EditDetailsModal'
@@ -98,6 +101,7 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
   // Contract instance TTL state
   const [liveUntilLedgerSeq, setLiveUntilLedgerSeq] = useState<number | null>(null)
   const [expiryDate, setExpiryDate] = useState<Date | null>(null)
+  const [currentLedger, setCurrentLedger] = useState<number | null>(null)
   const [ttlLoading, setTtlLoading] = useState(false)
   const [ttlError, setTtlError] = useState<string | null>(null)
 
@@ -142,15 +146,18 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
     let cancelled = false
     setTtlLoading(true)
     setTtlError(null)
-    fetchContractInstance(contract.network, contract.contract_id)
-      .then((instance) => {
+    // The latest ledger is best-effort: without it we still show the TTL but no banner.
+    Promise.all([
+      fetchContractInstance(contract.contract_id, contract.network),
+      fetchLatestLedger(contract.network).catch(() => null),
+    ])
+      .then(([instance, latest]) => {
         if (cancelled) return
-        if (!instance) {
-          setTtlError('Unable to load instance TTL')
-          return
-        }
         setLiveUntilLedgerSeq(instance.liveUntilLedgerSeq)
-        setExpiryDate(estimateExpiryDate(instance.liveUntilLedgerSeq))
+        setCurrentLedger(latest)
+        setExpiryDate(
+          latest === null ? null : estimateExpiryDate(instance.liveUntilLedgerSeq, latest)
+        )
       })
       .catch(() => {
         if (!cancelled) setTtlError('Unable to load instance TTL')
@@ -416,6 +423,8 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
 
   return (
     <div className="space-y-8 max-w-4xl">
+      <ContractExpiryBanner liveUntilLedgerSeq={liveUntilLedgerSeq} currentLedger={currentLedger} />
+
       {/* Undo Delete Toast */}
       {undoToast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 shadow-lg">

@@ -92,6 +92,18 @@ describe('useContractListState — derivations', () => {
     expect(sortContractList(contracts, 'label-desc').map((c) => c.id)).toEqual(['3', '2', '1'])
   })
 
+  it('sorts by last alert time with never-alerted contracts last', () => {
+    const list = [
+      makeContract({ id: 'a', contract_id: 'CA', created_at: 1 }),
+      makeContract({ id: 'b', contract_id: 'CB', created_at: 2 }),
+      makeContract({ id: 'c', contract_id: 'CC', created_at: 3 }),
+      makeContract({ id: 'd', contract_id: 'CD', created_at: 4 }),
+    ]
+    const times = { CA: 500, CC: 900 }
+    expect(sortContractList(list, 'last-alert', times).map((c) => c.id)).toEqual(['c', 'a', 'd', 'b'])
+    expect(sortContractList(list, 'last-alert').map((c) => c.id)).toEqual(['d', 'c', 'b', 'a'])
+  })
+
   it('does not mutate the input when sorting', () => {
     const copy = [...contracts]
     sortContractList(contracts, 'oldest')

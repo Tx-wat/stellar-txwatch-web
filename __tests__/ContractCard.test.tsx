@@ -7,10 +7,22 @@
  */
 import '@testing-library/jest-dom/vitest'
 import React from 'react'
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, act } from '@testing-library/react'
 import ContractCard from '@/components/ContractCard'
 import { WatchedContract } from '@/types'
+
+const alertState = vi.hoisted(() => ({
+  count: 0,
+  listeners: new Set<() => void>(),
+}))
+vi.mock('@/lib/storage', () => ({
+  getTodayAlertCount: () => alertState.count,
+  onAlertsChange: (cb: () => void) => {
+    alertState.listeners.add(cb)
+    return () => alertState.listeners.delete(cb)
+  },
+}))
 
 // next/link needs the App Router context; render a plain anchor instead.
 const mockPush = vi.fn()
@@ -128,5 +140,46 @@ describe('ContractCard', () => {
 
     fireEvent.click(compareBtn)
     expect(mockPush).toHaveBeenCalledWith('/contracts/compare?a=contract-1')
+  })
+})
+
+describe('ContractCard today alert badge', () => {
+  beforeEach(() => {
+    alertState.count = 0
+    alertState.listeners.clear()
+  })
+
+  it('hides the badge when there are no alerts today', () => {
+    render(<ContractCard contract={baseContract} />)
+    expect(screen.queryByTestId('today-alert-badge')).not.toBeInTheDocument()
+  })
+
+  it('shows today\'s alert count', () => {
+    alertState.count = 3
+    render(<ContractCard contract={baseContract} />)
+    expect(screen.getByTestId('today-alert-badge')).toHaveTextContent('3')
+    expect(screen.getByLabelText('3 alerts today')).toBeInTheDocument()
+  })
+
+  it('uses the singular label for one alert and caps large counts', () => {
+    alertState.count = 1
+    const { unmount } = render(<ContractCard contract={baseContract} />)
+    expect(screen.getByLabelText('1 alert today')).toBeInTheDocument()
+    unmount()
+    alertState.count = 250
+    render(<ContractCard contract={baseContract} />)
+    expect(screen.getByTestId('today-alert-badge')).toHaveTextContent('99+')
+  })
+
+  it('updates when alerts change and unsubscribes on unmount', () => {
+    const { unmount } = render(<ContractCard contract={baseContract} />)
+    expect(screen.queryByTestId('today-alert-badge')).not.toBeInTheDocument()
+    act(() => {
+      alertState.count = 2
+      alertState.listeners.forEach((cb) => cb())
+    })
+    expect(screen.getByTestId('today-alert-badge')).toHaveTextContent('2')
+    unmount()
+    expect(alertState.listeners.size).toBe(0)
   })
 })
