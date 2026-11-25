@@ -21,6 +21,7 @@ const RULE_TYPES: AlertRuleType[] = [
   'FunctionCalled',
   'AdminFunctionCalled',
   'TransactionFailed',
+  'HighFee',
 ]
 
 const RULE_EXAMPLES: Record<AlertRuleType, string> = {
@@ -29,6 +30,7 @@ const RULE_EXAMPLES: Record<AlertRuleType, string> = {
   'FunctionCalled': 'Alert when a specific function is called',
   'AdminFunctionCalled': 'Alert when admin functions are called',
   'TransactionFailed': 'Alert on failed transactions',
+  'HighFee': 'Alert when a transaction fee exceeds threshold',
 }
 
 const TEMPLATE_STORAGE_KEY = STORAGE_KEYS.RULE_TEMPLATES
@@ -230,6 +232,7 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
         const existingNames = (rule.function_names ?? []).sort().join(',')
         return newNames === existingNames
       }
+      if (newRule.type === 'HighFee') return newRule.threshold_stroops === rule.threshold_stroops
       return true // AnyTransaction and TransactionFailed
     })
   }
@@ -270,6 +273,17 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
           setError('Threshold must be greater than 0')
           return false
         }
+      }
+    }
+    if (draft.type === 'HighFee') {
+      const stroops = draft.threshold_stroops
+      if (stroops === undefined || stroops === null || isNaN(stroops)) {
+        setError('Enter a valid stroops threshold')
+        return false
+      }
+      if (stroops <= 0 || !Number.isInteger(stroops)) {
+        setError('Stroops threshold must be a whole number greater than 0')
+        return false
       }
     }
     if (draft.type === 'FunctionCalled') {
@@ -492,6 +506,23 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
                 />
               </div>
             )}
+          </div>
+        )}
+
+        {draft.type === 'HighFee' && (
+          <div>
+            <label className="block text-xs font-medium text-zinc-400 mb-1">
+              Threshold (stroops) <span className="text-zinc-600">(1 XLM = 10,000,000 stroops)</span>
+            </label>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              placeholder="e.g. 100000"
+              value={draft.threshold_stroops ?? ''}
+              onChange={(e) => updateDraft({ threshold_stroops: parseInt(e.target.value, 10) || undefined })}
+              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
+            />
           </div>
         )}
 

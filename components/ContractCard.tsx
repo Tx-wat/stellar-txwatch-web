@@ -6,6 +6,7 @@ import NetworkBadge from './NetworkBadge'
 import { truncateId } from '@/lib/stellar'
 import { formatDate as defaultFormatDate, formatRelativeTime } from '@/lib/format'
 import { useTimezone } from './TimezoneProvider'
+import { getTodayAlertCount, onAlertsChange } from '@/lib/storage'
 
 interface ContractCardProps {
   contract: WatchedContract
@@ -21,6 +22,7 @@ function ContractCard({ contract, lastAlertTime, highlight, missing }: ContractC
   const [active, setActive] = useState(highlight)
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  const [todayAlertCount, setTodayAlertCount] = useState(0)
 
   let formatDate = defaultFormatDate
   let isoString = (ts: number) => new Date(ts).toISOString()
@@ -40,6 +42,13 @@ function ContractCard({ contract, lastAlertTime, highlight, missing }: ContractC
     const id = setTimeout(() => setActive(false), 2500)
     return () => clearTimeout(id)
   }, [highlight])
+
+  // Keep today's alert count live: same-tab writes and cross-tab `storage` events both fire onAlertsChange
+  useEffect(() => {
+    const refresh = () => setTodayAlertCount(getTodayAlertCount())
+    refresh()
+    return onAlertsChange(refresh)
+  }, [])
 
   useEffect(() => {
     if (!menuOpen) return
@@ -94,6 +103,16 @@ function ContractCard({ contract, lastAlertTime, highlight, missing }: ContractC
           </div>
           <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
             <div className="flex items-center gap-1.5">
+              {todayAlertCount > 0 && (
+                <span
+                  data-testid="today-alert-badge"
+                  title={`${todayAlertCount} alert${todayAlertCount === 1 ? '' : 's'} today`}
+                  aria-label={`${todayAlertCount} alert${todayAlertCount === 1 ? '' : 's'} today`}
+                  className="inline-flex items-center rounded-full bg-red-500/15 border border-red-500/20 px-2 py-0.5 text-xs font-medium text-red-400"
+                >
+                  {todayAlertCount > 99 ? '99+' : todayAlertCount}
+                </span>
+              )}
               <NetworkBadge network={contract.network} />
               <button
                 type="button"

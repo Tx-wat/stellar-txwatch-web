@@ -15,6 +15,7 @@ const styles: Record<AlertRuleType, string> = {
   AnyTransaction: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
   FunctionCalled: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
   TransactionFailed: 'bg-rose-500/20 text-rose-400 border-rose-500/30',
+  HighFee: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
 }
 
 const labels: Record<AlertRuleType, string> = {
@@ -23,6 +24,7 @@ const labels: Record<AlertRuleType, string> = {
   AnyTransaction: 'Any Transaction',
   FunctionCalled: 'Function Called',
   TransactionFailed: 'Tx Failed',
+  HighFee: 'High Fee',
 }
 
 const descriptions: Record<AlertRuleType, string> = {
@@ -31,6 +33,7 @@ const descriptions: Record<AlertRuleType, string> = {
   AnyTransaction: 'Alert on any transaction involving this contract',
   FunctionCalled: 'Alert when specific functions are called',
   TransactionFailed: 'Alert when a transaction fails',
+  HighFee: 'Alert when a transaction fee exceeds the specified stroops threshold',
 }
 
 let tooltipIdCounter = 0

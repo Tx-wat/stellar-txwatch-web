@@ -113,6 +113,12 @@ export async function fetchContractInstance(
   return { liveUntilLedgerSeq: Number(entry.liveUntilLedgerSeq) }
 }
 
+/** Current ledger sequence from Soroban RPC, used to measure how close an instance is to expiry. */
+export async function fetchLatestLedger(network: Network = 'testnet'): Promise<number> {
+  const result = await sorobanRpcCall<{ sequence: number | string }>(network, 'getLatestLedger', {})
+  return Number(result.sequence)
+}
+
 const contractFunctionsCache = new Map<string, string[]>()
 
 /**

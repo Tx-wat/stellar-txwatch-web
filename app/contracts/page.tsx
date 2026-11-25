@@ -209,7 +209,7 @@ export default function ContractsPage() {
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
   const lastAlertTimes = useLastAlertTimes()
-  const list = useContractListState(allContracts, searchParams?.get('q') ?? '')
+  const list = useContractListState(allContracts, searchParams?.get('q') ?? '', lastAlertTimes)
 
   const contractGroups = useMemo(() => {
     const groups = new Map<string, WatchedContract[]>()

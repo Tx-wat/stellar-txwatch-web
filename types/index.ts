@@ -23,13 +23,15 @@ export interface AppSettings {
  * Types must stay in sync with the Rust `AlertRule` struct in stellar-txwatch-core.
  */
 export interface AlertRule {
-  /** Rule type - one of: LargeTransfer, AdminFunctionCalled, AnyTransaction, FunctionCalled, TransactionFailed */
+  /** Rule type - one of: LargeTransfer, AdminFunctionCalled, AnyTransaction, FunctionCalled, TransactionFailed, HighFee */
   type: AlertRuleType
   /** Optional user-supplied label for this rule (max 60 characters). */
   name?: string
   threshold_xlm?: number
   asset?: string
   threshold?: number
+  /** HighFee: alert when a transaction's fee exceeds this many stroops (1 XLM = 10,000,000 stroops) */
+  threshold_stroops?: number
   function_names?: string[]
   /** Single function name to monitor; rule triggers when this function is called */
   function_name?: string

@@ -14,6 +14,7 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: 'label-asc', label: 'Label A–Z' },
   { value: 'label-desc', label: 'Label Z–A' },
   { value: 'rule-count-desc', label: 'Rule Count' },
+  { value: 'last-alert', label: 'Last Alert' },
 ]
 
 interface ContractListToolbarProps {
