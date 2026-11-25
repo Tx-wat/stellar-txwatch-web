@@ -8,6 +8,7 @@ export const AlertRuleTypeSchema = z.enum([
   'AnyTransaction',
   'FunctionCalled',
   'TransactionFailed',
+  'HighFee',
 ])
 
 export const AlertRuleSchema = z.object({
@@ -16,6 +17,7 @@ export const AlertRuleSchema = z.object({
   threshold_xlm: z.number().optional(),
   asset: z.string().optional(),
   threshold: z.number().optional(),
+  threshold_stroops: z.number().optional(),
   function_names: z.array(z.string()).optional(),
   function_name: z.string().optional(),
 })

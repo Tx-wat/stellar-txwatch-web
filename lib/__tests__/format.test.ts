@@ -109,6 +109,11 @@ describe('formatRuleSummary', () => {
     expect(formatRuleSummary(rule)).toBe('')
   })
 
+  it('formats HighFee with a stroops threshold', () => {
+    const rule: AlertRule = { type: 'HighFee', threshold_stroops: 100000 }
+    expect(formatRuleSummary(rule)).toBe('> 100000 stroops')
+  })
+
   it('covers every AlertRuleType variant', () => {
     const types: AlertRule['type'][] = [
       'LargeTransfer',
@@ -116,6 +121,7 @@ describe('formatRuleSummary', () => {
       'AnyTransaction',
       'FunctionCalled',
       'TransactionFailed',
+      'HighFee',
     ]
     for (const type of types) {
       expect(formatRuleSummary({ type })).toBeTypeOf('string')

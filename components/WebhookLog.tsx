@@ -27,6 +27,7 @@ const ruleTypes: AlertRuleType[] = [
   'AnyTransaction',
   'FunctionCalled',
   'TransactionFailed',
+  'HighFee',
 ]
 
 // CSV export always operates on the full filtered set, not just the visible window.

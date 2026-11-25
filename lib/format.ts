@@ -44,6 +44,8 @@ export function formatRuleSummary(rule: AlertRule): string {
   switch (rule.type) {
     case 'LargeTransfer':
       return `>= ${rule.threshold_xlm} XLM`
+    case 'HighFee':
+      return `> ${rule.threshold_stroops} stroops`
     case 'FunctionCalled':
       return rule.function_name || 'function'
     case 'AdminFunctionCalled':

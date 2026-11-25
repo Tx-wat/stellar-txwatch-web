@@ -115,6 +115,38 @@ describe('RuleBuilder', () => {
     expect(screen.getByText('>= 1000 XLM')).toBeInTheDocument()
   })
 
+  it('lists HighFee as a rule type', () => {
+    render(<Harness />)
+    expect(screen.getByRole('option', { name: /HighFee/ })).toBeInTheDocument()
+  })
+
+  it('shows the stroops input for HighFee and errors on empty threshold', () => {
+    render(<Harness />)
+    selectType('HighFee')
+    expect(screen.getByPlaceholderText('e.g. 100000')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /add rule/i }))
+    expect(screen.getByText('Enter a valid stroops threshold')).toBeInTheDocument()
+  })
+
+  it('rejects a non-positive or fractional HighFee threshold', () => {
+    render(<Harness />)
+    selectType('HighFee')
+    const input = screen.getByPlaceholderText('e.g. 100000')
+    fireEvent.change(input, { target: { value: '-5' } })
+    fireEvent.click(screen.getByRole('button', { name: /add rule/i }))
+    expect(screen.getByText('Stroops threshold must be a whole number greater than 0')).toBeInTheDocument()
+  })
+
+  it('adds a valid HighFee rule', () => {
+    const onChange = vi.fn()
+    render(<Harness onChange={onChange} />)
+    selectType('HighFee')
+    fireEvent.change(screen.getByPlaceholderText('e.g. 100000'), { target: { value: '100000' } })
+    fireEvent.click(screen.getByRole('button', { name: /add rule/i }))
+    expect(onChange).toHaveBeenCalledWith([{ type: 'HighFee', threshold_stroops: 100000 }])
+    expect(screen.getByText('> 100000 stroops')).toBeInTheDocument()
+  })
+
   it('shows the function name input for FunctionCalled and errors when empty', () => {
     render(<Harness />)
     selectType('FunctionCalled')

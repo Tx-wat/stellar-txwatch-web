@@ -19,6 +19,7 @@ const VARIANTS: Array<{ type: AlertRuleType; label: string; colorClass: string }
   { type: 'AnyTransaction', label: 'Any Transaction', colorClass: 'bg-blue-500/20' },
   { type: 'FunctionCalled', label: 'Function Called', colorClass: 'bg-cyan-500/20' },
   { type: 'TransactionFailed', label: 'Tx Failed', colorClass: 'bg-rose-500/20' },
+  { type: 'HighFee', label: 'High Fee', colorClass: 'bg-yellow-500/20' },
 ]
 
 describe('AlertRuleBadge', () => {
