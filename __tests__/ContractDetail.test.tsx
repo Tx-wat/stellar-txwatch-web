@@ -1,8 +1,28 @@
+// @vitest-environment jsdom
+import '@testing-library/jest-dom/vitest'
 import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import ContractDetail from '@/app/contracts/[id]/page'
 
 const DAYS = 24 * 60 * 60 * 1000
 const LEDGERS_PER_DAY = 17280
+
+// Mock next/navigation so notFound() is trackable
+const mockNotFound = vi.fn()
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  notFound: () => { mockNotFound(); return null },
+}))
+
+// Mock storage so we control what getContract returns
+vi.mock('@/lib/storage', () => ({
+  getContract: vi.fn(),
+  getAlerts: vi.fn(() => []),
+  saveContract: vi.fn(),
+  deleteContract: vi.fn(),
+  onAlertsChange: vi.fn(() => () => {}),
+  onContractsChange: vi.fn(() => () => {}),
+}))
 
 function mockContract(liveUntilLedgerSeq: number) {
   return {
@@ -14,18 +34,18 @@ function mockContract(liveUntilLedgerSeq: number) {
 
 describe('ContractDetail TTL display', () => {
   beforeEach(() => {
-    jest.useFakeTimers()
-    jest.setSystemTime(new Date('2024-01-01T00:00:00Z'))
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2024-01-01T00:00:00Z'))
   })
 
   afterEach(() => {
-    jest.useRealTimers()
-    jest.restoreAllMocks()
+    vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
   it('shows liveUntilLedgerSeq and estimated expiry', () => {
     const liveUntilLedgerSeq = 1000 + LEDGERS_PER_DAY * 60
-    jest.spyOn(global, 'fetch').mockResolvedValue({
+    vi.spyOn(global, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => mockContract(liveUntilLedgerSeq),
     } as Response)
@@ -38,7 +58,7 @@ describe('ContractDetail TTL display', () => {
 
   it('shows amber warning under 30 days', async () => {
     const liveUntilLedgerSeq = 1000 + LEDGERS_PER_DAY * 20
-    jest.spyOn(global, 'fetch').mockResolvedValue({
+    vi.spyOn(global, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => mockContract(liveUntilLedgerSeq),
     } as Response)
@@ -51,7 +71,7 @@ describe('ContractDetail TTL display', () => {
 
   it('shows red warning under 7 days', async () => {
     const liveUntilLedgerSeq = 1000 + LEDGERS_PER_DAY * 3
-    jest.spyOn(global, 'fetch').mockResolvedValue({
+    vi.spyOn(global, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => mockContract(liveUntilLedgerSeq),
     } as Response)
@@ -64,7 +84,7 @@ describe('ContractDetail TTL display', () => {
 
   it('shows no warning when far from expiry', async () => {
     const liveUntilLedgerSeq = 1000 + LEDGERS_PER_DAY * 365
-    jest.spyOn(global, 'fetch').mockResolvedValue({
+    vi.spyOn(global, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => mockContract(liveUntilLedgerSeq),
     } as Response)
@@ -83,4 +103,20 @@ describe('Soroban RPC URL configuration and fallback', () => {
   })
 })
 
+describe('ContractDetail missing contract', () => {
+  beforeEach(() => {
+    mockNotFound.mockClear()
+  })
 
+  it('calls notFound() when the contract ID does not exist in storage', async () => {
+    const { getContract } = await import('@/lib/storage')
+    vi.mocked(getContract).mockReturnValue(undefined)
+
+    const { act } = await import('@testing-library/react')
+    await act(async () => {
+      render(<ContractDetail params={{ id: 'nonexistent-id' }} />)
+    })
+
+    expect(mockNotFound).toHaveBeenCalled()
+  })
+})

@@ -1,10 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { WatchedContract } from '@/types'
 import { truncateId, explorerContractUrl } from '@/lib/stellar'
 import NetworkBadge from '@/components/NetworkBadge'
 import CopyButton from '@/components/CopyButton'
+import ContractQrModal from '@/components/ContractQrModal'
 
 interface ContractHeaderProps {
   contract: WatchedContract
@@ -19,7 +21,9 @@ export default function ContractHeader({
   onEditRules,
   onDelete,
 }: ContractHeaderProps) {
+  const router = useRouter()
   const [showShareCopied, setShowShareCopied] = useState(false)
+  const [showQr, setShowQr] = useState(false)
 
   const handleShareLink = async () => {
     try {
@@ -36,6 +40,16 @@ export default function ContractHeader({
     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
       <div className="space-y-1 min-w-0">
         <div className="flex items-center gap-3 flex-wrap">
+          <button
+            onClick={() => router.push('/contracts')}
+            className="inline-flex items-center gap-1 text-sm text-zinc-400 hover:text-zinc-100 transition-colors"
+            aria-label="Back to contracts"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back
+          </button>
           <h1 className="text-2xl font-bold text-zinc-100">{contract.label}</h1>
           <NetworkBadge network={contract.network} />
         </div>
@@ -49,6 +63,13 @@ export default function ContractHeader({
             {truncateId(contract.contract_id, 12)}
           </a>
           <CopyButton text={contract.contract_id} />
+          <button
+            type="button"
+            onClick={() => setShowQr(true)}
+            className="text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
+          >
+            QR code
+          </button>
         </div>
       </div>
 
@@ -80,6 +101,14 @@ export default function ContractHeader({
           Delete
         </button>
       </div>
+
+      {showQr && (
+        <ContractQrModal
+          value={contract.contract_id}
+          label={contract.label}
+          onClose={() => setShowQr(false)}
+        />
+      )}
     </div>
   )
 }

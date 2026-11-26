@@ -10,6 +10,7 @@ import ToastProvider from '@/components/ToastProvider'
 import TimezoneProvider from '@/components/TimezoneProvider'
 import OnboardingTour from '@/components/OnboardingTour'
 import HeaderSyncStatus from '@/components/HeaderSyncStatus'
+import NewContractShortcut from '@/components/NewContractShortcut'
 
 export const metadata: Metadata = {
   title: {
@@ -24,10 +25,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="dark">
       <body className="min-h-screen bg-zinc-950 text-zinc-100">
         <WebVitals />
+        <NewContractShortcut />
         <ToastProvider>
           <TimezoneProvider>
             <StorageContext>
-              <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-sm sticky top-0 z-50">
+              <header className="no-print border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-sm sticky top-0 z-50">
                 <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
                   <Link href="/" className="flex items-center gap-2 font-bold text-lg tracking-tight">
                     <span className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-white text-xs font-black">
