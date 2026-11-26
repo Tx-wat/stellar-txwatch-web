@@ -43,7 +43,12 @@ export function useSortedLog<T extends SortableEntry>(
       const ta = toMillis(a[timestampKey] as string | number);
       const tb = toMillis(b[timestampKey] as string | number);
       if (isNaN(ta) || isNaN(tb)) return 0;
-      return sortDirection === 'desc' ? tb - ta : ta - tb;
+      if (ta !== tb) return sortDirection === 'desc' ? tb - ta : ta - tb;
+      // Identical timestamps: break ties on transaction_hash so the order is stable (#657)
+      const ha = String(a.transaction_hash ?? '');
+      const hb = String(b.transaction_hash ?? '');
+      const tie = ha < hb ? -1 : ha > hb ? 1 : 0;
+      return sortDirection === 'desc' ? -tie : tie;
     });
   }, [entries, sortDirection, sortField, timestampKey]);
 
