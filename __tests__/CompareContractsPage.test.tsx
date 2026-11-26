@@ -117,4 +117,19 @@ describe('CompareContractsPage', () => {
     expect(screen.getByText('rebalance')).toBeInTheDocument()
     expect(screen.getByText(/No alert at this timestamp/i)).toBeInTheDocument()
   })
+
+  it('shows rule diff section with rules unique to each contract', () => {
+    render(<CompareContractsPage />)
+    expect(screen.getByTestId('rule-diff')).toBeInTheDocument()
+    // contractA has LargeTransfer (not in B), contractB has FunctionCalled (not in A)
+    const onlyA = screen.getAllByTestId('rule-only-a')
+    const onlyB = screen.getAllByTestId('rule-only-b')
+    expect(onlyA.length).toBeGreaterThan(0)
+    expect(onlyB.length).toBeGreaterThan(0)
+  })
+
+  it('shows the alert count comparison chart', () => {
+    render(<CompareContractsPage />)
+    expect(screen.getByTestId('alert-count-chart')).toBeInTheDocument()
+  })
 })

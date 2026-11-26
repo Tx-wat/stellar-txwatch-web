@@ -1,17 +1,22 @@
 import { z } from 'zod'
-import { WatchedContract, AlertPayload, Network } from '@/types'
+import { WatchedContract, AlertPayload, Network, AppSettings } from '@/types'
 import { STORAGE_KEYS } from '@/lib/storageKeys'
+import { WatchedContractSchema, AlertPayloadSchema } from '@/lib/schemas'
+import { ExplorerId } from '@/lib/stellar'
 import {
   STORAGE_QUOTA_BYTES,
   MAX_ALERTS_PER_CONTRACT,
   ALERTS_RETENTION_DAYS,
+  MAX_NOTES_LENGTH,
 } from './constants'
 
 const CONTRACTS_KEY = STORAGE_KEYS.CONTRACTS
 const ALERTS_KEY = STORAGE_KEYS.ALERTS
 const SETTINGS_KEY = STORAGE_KEYS.SETTINGS
 const STORAGE_VERSION_KEY = STORAGE_KEYS.STORAGE_VERSION
-const CURRENT_STORAGE_VERSION = 2
+const CURRENT_STORAGE_VERSION = 3
+
+const DEFAULT_SETTINGS: AppSettings = { explorer: 'stellar-expert' }
 
 /**
  * Same-tab pub/sub registry. The browser `storage` event only fires in *other*
@@ -195,13 +200,23 @@ export function migrateStorage(
   setStorageVersion(targetVersion)
 }
 
+const DEFAULT_SETTINGS: AppSettings = {
+  explorer: 'stellar-expert',
+  soundNotification: false,
+}
+
 /**
  * Migration to v2:
  * - Normalizes LargeTransfer rules that only have `threshold_xlm` into the
  *   token-denominated shape (`asset` + `threshold`), while keeping
  *   `threshold_xlm` for backwards compatibility.
  * - Ensures settings exist with the default explorer preference.
+ *
+ * Guards against repeated execution by checking the stored version first.
+ * Calling this function when the storage version is already >= 2 is a no-op.
  */
+export const DEFAULT_SETTINGS: AppSettings = { explorer: 'stellar-expert' as ExplorerId }
+
 export function migrateToV2() {
   const storage = getStorage()
   if (!storage) return
@@ -247,6 +262,8 @@ export function migrateToV2() {
   if (storage.getItem(SETTINGS_KEY) === null) {
     storage.setItem(SETTINGS_KEY, JSON.stringify(DEFAULT_SETTINGS))
   }
+
+  setStorageVersion(2)
 }
 
 export function getSettings(): AppSettings {
@@ -292,6 +309,56 @@ export function migrateContractsEnabled() {
   }
 }
 
+/**
+ * Normalises free-text contract notes: trims surrounding whitespace, treats an
+ * empty value as "no notes" and caps the length at MAX_NOTES_LENGTH.
+ */
+export function normalizeNotes(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  return trimmed.slice(0, MAX_NOTES_LENGTH)
+}
+
+/**
+ * Migration to v3:
+ * - Normalises contract `notes`: trims whitespace, drops blank values and
+ *   truncates anything over MAX_NOTES_LENGTH so previously stored contracts
+ *   stay readable under the new schema.
+ */
+export function migrateToV3() {
+  const storage = getStorage()
+  if (!storage) return
+
+  // Read the raw entries instead of going through WatchedContractSchema: a
+  // legacy note longer than MAX_NOTES_LENGTH would fail validation and the
+  // whole contract would be dropped instead of having its notes truncated.
+  const raw = storage.getItem(CONTRACTS_KEY)
+  if (!raw) return
+
+  let entries: unknown
+  try {
+    entries = JSON.parse(raw)
+  } catch {
+    return
+  }
+  if (!Array.isArray(entries)) return
+
+  let changed = false
+  const migrated = entries.map((entry) => {
+    if (!entry || typeof entry !== 'object') return entry
+    const current = (entry as { notes?: unknown }).notes
+    const notes = normalizeNotes(current)
+    if (notes === current) return entry
+    changed = true
+    return { ...entry, notes }
+  })
+
+  if (changed) {
+    storage.setItem(CONTRACTS_KEY, JSON.stringify(migrated))
+  }
+}
+
 export function getContract(id: string): WatchedContract | undefined {
   return getContracts().find((c) => c.id === id)
 }
@@ -312,12 +379,17 @@ export function getContractByIdAndNetwork(
 
 export function saveContract(contract: WatchedContract): void {
   const contracts = getContracts().filter((c) => c.id !== contract.id)
-  const updated: WatchedContract = { ...contract, updated_at: Date.now() }
+  const updated: WatchedContract = {
+    ...contract,
+    notes: normalizeNotes(contract.notes),
+    updated_at: Date.now(),
+  }
   save(CONTRACTS_KEY, [...contracts, updated])
   notify(CONTRACTS_KEY)
 }
 
 export function deleteContract(id: string): void {
+  // Removes the contract's alerts too. DeleteContractModal shows the count first (#652).
   const contract = getContract(id)
   save(CONTRACTS_KEY, getContracts().filter((c) => c.id !== id))
   notify(CONTRACTS_KEY)
@@ -374,15 +446,6 @@ export function getAlerts(contractId: string): AlertPayload[] {
     (a) => a.contract_id === contractId
   )
 }
-are 
-function deterministicSuffix(contractId: string, sequence: number): string {
-  let h = sequence * 2654435761
-  for (let i = 0; i < contractId.length; i++) {
-    h = Math.imul(h ^ contractId.charCodeAt(i), 2246822519)
-  }
-  return (h >>> 0).toString(16).padStart(8, '0').repeat(2)
-}
-
 function deterministicSuffix(contractId: string, sequence: number): string {
   let h = sequence * 2654435761
   for (let i = 0; i < contractId.length; i++) {

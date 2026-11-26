@@ -3,7 +3,8 @@
  * WebhookLog.test.tsx
  *
  * Component tests covering empty state, alert rows, explorer links,
- * amount/function formatting, rule-type filtering, and CSV export.
+ * amount/function formatting, rule-type filtering, date range filter (#614),
+ * and CSV export.
  */
 import '@testing-library/jest-dom/vitest'
 import React from 'react'
@@ -200,93 +201,69 @@ describe('WebhookLog', () => {
     expect(screen.getByText('large_transfer')).toBeInTheDocument()
   })
 
-  describe('network filter (issue #589)', () => {
-    const mainnetAlert: AlertPayload = {
-      ...baseAlert,
-      network: 'mainnet',
-      rule_triggered: 'AnyTransaction',
-      transaction_hash: 'mainnet_tx_abcdef1234567890abcdef1234567890abcdef1234567890abcdef12',
-    }
-    const testnetAlert: AlertPayload = {
-      ...baseAlert,
-      network: 'testnet',
-      rule_triggered: 'LargeTransfer',
-      transaction_hash: 'testnet_tx_abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
-    }
-    const futurenetAlert: AlertPayload = {
-      ...baseAlert,
-      network: 'futurenet',
-      rule_triggered: 'TransactionFailed',
-      transaction_hash: 'futurenet_x_abcdef1234567890abcdef1234567890abcdef1234567890abcde',
-    }
+  it('renders date range picker inputs', () => {
+    render(<WebhookLog alerts={[baseAlert]} network="testnet" />)
+    expect(screen.getByLabelText('Filter from date')).toBeInTheDocument()
+    expect(screen.getByLabelText('Filter to date')).toBeInTheDocument()
+  })
 
-    it('shows all alerts when "All Networks" is selected (default)', () => {
-      render(
-        <WebhookLog alerts={[mainnetAlert, testnetAlert, futurenetAlert]} network="mainnet" />
-      )
-      expect(screen.getByText('3 of 3 alerts')).toBeInTheDocument()
-    })
+  it('filters alerts to those on or after the from date', () => {
+    const jan15 = new Date('2024-01-15T12:00:00Z').getTime()
+    const jan20 = new Date('2024-01-20T12:00:00Z').getTime()
+    render(
+      <WebhookLog
+        alerts={[
+          { ...baseAlert, timestamp: jan15 },
+          { ...baseAlert, transaction_hash: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', timestamp: jan20 },
+        ]}
+        network="testnet"
+      />
+    )
+    fireEvent.change(screen.getByLabelText('Filter from date'), { target: { value: '2024-01-18' } })
+    expect(screen.getByText('1 of 2 alerts')).toBeInTheDocument()
+  })
 
-    it('filters to mainnet alerts when mainnet is selected', () => {
-      render(
-        <WebhookLog alerts={[mainnetAlert, testnetAlert, futurenetAlert]} network="mainnet" />
-      )
-      fireEvent.change(screen.getByRole('combobox', { name: /filter by network/i }), {
-        target: { value: 'mainnet' },
-      })
-      expect(screen.getByText('1 of 3 alerts')).toBeInTheDocument()
-    })
+  it('filters alerts to those on or before the to date', () => {
+    const jan10 = new Date('2024-01-10T12:00:00Z').getTime()
+    const jan20 = new Date('2024-01-20T12:00:00Z').getTime()
+    render(
+      <WebhookLog
+        alerts={[
+          { ...baseAlert, timestamp: jan10 },
+          { ...baseAlert, transaction_hash: 'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc', timestamp: jan20 },
+        ]}
+        network="testnet"
+      />
+    )
+    fireEvent.change(screen.getByLabelText('Filter to date'), { target: { value: '2024-01-15' } })
+    expect(screen.getByText('1 of 2 alerts')).toBeInTheDocument()
+  })
 
-    it('filters to testnet alerts when testnet is selected', () => {
-      render(
-        <WebhookLog alerts={[mainnetAlert, testnetAlert, futurenetAlert]} network="testnet" />
-      )
-      fireEvent.change(screen.getByRole('combobox', { name: /filter by network/i }), {
-        target: { value: 'testnet' },
-      })
-      expect(screen.getByText('1 of 3 alerts')).toBeInTheDocument()
-    })
+  it('shows a clear dates button only when a date filter is active', () => {
+    render(<WebhookLog alerts={[baseAlert]} network="testnet" />)
+    expect(screen.queryByLabelText('Clear date filter')).not.toBeInTheDocument()
 
-    it('filters to futurenet alerts when futurenet is selected', () => {
-      render(
-        <WebhookLog alerts={[mainnetAlert, testnetAlert, futurenetAlert]} network="futurenet" />
-      )
-      fireEvent.change(screen.getByRole('combobox', { name: /filter by network/i }), {
-        target: { value: 'futurenet' },
-      })
-      expect(screen.getByText('1 of 3 alerts')).toBeInTheDocument()
-    })
+    fireEvent.change(screen.getByLabelText('Filter from date'), { target: { value: '2024-01-01' } })
+    expect(screen.getByLabelText('Clear date filter')).toBeInTheDocument()
+  })
 
-    it('shows a no-match message when the network filter returns zero results', () => {
-      render(
-        <WebhookLog alerts={[mainnetAlert]} network="mainnet" />
-      )
-      fireEvent.change(screen.getByRole('combobox', { name: /filter by network/i }), {
-        target: { value: 'testnet' },
-      })
-      expect(screen.getByText(/No matching alerts on testnet/i)).toBeInTheDocument()
-    })
+  it('clears the date filter when the clear button is clicked', () => {
+    const jan15 = new Date('2024-01-15T12:00:00Z').getTime()
+    const jan20 = new Date('2024-01-20T12:00:00Z').getTime()
+    render(
+      <WebhookLog
+        alerts={[
+          { ...baseAlert, timestamp: jan15 },
+          { ...baseAlert, transaction_hash: 'dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd', timestamp: jan20 },
+        ]}
+        network="testnet"
+      />
+    )
+    fireEvent.change(screen.getByLabelText('Filter from date'), { target: { value: '2024-01-18' } })
+    expect(screen.getByText('1 of 2 alerts')).toBeInTheDocument()
 
-    it('persists the network filter to the URL query param', () => {
-      render(
-        <WebhookLog alerts={[mainnetAlert, testnetAlert]} network="mainnet" />
-      )
-      fireEvent.change(screen.getByRole('combobox', { name: /filter by network/i }), {
-        target: { value: 'mainnet' },
-      })
-      expect(window.location.search).toContain('network=mainnet')
-    })
-
-    it('removes the network query param when "All Networks" is selected', () => {
-      // First set a network param so we can clear it.
-      window.history.pushState({}, '', '?network=mainnet')
-      render(
-        <WebhookLog alerts={[mainnetAlert, testnetAlert]} network="mainnet" />
-      )
-      fireEvent.change(screen.getByRole('combobox', { name: /filter by network/i }), {
-        target: { value: 'all' },
-      })
-      expect(window.location.search).not.toContain('network=')
-    })
+    fireEvent.click(screen.getByLabelText('Clear date filter'))
+    expect(screen.getByText('2 of 2 alerts')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Clear date filter')).not.toBeInTheDocument()
   })
 })

@@ -19,6 +19,7 @@ const WALLET_STORAGE_KEY = STORAGE_KEYS.FREIGHTER_PUBLIC_KEY
 
 export default function FreighterConnect({ onConnect, className = '' }: FreighterConnectProps) {
   const [publicKey, setPublicKey] = useState<string | null>(null)
+  const [networkPassphrase, setNetworkPassphrase] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [errorState, setErrorState] = useState<FreighterErrorState>(null)
@@ -46,7 +47,7 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
         }
       }
     } catch {
-      // Connection check failed
+      // silent — connection check on mount
     } finally {
       setIsInitializing(false)
     }
@@ -99,10 +100,13 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
 
   function disconnect() {
     setPublicKey(null)
+    setNetworkPassphrase(null)
     setError(null)
     setErrorState(null)
     localStorage.removeItem(WALLET_STORAGE_KEY)
   }
+
+  const networkWarning = getNetworkWarning(networkPassphrase)
 
   if (isInitializing) {
     return (
@@ -114,17 +118,22 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
 
   if (publicKey) {
     return (
-      <div className={`flex items-center gap-2 ${className}`}>
-        <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
-        <span className="text-sm text-zinc-300 font-mono">
-          {publicKey.slice(0, 4)}...{publicKey.slice(-4)}
-        </span>
-        <button
-          onClick={disconnect}
-          className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-        >
-          Disconnect
-        </button>
+      <div className={`flex flex-col gap-1 ${className}`}>
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
+          <span className="text-sm text-zinc-300 font-mono">
+            {publicKey.slice(0, 4)}…{publicKey.slice(-4)}
+          </span>
+          <button
+            onClick={disconnect}
+            className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+          >
+            Disconnect
+          </button>
+        </div>
+        {networkWarning && (
+          <p className="text-xs text-amber-400" role="alert">{networkWarning}</p>
+        )}
       </div>
     )
   }
@@ -149,10 +158,10 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
         )}
         Connect Freighter
       </button>
-      {error ? (
+      {error && (
         <p className="mt-2 text-xs text-red-400" role="alert">
           {error}
-          {errorState === 'not-installed' ? (
+          {errorState === 'not-installed' && (
             <>
               {' '}
               <a
@@ -164,9 +173,9 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
                 Install Freighter
               </a>
             </>
-          ) : null}
+          )}
         </p>
-      ) : null}
+      )}
     </div>
   )
 }

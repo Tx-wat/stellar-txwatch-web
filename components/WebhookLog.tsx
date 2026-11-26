@@ -9,6 +9,7 @@ import { formatDateTime as defaultFormatDateTime } from '@/lib/format'
 import { useTimezone } from './TimezoneProvider'
 import AlertRuleBadge from './AlertRuleBadge'
 import CopyButton from './CopyButton'
+import { useSortedLog } from '@/hooks/useSortedLog'
 
 /** Network values shown in the filter dropdown, plus the "all" sentinel. */
 const NETWORK_OPTIONS = ['all', 'mainnet', 'testnet', 'futurenet'] as const
@@ -39,22 +40,13 @@ const ruleTypes: AlertRuleType[] = [
 // CSV export always operates on the full filtered set, not just the visible window.
 function exportCSV(alerts: AlertPayload[]) {
   const rows = [
-    ['Time', 'Rule', 'Rule Name', 'Tx Hash', 'Function', 'Amount', 'Latency'],
+    ['Time', 'Rule', 'Tx Hash', 'Function', 'Amount'],
     ...alerts.map((a) => [
       new Date(a.timestamp).toLocaleString(),
       a.rule_triggered,
-      a.rule_name ?? '',
       a.transaction_hash,
       a.function_name ?? 'N/A',
       a.amount !== undefined ? `${a.amount} XLM` : 'N/A',
-      a.delivery_status ?? 'unknown',
-      a.delivery_retry_count !== undefined ? String(a.delivery_retry_count) : 'N/A',
-      a.delivery_last_attempt ? new Date(a.delivery_last_attempt).toLocaleString() : 'N/A',
-      a.delivery_ms !== undefined
-        ? a.delivery_ms < 1000
-          ? `${a.delivery_ms} ms`
-          : `${(a.delivery_ms / 1000).toFixed(2)} s`
-        : 'N/A',
     ]),
   ]
   const csv = rows.map((r) => r.map((v) => `"${v}"`).join(',')).join('\n')
@@ -82,6 +74,8 @@ export default function WebhookLog({
 }: WebhookLogProps) {
   const [selectedFilter, setSelectedFilter] = useState<AlertRuleType | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
 
   // ── Network filter ──────────────────────────────────────────────────────────
   // Initialise from the URL query param so the filter survives page loads and
@@ -115,6 +109,13 @@ export default function WebhookLog({
     // Fallback when rendered outside TimezoneProvider (e.g. in unit tests)
   }
 
+  const hasDateFilter = Boolean(dateFrom || dateTo)
+
+  function clearDateFilter() {
+    setDateFrom('')
+    setDateTo('')
+  }
+
   // Filtering operates on the full alerts array; only rendering is virtualised.
   const filteredAlerts = alerts.filter((a: AlertPayload) => {
     if (networkFilter !== 'all' && a.network !== networkFilter) return false
@@ -123,8 +124,21 @@ export default function WebhookLog({
       const q = searchQuery.trim().toLowerCase()
       if (!a.transaction_hash.toLowerCase().includes(q)) return false
     }
+    if (dateFrom) {
+      const fromTs = new Date(dateFrom).getTime()
+      if (a.timestamp < fromTs) return false
+    }
+    if (dateTo) {
+      // Include the entire "to" day by advancing to end-of-day
+      const toTs = new Date(dateTo).getTime() + 86_400_000 - 1
+      if (a.timestamp > toTs) return false
+    }
     return true
   })
+
+  // Sorting applies only to the standalone log; shared timelines keep their axis order (#651)
+  const { sortedEntries: sortedAlerts, sortField, sortDirection, setSortField, setSortDirection } =
+    useSortedLog(filteredAlerts, 'desc', 'timestamp')
 
   // When sharedTimestamps is provided, align rows to the shared timeline axis
   const timelineSlots: { timestamp: number; alert: AlertPayload | null }[] = sharedTimestamps
@@ -132,7 +146,18 @@ export default function WebhookLog({
         timestamp: ts,
         alert: filteredAlerts.find((a: AlertPayload) => a.timestamp === ts) ?? null,
       }))
-    : filteredAlerts.map((a: AlertPayload) => ({ timestamp: a.timestamp, alert: a }))
+    : sortedAlerts.map((a: AlertPayload) => ({ timestamp: a.timestamp, alert: a }))
+
+  // Options map to a field and direction: failed first is ascending by delivery status (#651)
+  const sortValue = sortField === 'delivery_status'
+    ? (sortDirection === 'asc' ? 'failed-first' : 'delivered-first')
+    : (sortDirection === 'desc' ? 'newest' : 'oldest')
+  const handleSortChange = (value: string) => {
+    if (value === 'newest') { setSortField('timestamp'); setSortDirection('desc') }
+    if (value === 'oldest') { setSortField('timestamp'); setSortDirection('asc') }
+    if (value === 'failed-first') { setSortField('delivery_status'); setSortDirection('asc') }
+    if (value === 'delivered-first') { setSortField('delivery_status'); setSortDirection('desc') }
+  }
 
   const internalRef = useRef<HTMLDivElement>(null)
   const parentRef = scrollContainerRef ?? internalRef
@@ -238,15 +263,33 @@ export default function WebhookLog({
         ))}
       </div>
 
-      {/* Search by transaction hash */}
-      <div className="flex justify-end mb-2">
+      {/* Date range filter */}
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="text-xs text-zinc-500 font-medium">Date range:</label>
         <input
-          type="text"
-          placeholder="Search transaction hash…"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="px-3 py-1.5 rounded-lg text-xs bg-zinc-950 border border-zinc-800 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64"
+          type="date"
+          aria-label="Filter from date"
+          value={dateFrom}
+          onChange={(e) => setDateFrom(e.target.value)}
+          className="px-2 py-1 rounded-lg text-xs bg-zinc-900 border border-zinc-700 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
+        <span className="text-xs text-zinc-600">to</span>
+        <input
+          type="date"
+          aria-label="Filter to date"
+          value={dateTo}
+          onChange={(e) => setDateTo(e.target.value)}
+          className="px-2 py-1 rounded-lg text-xs bg-zinc-900 border border-zinc-700 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+        {hasDateFilter && (
+          <button
+            onClick={clearDateFilter}
+            aria-label="Clear date filter"
+            className="px-2 py-1 rounded-lg text-xs border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-colors"
+          >
+            Clear dates
+          </button>
+        )}
       </div>
 
       {/* Export and Results */}
@@ -255,6 +298,17 @@ export default function WebhookLog({
           <span className="text-xs text-zinc-500">
             {filteredAlerts.length} of {alerts.length} alerts
           </span>
+          <select
+            aria-label="Sort log"
+            value={sortValue}
+            onChange={(e) => handleSortChange(e.target.value)}
+            className="text-xs bg-zinc-950 border border-zinc-800 rounded-md px-2 py-1 text-zinc-300"
+          >
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="failed-first">Failed first</option>
+            <option value="delivered-first">Delivered first</option>
+          </select>
           {/* exportCSV receives the full filtered set, not the virtual window */}
           <button
             onClick={() => exportCSV(filteredAlerts)}
@@ -266,7 +320,7 @@ export default function WebhookLog({
 
         {filteredAlerts.length === 0 && !sharedTimestamps ? (
           <p className="text-sm text-zinc-500 py-4">
-          No matching alerts{searchQuery ? ` for "${searchQuery}"` : networkFilter !== 'all' ? ` on ${networkFilter}` : ''}.
+            No alerts match the selected filter{searchQuery ? ` for "${searchQuery}"` : ''}.
           </p>
         ) : (
           /*
@@ -279,7 +333,7 @@ export default function WebhookLog({
             {/* Header */}
             <div
               role="row"
-              className="grid border-b border-zinc-800 pb-3 mb-0"
+              className="grid sticky top-0 z-10 bg-zinc-900 border-b border-zinc-800 pb-3 mb-0"
               style={{ gridTemplateColumns: '160px 180px 1fr 140px 120px 120px' }}
             >
               {['Time', 'Rule', 'Tx Hash', 'Function', 'Amount', 'Latency'].map((h) => (
