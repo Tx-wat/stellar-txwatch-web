@@ -48,6 +48,15 @@ export function formatRuleSummary(rule: AlertRule): string {
       return rule.function_name || 'function'
     case 'AdminFunctionCalled':
       return rule.function_names?.join(', ') || 'admin functions'
+    case 'SourceAccountMatch':
+      return rule.source_account ? `source: ${rule.source_account.slice(0, 8)}…` : 'source account'
+    case 'TimeWindow': {
+      const parts: string[] = []
+      if (rule.hours_utc?.length) parts.push(`hours: ${rule.hours_utc.join(',')}`)
+      if (rule.weekdays?.length) parts.push(`days: ${rule.weekdays.join(',')}`)
+      if (rule.wrap_rule) parts.push(`wraps: ${rule.wrap_rule}`)
+      return parts.join(' · ') || 'time window'
+    }
     default:
       return ''
   }

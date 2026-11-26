@@ -3,11 +3,15 @@ import { z } from 'zod'
 export const NetworkSchema = z.enum(['mainnet', 'testnet', 'futurenet'])
 
 export const AlertRuleTypeSchema = z.enum([
-  'LargeTransfer',
-  'AdminFunctionCalled',
   'AnyTransaction',
+  'LargeTransfer',
   'FunctionCalled',
+  'AdminFunctionCalled',
   'TransactionFailed',
+  'SorobanInvocation',
+  'InsufficientFunds',
+  'SourceAccountMatch',
+  'TimeWindow',
 ])
 
 export const AlertRuleSchema = z.object({
@@ -18,6 +22,12 @@ export const AlertRuleSchema = z.object({
   threshold: z.number().optional(),
   function_names: z.array(z.string()).optional(),
   function_name: z.string().optional(),
+  // SourceAccountMatch
+  source_account: z.string().optional(),
+  // TimeWindow
+  hours_utc: z.array(z.number()).optional(),
+  weekdays: z.array(z.number()).optional(),
+  wrap_rule: z.string().optional(),
 })
 
 export const WatchedContractSchema = z.object({

@@ -22,15 +22,35 @@ const RULE_TYPES: AlertRuleType[] = [
   'FunctionCalled',
   'AdminFunctionCalled',
   'TransactionFailed',
+  'SorobanInvocation',
+  'InsufficientFunds',
+  'SourceAccountMatch',
+  'TimeWindow',
 ]
 
 const RULE_EXAMPLES: Record<AlertRuleType, string> = {
-  'AnyTransaction': 'Alert on every transaction',
-  'LargeTransfer': 'Alert when transfer amount exceeds threshold',
-  'FunctionCalled': 'Alert when a specific function is called',
-  'AdminFunctionCalled': 'Alert when admin functions are called',
-  'TransactionFailed': 'Alert on failed transactions',
+  AnyTransaction: 'Alert on every transaction',
+  LargeTransfer: 'Alert when transfer amount exceeds threshold',
+  FunctionCalled: 'Alert when a specific function is called',
+  AdminFunctionCalled: 'Alert when admin functions are called',
+  TransactionFailed: 'Alert on failed transactions',
+  SorobanInvocation: 'Alert on any Soroban contract invocation',
+  InsufficientFunds: 'Alert when a transaction fails due to insufficient funds',
+  SourceAccountMatch: 'Alert when a transaction originates from a specific source account',
+  TimeWindow: 'Alert only when transactions occur within specified UTC hours or weekdays',
 }
+
+/** Wrappable rule types for the TimeWindow wrap_rule selector. */
+const WRAP_RULE_OPTIONS: AlertRuleType[] = [
+  'AnyTransaction',
+  'LargeTransfer',
+  'FunctionCalled',
+  'AdminFunctionCalled',
+  'TransactionFailed',
+  'SorobanInvocation',
+  'InsufficientFunds',
+  'SourceAccountMatch',
+]
 
 const TEMPLATE_STORAGE_KEY = STORAGE_KEYS.RULE_TEMPLATES
 const ALERT_RULES_DOC_URL = 'https://docs.txwatch.dev/alert-rules'
@@ -43,12 +63,8 @@ interface DryRunResult {
   matchedHashes: string[]
 }
 
-interface RuleTemplate {
-  id: string
-  name: string
-  rules: AlertRule[]
-  created_at: number
-}
+const G_ADDRESS_REGEX = /^G[A-Z2-7]{55}$/
+const SAC_CONTRACT_ID_REGEX = /^C[A-Z2-7]{55}$/
 
 function loadTemplates(): RuleTemplate[] {
   if (typeof window === 'undefined') return []
@@ -173,22 +189,14 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
       ? `Function not found in contract spec — rule may never fire: ${unknownNames.join(', ')}`
       : null
 
-  // Dry-run state
-  const [dryRunStatus, setDryRunStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
-  const [dryRunResult, setDryRunResult] = useState<DryRunResult | null>(null)
-  const [dryRunError, setDryRunError] = useState<string | null>(null)
-
   function updateDraft(patch: Partial<AlertRule>) {
     setDraft((prev) => ({ ...prev, ...patch }))
     setError(null)
     setWarning(null)
-    // Reset dry-run results when rule changes
-    setDryRunResult(null)
-    setDryRunStatus('idle')
   }
 
   function handleTypeChange(type: AlertRuleType) {
-    setDraft((prev) => ({ type, name: prev.name }))
+    setDraft({ type, name: draft.name })
     setError(null)
     setWarning(null)
     setTokenDecimals(null)
@@ -212,7 +220,6 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
     }
     setDecimalsLoading(true)
     const decimals = await fetchTokenDecimals(trimmed)
-    // Ignore stale responses if the asset changed while fetching.
     setDraft((prev) => {
       if (prev.asset !== trimmed) return prev
       setDecimalsLoading(false)
@@ -243,7 +250,17 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
         const existingNames = (rule.function_names ?? []).sort().join(',')
         return newNames === existingNames
       }
-      return true // AnyTransaction and TransactionFailed
+      if (newRule.type === 'SourceAccountMatch') {
+        return newRule.source_account === rule.source_account
+      }
+      if (newRule.type === 'TimeWindow') {
+        return (
+          (newRule.hours_utc ?? []).sort().join(',') === (rule.hours_utc ?? []).sort().join(',') &&
+          (newRule.weekdays ?? []).sort().join(',') === (rule.weekdays ?? []).sort().join(',') &&
+          newRule.wrap_rule === rule.wrap_rule
+        )
+      }
+      return true // AnyTransaction, TransactionFailed, SorobanInvocation, InsufficientFunds
     })
   }
 
@@ -275,7 +292,11 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
           return false
         }
       } else {
-        if (draft.threshold_xlm === undefined || draft.threshold_xlm === null || isNaN(draft.threshold_xlm)) {
+        if (
+          draft.threshold_xlm === undefined ||
+          draft.threshold_xlm === null ||
+          isNaN(draft.threshold_xlm)
+        ) {
           setError('Enter a valid XLM threshold')
           return false
         }
@@ -291,13 +312,31 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
         return false
       }
       if (!isValidFunctionName(draft.function_name.trim())) {
-        setError('Function name must start with a letter or underscore, contain only alphanumeric characters and underscores')
+        setError(
+          'Function name must start with a letter or underscore, contain only alphanumeric characters and underscores'
+        )
         return false
       }
     }
     if (draft.type === 'AdminFunctionCalled') {
       if (!draft.function_names?.length) {
         setError('Enter at least one function name')
+        return false
+      }
+    }
+    if (draft.type === 'SourceAccountMatch') {
+      if (!draft.source_account?.trim()) {
+        setError('Enter a source account address')
+        return false
+      }
+      if (!G_ADDRESS_REGEX.test(draft.source_account.trim())) {
+        setError('Enter a valid Stellar G-address (starts with G, 56 characters)')
+        return false
+      }
+    }
+    if (draft.type === 'TimeWindow') {
+      if (!draft.hours_utc?.length && !draft.weekdays?.length) {
+        setError('Enter at least one UTC hour or weekday')
         return false
       }
     }
@@ -328,8 +367,9 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
     setDraft(emptyRule())
     setError(null)
     setWarning(null)
-    setDryRunResult(null)
-    setDryRunStatus('idle')
+    setTokenDecimals(null)
+    setDecimalsError(null)
+    setDecimalsLoading(false)
   }
 
   // Dry-run evaluation against recent transactions is not implemented yet;
@@ -416,32 +456,31 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
       setError('No rules to save as template')
       return
     }
-    const templates = loadTemplates()
+    const existing = loadTemplates()
     const newTemplate: RuleTemplate = {
       id: `template_${Date.now()}`,
       name: templateName.trim(),
       rules: [...rules],
       created_at: Date.now(),
     }
-    saveTemplates([...templates, newTemplate])
-    setTemplates([...templates, newTemplate])
+    saveTemplates([...existing, newTemplate])
+    setTemplates([...existing, newTemplate])
     setTemplateName('')
     setShowTemplateModal(false)
   }
 
   function loadTemplate(templateId: string) {
-    const template = templates.find(t => t.id === templateId)
+    const template = templates.find((t) => t.id === templateId)
     if (template) {
       onChange([...template.rules])
       onRulesChanged?.([...template.rules], 'add')
-      setSelectedTemplateId(null)
     }
   }
 
   function deleteTemplate(templateId: string) {
-    const templates = loadTemplates().filter(t => t.id !== templateId)
-    saveTemplates(templates)
-    setTemplates(templates)
+    const updated = loadTemplates().filter((t) => t.id !== templateId)
+    saveTemplates(updated)
+    setTemplates(updated)
   }
 
   function openSaveTemplateModal() {
@@ -493,6 +532,7 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
         {importMessage && <p role="status" className="text-xs text-zinc-400">{importMessage}</p>}
       </div>
       <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4 space-y-3">
+        {/* Rule Type */}
         <div>
           <label className="block text-xs font-medium text-zinc-400 mb-1">Rule Type</label>
           <select
@@ -501,22 +541,15 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
             className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-indigo-500"
           >
             {RULE_TYPES.map((t) => (
-              <option key={t} value={t}>{t}</option>
+              <option key={t} value={t}>
+                {t}
+              </option>
             ))}
           </select>
-          <p className="text-xs text-zinc-500 mt-1">
-            {RULE_EXAMPLES[draft.type]}{' '}
-            <a
-              href={`${ALERT_RULES_DOC_URL}#${draft.type.toLowerCase()}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-indigo-400 hover:text-indigo-300 underline"
-            >
-              Learn more
-            </a>
-          </p>
+          <p className="text-xs text-zinc-500 mt-1">{RULE_EXAMPLES[draft.type]}</p>
         </div>
 
+        {/* LargeTransfer inputs */}
         {draft.type === 'LargeTransfer' && (
           <div className="space-y-3">
             <div>
@@ -530,35 +563,47 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
                 onChange={(e) => handleAssetChange(e.target.value)}
                 className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm font-mono text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
               />
-              {decimalsLoading && <p className="text-xs text-zinc-500 mt-1">Fetching token decimals…</p>}
-              {!decimalsLoading && decimalsError && <p className="text-xs text-red-400 mt-1">{decimalsError}</p>}
+              {decimalsLoading && (
+                <p className="text-xs text-zinc-500 mt-1">Fetching token decimals…</p>
+              )}
+              {!decimalsLoading && decimalsError && (
+                <p className="text-xs text-red-400 mt-1">{decimalsError}</p>
+              )}
               {!decimalsLoading && !decimalsError && tokenDecimals !== null && (
                 <p className="text-xs text-zinc-500 mt-1">Token decimals: {tokenDecimals}</p>
               )}
             </div>
             {draft.asset ? (
               <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1">Threshold (token units)</label>
+                <label className="block text-xs font-medium text-zinc-400 mb-1">
+                  Threshold (token units)
+                </label>
                 <input
                   type="number"
                   min="0"
                   step="any"
                   placeholder="e.g. 1000"
                   value={draft.threshold ?? ''}
-                  onChange={(e) => updateDraft({ threshold: parseFloat(e.target.value) || undefined })}
+                  onChange={(e) =>
+                    updateDraft({ threshold: parseFloat(e.target.value) || undefined })
+                  }
                   className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
                 />
               </div>
             ) : (
               <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1">Threshold (XLM)</label>
+                <label className="block text-xs font-medium text-zinc-400 mb-1">
+                  Threshold (XLM)
+                </label>
                 <input
                   type="number"
                   min="0"
                   step="any"
                   placeholder="e.g. 10000"
                   value={draft.threshold_xlm ?? ''}
-                  onChange={(e) => updateDraft({ threshold_xlm: parseFloat(e.target.value) || undefined })}
+                  onChange={(e) =>
+                    updateDraft({ threshold_xlm: parseFloat(e.target.value) || undefined })
+                  }
                   className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
                 />
               </div>
@@ -566,6 +611,7 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
           </div>
         )}
 
+        {/* FunctionCalled input */}
         {hasSpec && (
           <datalist id={datalistId}>
             {specFunctions.map((name) => (
@@ -592,6 +638,7 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
           </div>
         )}
 
+        {/* AdminFunctionCalled input */}
         {draft.type === 'AdminFunctionCalled' && (
           <div>
             <label className="block text-xs font-medium text-zinc-400 mb-1">
@@ -615,7 +662,86 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
           </div>
         )}
 
-        {/* Optional rule name — shown in rule list, Active Rules, and WebhookLog */}
+        {/* SourceAccountMatch input */}
+        {draft.type === 'SourceAccountMatch' && (
+          <div>
+            <label className="block text-xs font-medium text-zinc-400 mb-1">
+              Source Account <span className="text-zinc-600">(Stellar G-address)</span>
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. GABC...XYZ"
+              value={draft.source_account ?? ''}
+              onChange={(e) => updateDraft({ source_account: e.target.value.trim() || undefined })}
+              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm font-mono text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
+            />
+            <p className="text-xs text-zinc-500 mt-1">
+              Triggers when a transaction's source account matches this address.
+            </p>
+          </div>
+        )}
+
+        {/* TimeWindow inputs */}
+        {draft.type === 'TimeWindow' && (
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-zinc-400 mb-1">
+                UTC Hours{' '}
+                <span className="text-zinc-600">(comma separated, 0–23, optional)</span>
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. 9, 10, 11, 14"
+                value={draft.hours_utc?.join(', ') ?? ''}
+                onChange={(e) =>
+                  updateDraft({ hours_utc: parseIntList(e.target.value) })
+                }
+                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-400 mb-1">
+                Weekdays{' '}
+                <span className="text-zinc-600">
+                  (comma separated, 0=Mon … 6=Sun, optional)
+                </span>
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. 0, 1, 2, 3, 4"
+                value={draft.weekdays?.join(', ') ?? ''}
+                onChange={(e) =>
+                  updateDraft({ weekdays: parseIntList(e.target.value) })
+                }
+                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-400 mb-1">
+                Wrap Rule <span className="text-zinc-600">(optional — apply window to this rule type)</span>
+              </label>
+              <select
+                value={draft.wrap_rule ?? ''}
+                onChange={(e) =>
+                  updateDraft({ wrap_rule: e.target.value || undefined })
+                }
+                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-indigo-500"
+              >
+                <option value="">— none —</option>
+                {WRAP_RULE_OPTIONS.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-zinc-500 mt-1">
+                When set, the time window constrains this inner rule type instead of all transactions.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Optional rule name */}
         <div>
           <label className="block text-xs font-medium text-zinc-400 mb-1">
             Rule Name <span className="text-zinc-600">(optional, max 60 chars)</span>
@@ -644,7 +770,12 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white transition-colors"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 4v16m8-8H4"
+              />
             </svg>
             {editingIndex !== null ? 'Update Rule' : 'Add Rule'}
           </button>
@@ -658,45 +789,26 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
               Cancel
             </button>
           )}
+
           <button
             type="button"
             onClick={openSaveTemplateModal}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-sm font-medium text-white transition-colors"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
             </svg>
             Save as Template
           </button>
         </div>
-
-        {/* Dry-run results */}
-        {dryRunStatus === 'done' && dryRunResult && (
-          <div className="mt-3 rounded-lg bg-zinc-900 border border-zinc-700 p-3 space-y-2">
-            <p className="text-xs font-semibold text-zinc-300">
-              Dry-run results:{' '}
-              <span className={dryRunResult.matched > 0 ? 'text-amber-400' : 'text-emerald-400'}>
-                {dryRunResult.matched} of {dryRunResult.total} recent transactions
-              </span>{' '}
-              would have matched
-            </p>
-            {dryRunResult.matchedHashes.length > 0 && (
-              <ul className="space-y-1 max-h-36 overflow-y-auto">
-                {dryRunResult.matchedHashes.map((hash) => (
-                  <li key={hash} className="text-xs font-mono text-zinc-400 truncate">
-                    {hash.slice(0, 16)}…{hash.slice(-8)}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-
-        {dryRunStatus === 'error' && dryRunError && (
-          <p className="text-xs text-red-400 mt-2">Dry-run failed: {dryRunError}</p>
-        )}
       </div>
 
+      {/* Rule list */}
       {rules.length > 0 && (
         <ul className="space-y-2" aria-label="Alert rules — drag to reorder">
           {rules.map((rule, i) => (
@@ -717,7 +829,9 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
                   <span className="text-xs font-medium text-zinc-200">{rule.name}</span>
                 )}
                 {formatRuleSummary(rule) && (
-                  <span className="text-xs font-mono text-zinc-400">{formatRuleSummary(rule)}</span>
+                  <span className="text-xs font-mono text-zinc-400">
+                    {formatRuleSummary(rule)}
+                  </span>
                 )}
               </div>
               <div className="flex gap-1 ml-2">
@@ -728,7 +842,12 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
                   aria-label="Edit rule"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                    />
                   </svg>
                 </button>
                 <button
@@ -738,7 +857,12 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
                   aria-label="Remove rule"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
                   </svg>
                 </button>
               </div>
@@ -747,29 +871,31 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
         </ul>
       )}
 
-      {/* Template Modal */}
+      {/* Save Template Modal */}
       {showTemplateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
           <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 max-w-lg w-full space-y-4">
             <h3 className="text-lg font-semibold text-zinc-100">Save Rule Template</h3>
             <p className="text-sm text-zinc-400">
-              Save the current {rules.length} rule{rules.length !== 1 ? 's' : ''} as a reusable template.
+              Save the current {rules.length} rule{rules.length !== 1 ? 's' : ''} as a reusable
+              template.
             </p>
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="template-name" className="block text-sm font-medium text-zinc-300 mb-2">
-                  Template Name
-                </label>
-                <input
-                  id="template-name"
-                  type="text"
-                  value={templateName}
-                  onChange={(e) => setTemplateName(e.target.value)}
-                  placeholder="e.g. High Value Transfers, Admin Functions"
-                  maxLength={50}
-                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                />
-              </div>
+            <div>
+              <label
+                htmlFor="template-name"
+                className="block text-sm font-medium text-zinc-300 mb-2"
+              >
+                Template Name
+              </label>
+              <input
+                id="template-name"
+                type="text"
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+                placeholder="e.g. High Value Transfers, Admin Functions"
+                maxLength={50}
+                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              />
             </div>
             <div className="flex gap-3 pt-2">
               <button
@@ -789,18 +915,12 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
         </div>
       )}
 
-      {/* Load Template Modal */}
+      {/* Load Templates */}
       {templates.length > 0 && (
         <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h4 className="text-sm font-medium text-zinc-300">Rule Templates ({templates.length})</h4>
-            <button
-              onClick={() => setSelectedTemplateId(templates[0]?.id || null)}
-              className="text-xs text-indigo-400 hover:text-indigo-300"
-            >
-              View All
-            </button>
-          </div>
+          <h4 className="text-sm font-medium text-zinc-300">
+            Rule Templates ({templates.length})
+          </h4>
           <div className="flex flex-wrap gap-2">
             {templates.slice(0, 3).map((template) => (
               <button
@@ -809,14 +929,24 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
                 className="flex items-center gap-2 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-300 hover:bg-zinc-700 hover:border-zinc-600 transition-colors"
               >
                 <span className="font-medium text-zinc-100">{template.name}</span>
-                <span className="text-xs text-zinc-500">{template.rules.length} rule{template.rules.length !== 1 ? 's' : ''}</span>
+                <span className="text-xs text-zinc-500">
+                  {template.rules.length} rule{template.rules.length !== 1 ? 's' : ''}
+                </span>
                 <button
-                  onClick={(e) => { e.stopPropagation(); deleteTemplate(template.id) }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    deleteTemplate(template.id)
+                  }}
                   className="text-zinc-600 hover:text-red-400 ml-1"
                   aria-label="Delete template"
                 >
                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
                   </svg>
                 </button>
               </button>

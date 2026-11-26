@@ -18,10 +18,14 @@
 # production
 /build
 
-# misc
+# editor & OS
 .DS_Store
 Thumbs.db
 *.pem
+.idea/
+.vscode/
+*.swp
+*.swo
 
 # debug
 npm-debug.log*
