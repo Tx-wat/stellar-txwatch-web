@@ -35,8 +35,11 @@ const descriptions: Record<AlertRuleType, string> = {
   TransactionFailed: 'Alert when a transaction fails',
 }
 
-export default function AlertRuleBadge({ type, asset, name }: AlertRuleBadgeProps) {
+let tooltipIdCounter = 0
+
+export default function AlertRuleBadge({ type, asset }: AlertRuleBadgeProps) {
   const [showTooltip, setShowTooltip] = useState(false)
+  const [tooltipId] = useState(() => `alert-rule-tooltip-${++tooltipIdCounter}`)
 
   const baseDescription =
     type === 'LargeTransfer' && asset
@@ -47,14 +50,23 @@ export default function AlertRuleBadge({ type, asset, name }: AlertRuleBadgeProp
   return (
     <div className="relative inline-block">
       <span
-        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border cursor-help ${styles[type]}`}
+        tabIndex={0}
+        role="img"
+        aria-describedby={tooltipId}
+        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border cursor-help focus:outline-none focus:ring-2 focus:ring-indigo-500/40 ${styles[type]}`}
         onMouseEnter={() => setShowTooltip(true)}
         onMouseLeave={() => setShowTooltip(false)}
+        onFocus={() => setShowTooltip(true)}
+        onBlur={() => setShowTooltip(false)}
       >
         {labels[type]}
       </span>
       {showTooltip && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200 whitespace-nowrap z-10 pointer-events-none">
+        <div
+          id={tooltipId}
+          role="tooltip"
+          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200 whitespace-nowrap z-10 pointer-events-none"
+        >
           {description}
         </div>
       )}

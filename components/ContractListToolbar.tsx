@@ -13,6 +13,7 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: 'oldest', label: 'Oldest first' },
   { value: 'label-asc', label: 'Label A–Z' },
   { value: 'label-desc', label: 'Label Z–A' },
+  { value: 'rule-count-desc', label: 'Rule Count' },
 ]
 
 interface ContractListToolbarProps {
@@ -27,6 +28,8 @@ interface ContractListToolbarProps {
   onViewModeChange: (viewMode: ViewMode) => void
   hasAnyContracts: boolean
   resultCount: number
+  allVisibleSelected: boolean
+  onToggleSelectAll: () => void
 }
 
 export default function ContractListToolbar({
@@ -41,9 +44,23 @@ export default function ContractListToolbar({
   onViewModeChange,
   hasAnyContracts,
   resultCount,
+  allVisibleSelected,
+  onToggleSelectAll,
 }: ContractListToolbarProps) {
   return (
     <>
+      {/* Select all visible contracts (#658) */}
+      <label className="inline-flex items-center gap-2 text-sm text-zinc-300 w-fit">
+        <input
+          type="checkbox"
+          checked={allVisibleSelected}
+          onChange={onToggleSelectAll}
+          disabled={resultCount === 0}
+          className="h-4 w-4 accent-indigo-500"
+        />
+        Select all
+      </label>
+
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-zinc-100">Contracts</h1>

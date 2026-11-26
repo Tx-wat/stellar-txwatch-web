@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { WatchedContract, Network } from '@/types'
 import { getContracts, deleteContract, saveContract } from '@/lib/storage'
@@ -150,7 +150,57 @@ function importContractsFromCsv(text: string): CsvImportResult {
   return { imported, skipped, errors }
 }
 
+const CONTRACT_CARD_SELECTOR = '[data-contract-card="true"]'
+
+export function handleContractGridKeyDown(
+  event: React.KeyboardEvent<HTMLDivElement>,
+  router: ReturnType<typeof useRouter>,
+  toggleSelected: (id: string) => void
+) {
+  const target = event.target as HTMLElement
+  const card = target.closest(CONTRACT_CARD_SELECTOR) as HTMLElement | null
+  if (!card) return
+
+  const cards = Array.from(
+    event.currentTarget.querySelectorAll<HTMLElement>(CONTRACT_CARD_SELECTOR)
+  )
+  const index = cards.indexOf(card)
+  if (index === -1) return
+
+  switch (event.key) {
+    case 'ArrowRight':
+    case 'ArrowDown': {
+      event.preventDefault()
+      const next = cards[index + 1]
+      next?.focus()
+      break
+    }
+    case 'ArrowLeft':
+    case 'ArrowUp': {
+      event.preventDefault()
+      const prev = cards[index - 1]
+      prev?.focus()
+      break
+    }
+    case 'Enter': {
+      event.preventDefault()
+      const id = card.dataset.contractId
+      if (id) router.push(`/contracts/${id}`)
+      break
+    }
+    case ' ': {
+      event.preventDefault()
+      const id = card.dataset.contractId
+      if (id) toggleSelected(id)
+      break
+    }
+    default:
+      break
+  }
+}
+
 export default function ContractsPage() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const [allContracts, setAllContracts] = useState<WatchedContract[]>([])
   const [mounted, setMounted] = useState(false)
@@ -235,7 +285,14 @@ export default function ContractsPage() {
   const renderCard = (contract: WatchedContract) => {
     const selected = list.selectedIds.includes(contract.id)
     return (
-      <div key={contract.id} className="relative">
+      <div
+        key={contract.id}
+        className="relative focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 rounded-xl"
+        data-contract-card="true"
+        data-contract-id={contract.id}
+        tabIndex={0}
+        aria-label={`${contract.label} contract card. Use arrow keys to navigate, Enter to open, Space to select.`}
+      >
         <ContractCard
           contract={contract}
           lastAlertTime={lastAlertTimes[contract.contract_id]}
@@ -266,6 +323,8 @@ export default function ContractsPage() {
         onViewModeChange={list.setViewMode}
         hasAnyContracts={hasAnyContracts}
         resultCount={list.filtered.length}
+        allVisibleSelected={list.allVisibleSelected}
+        onToggleSelectAll={list.toggleSelectAllVisible}
       />
 
       <div className="flex justify-end">
@@ -363,7 +422,10 @@ export default function ContractsPage() {
                   {label}
                   <span className="text-sm font-normal text-zinc-500">({networkContracts.length})</span>
                 </h2>
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div
+                  className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4"
+                  onKeyDown={(e) => handleContractGridKeyDown(e, router, list.toggleSelected)}
+                >
                   {networkContracts.map(renderCard)}
                 </div>
               </section>
@@ -395,7 +457,11 @@ export default function ContractsPage() {
                   </button>
                 </h2>
                 {!collapsed && (
-                  <div id={`group-section-${group.key}`} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div
+                    id={`group-section-${group.key}`}
+                    className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4"
+                    onKeyDown={(e) => handleContractGridKeyDown(e, router, list.toggleSelected)}
+                  >
                     {group.contracts.map(renderCard)}
                   </div>
                 )}
@@ -405,7 +471,10 @@ export default function ContractsPage() {
         </div>
       ) : (
         <>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div
+            className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4"
+            onKeyDown={(e) => handleContractGridKeyDown(e, router, list.toggleSelected)}
+          >
             {list.paginated.map(renderCard)}
           </div>
 

@@ -3,6 +3,11 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
 import { NetworkEditField } from '../components/NetworkEditField';
 
+vi.mock('@/lib/api', () => ({
+  contractExistsOnNetwork: vi.fn(),
+}));
+import { contractExistsOnNetwork } from '@/lib/api';
+
 const noop = vi.fn();
 
 describe('NetworkEditField', () => {
@@ -50,6 +55,27 @@ describe('NetworkEditField', () => {
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'testnet' } });
     fireEvent.click(screen.getByRole('button', { name: /Confirm switch to testnet/ }));
     await waitFor(() => expect(noop).toHaveBeenCalledWith('testnet'));
+  });
+
+  it('validates contract exists on new network before switching (issue #627)', async () => {
+    (contractExistsOnNetwork as ReturnType<typeof vi.fn>).mockResolvedValue(true);
+    render(<NetworkEditField currentNetwork="mainnet" onNetworkChange={noop} contractId="CABC123" />);
+    fireEvent.click(screen.getByRole('button', { name: /Edit network/ }));
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'testnet' } });
+    fireEvent.click(screen.getByRole('button', { name: /Confirm switch to testnet/ }));
+    await waitFor(() => expect(noop).toHaveBeenCalledWith('testnet'));
+    expect(contractExistsOnNetwork).toHaveBeenCalledWith('CABC123', 'testnet');
+  });
+
+  it('shows a warning and does not switch when contract is not found on new network', async () => {
+    (contractExistsOnNetwork as ReturnType<typeof vi.fn>).mockResolvedValue(false);
+    render(<NetworkEditField currentNetwork="mainnet" onNetworkChange={noop} contractId="CABC123" />);
+    fireEvent.click(screen.getByRole('button', { name: /Edit network/ }));
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'testnet' } });
+    fireEvent.click(screen.getByRole('button', { name: /Confirm switch to testnet/ }));
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(screen.getByText(/Contract not found on testnet/)).toBeInTheDocument();
+    expect(noop).not.toHaveBeenCalled();
   });
 
   it('does not show Edit button when disabled', () => {

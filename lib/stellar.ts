@@ -9,14 +9,8 @@ const DEFAULT_HORIZON_URLS: Record<Network, string> = {
   futurenet: 'https://horizon-futurenet.stellar.org',
 }
 
-// Exported, and layered with the NEXT_PUBLIC_HORIZON_URL override the same
-// way SOROBAN_RPC_URLS layers its override over defaults below. All callers
-// (explorerTxUrl/explorerContractUrl here, and lib/api.ts) import this name.
-export const HORIZON_URLS: Record<Network, string> = {
-  mainnet: process.env.NEXT_PUBLIC_HORIZON_URL || DEFAULT_HORIZON_URLS.mainnet,
-  testnet: process.env.NEXT_PUBLIC_HORIZON_URL || DEFAULT_HORIZON_URLS.testnet,
-  futurenet: process.env.NEXT_PUBLIC_HORIZON_URL || DEFAULT_HORIZON_URLS.futurenet,
-}
+// Used by explorerTxUrl and explorerContractUrl; was referenced but never defined (#659).
+export const HORIZON_URLS: Record<Network, string> = DEFAULT_HORIZON_URLS
 
 const mainnetRpcUrl =
   process.env.NEXT_PUBLIC_SOROBAN_RPC_URL_MAINNET ||
