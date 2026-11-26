@@ -33,7 +33,9 @@ function Harness({ initial = [], onChange, contractId }: { initial?: AlertRule[]
 }
 
 function selectType(type: AlertRuleType) {
-  fireEvent.change(screen.getByRole('combobox'), { target: { value: type } })
+  fireEvent.change(screen.getByRole('combobox', { name: 'Rule type' }), {
+    target: { value: type },
+  })
 }
 
 describe('RuleBuilder function autocomplete (issue #626)', () => {
@@ -79,7 +81,7 @@ describe('RuleBuilder', () => {
 
   it('renders the rule type dropdown with AnyTransaction as default', () => {
     render(<Harness />)
-    const select = screen.getByRole('combobox') as HTMLSelectElement
+    const select = screen.getByRole('combobox', { name: 'Rule type' }) as HTMLSelectElement
     expect(select).toHaveValue('AnyTransaction')
     expect(screen.getByText('Alert on every transaction')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /add rule/i })).toBeInTheDocument()
@@ -417,7 +419,7 @@ describe('RuleBuilder', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }))
     expect(screen.queryByRole('button', { name: /update rule/i })).not.toBeInTheDocument()
-    expect(screen.getByRole('combobox')).toHaveValue('AnyTransaction')
+    expect(screen.getByRole('combobox', { name: 'Rule type' })).toHaveValue('AnyTransaction')
 
     expect(screen.getByText('burn')).toBeInTheDocument()
   })
