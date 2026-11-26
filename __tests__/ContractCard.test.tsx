@@ -3,7 +3,8 @@
  * ContractCard.test.tsx
  *
  * Component tests covering label/ID rendering, network badge, detail
- * link, webhook warning, highlight pulse, and last-alert states.
+ * link, webhook warning, highlight pulse, last-alert states, and
+ * the 7-day activity sparkline (#615).
  */
 import '@testing-library/jest-dom/vitest'
 import React from 'react'
@@ -31,6 +32,13 @@ vi.mock('next/link', () => ({
     <a href={href} {...rest}>
       {children}
     </a>
+  ),
+}))
+
+// Mock storage so sparkline has deterministic data
+vi.mock('@/lib/storage', () => ({
+  getDailyAlertCounts: vi.fn(() =>
+    Array.from({ length: 7 }, (_, i) => ({ date: `2024-01-0${i + 1}`, count: i * 2 }))
   ),
 }))
 
@@ -128,5 +136,16 @@ describe('ContractCard', () => {
 
     fireEvent.click(compareBtn)
     expect(mockPush).toHaveBeenCalledWith('/contracts/compare?a=contract-1')
+  })
+
+  it('shows a Disabled badge and "rules paused" text when the contract is disabled', () => {
+    render(<ContractCard contract={{ ...baseContract, enabled: false }} />)
+    expect(screen.getByText('Disabled')).toBeInTheDocument()
+    expect(screen.getByText(/paused/)).toBeInTheDocument()
+  })
+
+  it('does not show the Disabled badge when the contract is enabled', () => {
+    render(<ContractCard contract={{ ...baseContract, enabled: true }} />)
+    expect(screen.queryByText('Disabled')).toBeNull()
   })
 })

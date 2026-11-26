@@ -17,4 +17,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Horizon REST and Soroban RPC client helpers in `lib/stellar.ts` for network queries, contract validation, and explorer links.
 - Vitest unit test suite with coverage for storage management, network distribution, and helper utilities.
 - Mock API strategy and alert seeding mechanism for offline development and testing.
-- Cmd+N (macOS) / Ctrl+N keyboard shortcut to open the add-contract form, with hints on the contracts toolbar and empty state.
+
+### Fixed
+- CSV contract import now uses one shared implementation on `/contracts` and `/contracts/new`, so importing the same `contract_id:network` twice is skipped as a duplicate from either page.

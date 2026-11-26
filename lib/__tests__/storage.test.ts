@@ -11,6 +11,7 @@ import {
   deleteAlerts,
   deleteAlertsByContractId,
   migrateStorage,
+  migrateToV2,
   getNetworkDistribution,
 } from '../storage';
 import { WatchedContract, AlertPayload, Network } from '@/types';
@@ -429,3 +430,50 @@ describe('migrateStorage', () => {
   });
 });
 
+
+describe('migrateToV2 — runs only once', () => {
+  const VERSION_KEY = 'txwatch_storage_version';
+
+  beforeEach(() => {
+    localStorageMock.clear();
+  });
+
+  it('runs migration when version is below 2 and sets version to 2', () => {
+    localStorageMock.setItem(VERSION_KEY, '0');
+    migrateToV2();
+    expect(localStorageMock.getItem(VERSION_KEY)).toBe('2');
+  });
+
+  it('runs migration exactly once when called twice with version < 2', () => {
+    localStorageMock.setItem(VERSION_KEY, '0');
+    // First call runs the migration and sets version to 2
+    migrateToV2();
+    const versionAfterFirst = localStorageMock.getItem(VERSION_KEY);
+    expect(versionAfterFirst).toBe('2');
+    // Second call is a no-op because version is now 2
+    migrateToV2();
+    expect(localStorageMock.getItem(VERSION_KEY)).toBe('2');
+  });
+
+  it('skips migration entirely when version is already 2', () => {
+    localStorageMock.setItem(VERSION_KEY, '2');
+    // Storing a contract with a threshold_xlm rule that should stay unmigrated
+    // If migration runs it would add asset/threshold fields; it should not.
+    const contract = {
+      id: 'c1',
+      label: 'Test',
+      contract_id: 'CABC',
+      network: 'testnet',
+      rules: [{ type: 'LargeTransfer', threshold_xlm: 100 }],
+      webhook_url: '',
+      created_at: 0,
+      updated_at: 0,
+    };
+    localStorageMock.setItem('txwatch_contracts', JSON.stringify([contract]));
+    migrateToV2();
+    const stored = JSON.parse(localStorageMock.getItem('txwatch_contracts') ?? '[]');
+    // Rules must remain unchanged — no asset or threshold field added
+    expect(stored[0].rules[0].asset).toBeUndefined();
+    expect(stored[0].rules[0].threshold).toBeUndefined();
+  });
+});
