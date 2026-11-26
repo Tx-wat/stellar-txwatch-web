@@ -133,7 +133,7 @@ describe('WebhookLog', () => {
     render(<WebhookLog alerts={[largeTransferAlert]} network="testnet" />)
     fireEvent.click(screen.getByRole('button', { name: 'FunctionCalled' }))
     expect(
-      screen.getByText('No alerts match the selected filter.')
+      screen.getByText('No matching alerts.')
     ).toBeInTheDocument()
     expect(screen.queryByText('Large Transfer')).not.toBeInTheDocument()
   })
