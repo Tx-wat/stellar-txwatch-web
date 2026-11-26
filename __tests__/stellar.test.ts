@@ -133,6 +133,16 @@ describe('explorer URLs', () => {
     expect(explorerTxUrl('testnet', 'h')).toContain('/testnet/')
     expect(explorerTxUrl('futurenet', 'h')).toContain('/futurenet/')
   })
+
+  it('builds horizon tx/contract links from HORIZON_URLS without throwing', () => {
+    expect(explorerTxUrl('testnet', 'txhash', 'horizon')).toBe(
+      'https://horizon-testnet.stellar.org/transactions/txhash'
+    )
+    const contractId = 'C' + 'A'.repeat(55)
+    expect(explorerContractUrl('mainnet', contractId, 'horizon')).toBe(
+      `https://horizon.stellar.org/accounts/${contractId}`
+    )
+  })
 })
 
 // ---------------------------------------------------------------------------

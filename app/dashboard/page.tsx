@@ -6,7 +6,7 @@ import { useTodayAlertCount, useLastAlertTimes } from '@/hooks/useAlerts'
 import ContractCard from '@/components/ContractCard'
 import EmptyState from '@/components/EmptyState'
 import NetworkBadge from '@/components/NetworkBadge'
-import NetworkPie from '@/components/NetworkPie'
+import ApiModeBadge from '@/components/ApiModeBadge'
 import { Network } from '@/types'
 
 export default function DashboardPage() {
@@ -42,7 +42,10 @@ export default function DashboardPage() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-100">Dashboard</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-zinc-100">Dashboard</h1>
+            <ApiModeBadge />
+          </div>
           <p className="text-sm text-zinc-500 mt-1">Monitor your Soroban contracts in real time</p>
         </div>
         <Link

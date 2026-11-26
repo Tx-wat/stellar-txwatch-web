@@ -13,6 +13,7 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: 'oldest', label: 'Oldest first' },
   { value: 'label-asc', label: 'Label A–Z' },
   { value: 'label-desc', label: 'Label Z–A' },
+  { value: 'rule-count-desc', label: 'Rule Count' },
 ]
 
 interface ContractListToolbarProps {
@@ -27,6 +28,8 @@ interface ContractListToolbarProps {
   onViewModeChange: (viewMode: ViewMode) => void
   hasAnyContracts: boolean
   resultCount: number
+  allVisibleSelected: boolean
+  onToggleSelectAll: () => void
 }
 
 export default function ContractListToolbar({
@@ -41,9 +44,23 @@ export default function ContractListToolbar({
   onViewModeChange,
   hasAnyContracts,
   resultCount,
+  allVisibleSelected,
+  onToggleSelectAll,
 }: ContractListToolbarProps) {
   return (
     <>
+      {/* Select all visible contracts (#658) */}
+      <label className="inline-flex items-center gap-2 text-sm text-zinc-300 w-fit">
+        <input
+          type="checkbox"
+          checked={allVisibleSelected}
+          onChange={onToggleSelectAll}
+          disabled={resultCount === 0}
+          className="h-4 w-4 accent-indigo-500"
+        />
+        Select all
+      </label>
+
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-zinc-100">Contracts</h1>
@@ -68,6 +85,19 @@ export default function ContractListToolbar({
               placeholder="Search by label or contract ID"
               className="w-full rounded-lg border border-zinc-700 bg-zinc-900 py-2 pl-10 pr-3 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
             />
+            {isSearchPending && (
+              <span
+                data-testid="search-pending-indicator"
+                role="status"
+                aria-label="Searching"
+                className="pointer-events-none absolute inset-y-0 right-3 flex items-center"
+              >
+                <svg className="w-4 h-4 animate-spin text-zinc-500" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+              </span>
+            )}
           </div>
 
           {search && (
