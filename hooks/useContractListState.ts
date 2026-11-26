@@ -1,15 +1,37 @@
-import { useCallback, useEffect, useMemo, useReducer } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
 import { WatchedContract, Network } from '@/types'
 
 export type ViewMode = 'flat' | 'grouped'
 export type NetworkFilter = 'all' | Network
-export type SortOption = 'newest' | 'oldest' | 'label-asc' | 'label-desc'
+export type SortOption = 'newest' | 'oldest' | 'label-asc' | 'label-desc' | 'rule-count-desc'
 
 export const PAGE_SIZE = 12
 
+const SORT_STORAGE_KEY = 'txwatch:contract-list-sort'
+const SORT_OPTIONS: SortOption[] = ['newest', 'oldest', 'label-asc', 'label-desc']
+
+// Storage can be unavailable (private mode, blocked site data), so every access is guarded (#666).
+function readStoredSort(): SortOption | null {
+  try {
+    const value = window.localStorage.getItem(SORT_STORAGE_KEY)
+    return SORT_OPTIONS.find((option) => option === value) ?? null
+  } catch {
+    return null
+  }
+}
+
+function writeStoredSort(sortBy: SortOption): void {
+  try {
+    window.localStorage.setItem(SORT_STORAGE_KEY, sortBy)
+  } catch {
+    // The sort still applies for this session.
+  }
+}
+
 export interface ContractListState {
   search: string
-  networkFilter: NetworkFilter
+  /** Empty array means "all networks" */
+  networkFilters: Network[]
   sortBy: SortOption
   viewMode: ViewMode
   page: number
@@ -18,7 +40,8 @@ export interface ContractListState {
 
 export type ContractListAction =
   | { type: 'setSearch'; search: string }
-  | { type: 'setNetworkFilter'; networkFilter: NetworkFilter }
+  | { type: 'toggleNetworkFilter'; network: Network }
+  | { type: 'setNetworkFilters'; networks: Network[] }
   | { type: 'setSortBy'; sortBy: SortOption }
   | { type: 'setViewMode'; viewMode: ViewMode }
   | { type: 'setPage'; page: number }
@@ -30,7 +53,7 @@ export type ContractListAction =
 export function createInitialState(search = ''): ContractListState {
   return {
     search,
-    networkFilter: 'all',
+    networkFilters: [],
     sortBy: 'newest',
     viewMode: 'flat',
     page: 1,
@@ -43,10 +66,11 @@ export function contractListReducer(
   action: ContractListAction
 ): ContractListState {
   switch (action.type) {
+    // A new search or network filter drops the selection so bulk actions never hit hidden rows (#658)
     case 'setSearch':
-      return { ...state, search: action.search, page: 1 }
+      return { ...state, search: action.search, page: 1, selectedIds: [] }
     case 'setNetworkFilter':
-      return { ...state, networkFilter: action.networkFilter, page: 1 }
+      return { ...state, networkFilter: action.networkFilter, page: 1, selectedIds: [] }
     case 'setSortBy':
       return { ...state, sortBy: action.sortBy }
     case 'setViewMode':
@@ -54,7 +78,7 @@ export function contractListReducer(
     case 'setPage':
       return { ...state, page: Math.max(1, action.page) }
     case 'clearFilters':
-      return { ...state, search: '', networkFilter: 'all', page: 1 }
+      return { ...state, search: '', networkFilters: [], page: 1 }
     case 'toggleSelected':
       return {
         ...state,
@@ -73,13 +97,13 @@ export function contractListReducer(
 
 export function filterContracts(
   contracts: WatchedContract[],
-  networkFilter: NetworkFilter,
+  networkFilters: Network[],
   search: string
 ): WatchedContract[] {
   const byNetwork =
-    networkFilter === 'all'
+    networkFilters.length === 0
       ? contracts
-      : contracts.filter((contract) => contract.network === networkFilter)
+      : contracts.filter((contract) => networkFilters.includes(contract.network))
 
   const query = search.trim().toLowerCase()
   if (!query) return byNetwork
@@ -100,6 +124,11 @@ export function sortContractList(contracts: WatchedContract[], sortBy: SortOptio
       return sorted.sort((a, b) => a.label.localeCompare(b.label))
     case 'label-desc':
       return sorted.sort((a, b) => b.label.localeCompare(a.label))
+    case 'rule-count-desc':
+      return sorted.sort((a, b) => {
+        const diff = (b.rules?.length ?? 0) - (a.rules?.length ?? 0)
+        return diff !== 0 ? diff : b.created_at - a.created_at
+      })
     case 'newest':
     default:
       return sorted.sort((a, b) => b.created_at - a.created_at)
@@ -139,12 +168,25 @@ export function countByNetwork(contracts: WatchedContract[]): Record<NetworkFilt
   return counts
 }
 
+export const SEARCH_DEBOUNCE_MS = 200
+
 export function useContractListState(contracts: WatchedContract[], initialSearch = '') {
   const [state, dispatch] = useReducer(contractListReducer, initialSearch, createInitialState)
+  const [debouncedSearch, setDebouncedSearch] = useState(state.search)
+  const [isSearchPending, setIsSearchPending] = useState(false)
+
+  useEffect(() => {
+    setIsSearchPending(true)
+    const timer = setTimeout(() => {
+      setDebouncedSearch(state.search)
+      setIsSearchPending(false)
+    }, SEARCH_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
+  }, [state.search])
 
   const filtered = useMemo(
-    () => filterContracts(contracts, state.networkFilter, state.search),
-    [contracts, state.networkFilter, state.search]
+    () => filterContracts(contracts, state.networkFilter, debouncedSearch),
+    [contracts, state.networkFilter, debouncedSearch]
   )
   const sorted = useMemo(() => sortContractList(filtered, state.sortBy), [filtered, state.sortBy])
   const totalPages = getTotalPages(sorted.length)
@@ -158,6 +200,11 @@ export function useContractListState(contracts: WatchedContract[], initialSearch
     }
   }, [state.page, totalPages])
 
+  useEffect(() => {
+    options?.onPageChange?.(state.page)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.page])
+
   // Drop selections for contracts that no longer exist
   useEffect(() => {
     const existing = new Set(contracts.map((contract) => contract.id))
@@ -166,16 +213,29 @@ export function useContractListState(contracts: WatchedContract[], initialSearch
     }
   }, [contracts, state.selectedIds])
 
+  // Restore after mount so the server render and the first client render match (#666).
+  useEffect(() => {
+    const stored = readStoredSort()
+    if (stored) dispatch({ type: 'setSortBy', sortBy: stored })
+  }, [])
+
   const visible = state.viewMode === 'grouped' ? sorted : paginated
   const allVisibleSelected =
     visible.length > 0 && visible.every((contract) => state.selectedIds.includes(contract.id))
 
   const setSearch = useCallback((search: string) => dispatch({ type: 'setSearch', search }), [])
-  const setNetworkFilter = useCallback(
-    (networkFilter: NetworkFilter) => dispatch({ type: 'setNetworkFilter', networkFilter }),
+  const toggleNetworkFilter = useCallback(
+    (network: Network) => dispatch({ type: 'toggleNetworkFilter', network }),
     []
   )
-  const setSortBy = useCallback((sortBy: SortOption) => dispatch({ type: 'setSortBy', sortBy }), [])
+  const setNetworkFilters = useCallback(
+    (networks: Network[]) => dispatch({ type: 'setNetworkFilters', networks }),
+    []
+  )
+  const setSortBy = useCallback((sortBy: SortOption) => {
+    dispatch({ type: 'setSortBy', sortBy })
+    writeStoredSort(sortBy)
+  }, [])
   const setViewMode = useCallback((viewMode: ViewMode) => dispatch({ type: 'setViewMode', viewMode }), [])
   const setPage = useCallback((page: number) => dispatch({ type: 'setPage', page }), [])
   const clearFilters = useCallback(() => dispatch({ type: 'clearFilters' }), [])
@@ -198,9 +258,11 @@ export function useContractListState(contracts: WatchedContract[], initialSearch
     grouped,
     networkCounts,
     totalPages,
+    isSearchPending,
     allVisibleSelected,
     setSearch,
-    setNetworkFilter,
+    toggleNetworkFilter,
+    setNetworkFilters,
     setSortBy,
     setViewMode,
     setPage,

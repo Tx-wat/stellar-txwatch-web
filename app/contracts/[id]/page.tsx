@@ -1,12 +1,14 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, type KeyboardEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { WatchedContract, AlertPayload, AlertRule } from '@/types'
-import { getContract, deleteContract, getAlerts, saveContract } from '@/lib/storage'
+import { getContract, deleteContract, deleteAlerts, getAlerts, saveContract } from '@/lib/storage'
 import { truncateId, explorerContractUrl, isValidUrl } from '@/lib/stellar'
-import { formatDate, formatRuleSummary } from '@/lib/format'
+import { formatDate, formatRuleSummary, formatRelativeTime } from '@/lib/format'
 import { useAnalytics } from '@/hooks/useAnalytics'
+import { useContracts } from '@/hooks/useContracts'
+import SyncIndicator from '@/components/SyncIndicator'
 import NetworkBadge from '@/components/NetworkBadge'
 import AlertRuleBadge from '@/components/AlertRuleBadge'
 import CopyButton from '@/components/CopyButton'
@@ -18,24 +20,62 @@ import ActiveRulesList from '@/components/ActiveRulesList'
 import EditDetailsModal from '@/components/EditDetailsModal'
 import EditRulesModal from '@/components/EditRulesModal'
 import DeleteContractModal from '@/components/DeleteContractModal'
+import ClearHistoryModal from '@/components/ClearHistoryModal'
 import ContractDetailLoading from './loading'
 
 
 export default function ContractDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const { trackEvent } = useAnalytics()
+  const { syncStatus, lastSyncedAt } = useContracts()
 
   const [contract, setContract] = useState<WatchedContract | null>(null)
   const [alerts, setAlerts] = useState<AlertPayload[]>([])
   const [contractNotFound, setContractNotFound] = useState(false)
 
   const [showDelete, setShowDelete] = useState(false)
+  const [showClearHistory, setShowClearHistory] = useState(false)
   const [showEditDetails, setShowEditDetails] = useState(false)
   const [showEditRules, setShowEditRules] = useState(false)
   const [editedRules, setEditedRules] = useState<AlertRule[]>([])
   const [rulesError, setRulesError] = useState<string | null>(null)
 const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
   const [searchHash, setSearchHash] = useState('')
+
+  // Tab navigation (issue #629): Overview / Alert Rules / Webhook History,
+  // persisted in the URL hash so a reload or shared link keeps the tab.
+  const TABS = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'rules', label: 'Alert Rules' },
+    { id: 'webhooks', label: 'Webhook History' },
+  ] as const
+  type TabId = (typeof TABS)[number]['id']
+  const [activeTab, setActiveTab] = useState<TabId>('overview')
+
+  useEffect(() => {
+    const fromHash = window.location.hash.replace('#', '')
+    if (TABS.some((t) => t.id === fromHash)) {
+      setActiveTab(fromHash as TabId)
+    }
+  }, [])
+
+  function selectTab(id: TabId) {
+    setActiveTab(id)
+    window.location.hash = id
+  }
+
+  function handleTabKeyDown(e: KeyboardEvent, index: number) {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft' && e.key !== 'Home' && e.key !== 'End') return
+    e.preventDefault()
+    let nextIndex = index
+    if (e.key === 'ArrowRight') nextIndex = (index + 1) % TABS.length
+    if (e.key === 'ArrowLeft') nextIndex = (index - 1 + TABS.length) % TABS.length
+    if (e.key === 'Home') nextIndex = 0
+    if (e.key === 'End') nextIndex = TABS.length - 1
+    selectTab(TABS[nextIndex].id)
+    const nextTabEl = document.getElementById(`contract-tab-${TABS[nextIndex].id}`)
+    nextTabEl?.focus()
+  }
    
   // Metadata editing state
   const [showEditMetadata, setShowEditMetadata] = useState(false)
@@ -43,7 +83,14 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
   const [editedWebhookUrl, setEditedWebhookUrl] = useState('')
   const [editedWebhookSecret, setEditedWebhookSecret] = useState('')
   const [showWebhookSecret, setShowWebhookSecret] = useState(false)
+  const [secretVisible, setSecretVisible] = useState(false)
   const [metadataError, setMetadataError] = useState<string | null>(null)
+
+  // Inline webhook URL edit state (Issue #618)
+  const [editingWebhook, setEditingWebhook] = useState(false)
+  const [inlineWebhookUrl, setInlineWebhookUrl] = useState('')
+  const [inlineWebhookError, setInlineWebhookError] = useState<string | null>(null)
+  const [webhookSaving, setWebhookSaving] = useState(false)
   const [relativeCreatedAt, setRelativeCreatedAt] = useState<string>('')
 
   useEffect(() => {
@@ -57,6 +104,13 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
 
   // Explorer preference
   const [explorer, setExplorer] = useState<ExplorerId>('stellar-expert')
+
+  useEffect(() => {
+    setExplorer(getSettings().explorer as ExplorerId)
+    return onSettingsChange(() => {
+      setExplorer(getSettings().explorer as ExplorerId)
+    })
+  }, [])
 
   // Contract instance TTL state
   const [liveUntilLedgerSeq, setLiveUntilLedgerSeq] = useState<number | null>(null)
@@ -89,10 +143,14 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
 
   useEffect(() => {
     const c = getContract(params.id)
-    if (!c) { setContractNotFound(true); return }
+    if (!c) {
+      setContractNotFound(true)
+      return
+    }
     setContract(c)
     setAlerts(getAlerts(params.id))
-  }, [params.id])
+    recordView(params.id)
+  }, [params.id, recordView])
 
   const filteredAlerts = useMemo(() => {
     if (!searchHash) return alerts
@@ -236,6 +294,13 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
     }
   }
 
+  // Alerts are keyed by the on-chain contract ID, not the route ID (#661)
+  function handleClearHistory() {
+    deleteAlerts(contract!.contract_id)
+    setAlerts(getAlerts(contract!.contract_id))
+    setShowClearHistory(false)
+  }
+
   function handleDelete() {
     const deletedContract = contract!
     const deletedAlerts = alerts
@@ -269,8 +334,23 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
   }
 
   // Metadata editing functions
-  function openEditMetadata() {
-    setEditedLabel(contract!.label)
+  function handleInlineWebhookSave() {
+    const trimmed = inlineWebhookUrl.trim()
+    if (trimmed && !isValidUrl(trimmed)) {
+      setInlineWebhookError('Enter a valid HTTPS URL')
+      return
+    }
+    setWebhookSaving(true)
+    setInlineWebhookError(null)
+    const updated = { ...contract!, webhook_url: trimmed }
+    saveContract(updated)
+    setContract(updated)
+    setEditingWebhook(false)
+    setWebhookSaving(false)
+    trackEvent('webhook_url_updated', { contractId: contract!.id })
+  }
+
+  function openEditMetadata() {    setEditedLabel(contract!.label)
     setEditedWebhookUrl(contract!.webhook_url)
     setEditedWebhookSecret(contract!.webhook_secret || '')
     setShowWebhookSecret(false)
@@ -337,35 +417,19 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
   }
 
   if (contractNotFound) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center space-y-4 max-w-sm">
-          <div className="flex justify-center">
-            <svg className="w-16 h-16 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <h2 className="text-xl font-semibold text-zinc-100">Contract Not Found</h2>
-          <p className="text-sm text-zinc-400">
-            The contract you&apos;re looking for doesn&apos;t exist or has been deleted.
-          </p>
-          <button
-            onClick={() => router.push('/contracts')}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            Back to Contracts
-          </button>
-        </div>
-      </div>
-    )
+    notFound()
   }
 
   if (!contract) return <ContractDetailLoading />
 
   const isPaused = contract.enabled === false
+
+  function handleToggleEnabled() {
+    if (!contract) return
+    const updated: WatchedContract = { ...contract, enabled: contract.enabled === false, updated_at: Date.now() }
+    saveContract(updated)
+    setContract(updated)
+  }
 
   const isMainnet = contract.network === 'mainnet'
   const canDelete = !isMainnet || deleteConfirmText === contract.label
@@ -401,6 +465,14 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl font-bold text-zinc-100">{contract.label}</h1>
             <NetworkBadge network={contract.network} />
+            <div className="flex items-center gap-1.5">
+              <SyncIndicator status={syncStatus} />
+              {lastSyncedAt && (
+                <span className="text-xs text-zinc-500" title={formatDate(lastSyncedAt)}>
+                  · polled {formatRelativeTime(lastSyncedAt)}
+                </span>
+              )}
+            </div>
             {isPaused && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-900/30 border border-amber-700 text-xs font-medium text-amber-400">
                 Paused
@@ -419,7 +491,10 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
             <CopyButton text={contract.contract_id} />
           </div>
         </div>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+        <div className="no-print flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+          <Button onClick={() => window.print()} variant="secondary" size="sm">
+            Print / Export PDF
+          </Button>
           <Button onClick={handleToggleEnabled} variant="secondary" size="sm">
             {isPaused ? 'Resume' : 'Pause'}
           </Button>
@@ -443,6 +518,14 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
             Edit Rules
           </Button>
           <Button
+            onClick={() => setShowClearHistory(true)}
+            variant="secondary"
+            size="sm"
+            className="flex-1 sm:flex-none"
+          >
+            Clear History
+          </Button>
+          <Button
             onClick={() => setShowDelete(true)}
             variant="danger"
             size="sm"
@@ -453,49 +536,147 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
         </div>
       </div>
 
+      {/* Tab navigation (#629) */}
+      <div role="tablist" aria-label="Contract detail sections" className="flex gap-1 border-b border-zinc-800">
+        {TABS.map((tab, index) => (
+          <button
+            key={tab.id}
+            id={`contract-tab-${tab.id}`}
+            role="tab"
+            type="button"
+            aria-selected={activeTab === tab.id}
+            aria-controls={`contract-tabpanel-${tab.id}`}
+            tabIndex={activeTab === tab.id ? 0 : -1}
+            onClick={() => selectTab(tab.id)}
+            onKeyDown={(e) => handleTabKeyDown(e, index)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
+              activeTab === tab.id
+                ? 'border-indigo-500 text-zinc-100'
+                : 'border-transparent text-zinc-500 hover:text-zinc-300'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Overview tab */}
+      <div
+        id="contract-tabpanel-overview"
+        role="tabpanel"
+        aria-labelledby="contract-tab-overview"
+        hidden={activeTab !== 'overview'}
+        className="space-y-8"
+      >
       {/* Metadata */}
       <div className="grid sm:grid-cols-3 gap-4">
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-xs text-zinc-500">Webhook URL</p>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleTestWebhook}
-                disabled={testStatus === 'sending'}
-                className="px-2 py-0.5 rounded-md border border-zinc-700 hover:border-zinc-500 text-xs text-zinc-300 hover:text-zinc-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Send a test payload to this webhook endpoint"
-                data-tour-test-webhook
-              >
-                {testStatus === 'sending' ? 'Sending…' : testStatus === 'ok' ? `${testStatusCode} OK` : testStatus === 'error' ? `${testStatusCode ?? 'ERR'} Failed` : 'Send test'}
-              </button>
-              <CopyButton text={contract.webhook_url} />
+          {/* Webhook URL — inline edit */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-zinc-500 uppercase tracking-wider">Webhook URL</span>
+              <div className="flex items-center gap-2">
+                {!editingWebhook && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleTestWebhook}
+                      disabled={testStatus === 'sending'}
+                      className="px-2 py-0.5 rounded-md border border-zinc-700 hover:border-zinc-500 text-xs text-zinc-300 hover:text-zinc-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Send a test payload to this webhook endpoint"
+                      data-tour-test-webhook
+                    >
+                      {testStatus === 'sending' ? 'Sending…' : testStatus === 'ok' ? `${testStatusCode} OK` : testStatus === 'error' ? `${testStatusCode ?? 'ERR'} Failed` : 'Send test'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setEditingWebhook(true); setInlineWebhookUrl(contract.webhook_url); setInlineWebhookError(null) }}
+                      className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                    >
+                      Edit
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
+            {editingWebhook ? (
+              <div className="space-y-2">
+                <input
+                  type="url"
+                  value={inlineWebhookUrl}
+                  onChange={(e) => setInlineWebhookUrl(e.target.value)}
+                  placeholder="https://your-server.com/webhook"
+                  className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm font-mono text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                />
+                {inlineWebhookError && (
+                  <p className="text-xs text-red-400">{inlineWebhookError}</p>
+                )}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleInlineWebhookSave}
+                    disabled={webhookSaving}
+                    className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-xs font-medium text-white transition-colors"
+                  >
+                    {webhookSaving ? 'Saving…' : 'Save'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setEditingWebhook(false); setInlineWebhookError(null) }}
+                    className="px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                {contract.webhook_url ? (
+                  <>
+                    <CopyButton text={contract.webhook_url} />
+                    <a
+                      href={contract.webhook_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-indigo-400 hover:text-indigo-300 font-mono truncate max-w-xs"
+                    >
+                      {contract.webhook_url}
+                    </a>
+                  </>
+                ) : (
+                  <span className="text-sm text-zinc-500">Not configured</span>
+                )}
+              </div>
+            )}
+            {testStatus === 'error' && testError && !editingWebhook && (
+              <p className="mt-1 text-xs text-red-400">{testError}</p>
+            )}
+            {testStatus === 'ok' && !editingWebhook && (
+              <p className="mt-1 text-xs text-emerald-400">
+                Test payload delivered — {testStatusCode} received{testLatency !== null ? ` · ${testLatency}ms` : ''}
+              </p>
+            )}
           </div>
-          <a
-            href={contract.webhook_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors break-all"
-          >
-            {contract.webhook_url}
-          </a>
-          {testStatus === 'error' && testError && (
-            <p className="mt-1 text-xs text-red-400">{testError}</p>
-          )}
-          {testStatus === 'ok' && (
-            <p className="mt-1 text-xs text-emerald-400">
-              Test payload delivered — {testStatusCode} received{testLatency !== null ? ` · ${testLatency}ms` : ''}
-            </p>
-          )}
         </div>
         {contract.webhook_secret && (
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
             <div className="flex items-center justify-between mb-1">
               <p className="text-xs text-zinc-500">Webhook Secret</p>
-              <CopyButton text={contract.webhook_secret} />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSecretVisible((v) => !v)}
+                  className="text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
+                  aria-label={secretVisible ? 'Hide webhook secret' : 'Show webhook secret'}
+                >
+                  {secretVisible ? 'Hide' : 'Show'}
+                </button>
+                <CopyButton text={contract.webhook_secret} />
+              </div>
             </div>
-            <p className="text-sm text-zinc-300 font-mono">••••••••{contract.webhook_secret.slice(-4)}</p>
+            <p className="text-sm text-zinc-300 font-mono break-all">
+              {secretVisible ? contract.webhook_secret : `••••••••${contract.webhook_secret.slice(-4)}`}
+            </p>
           </div>
         )}
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
@@ -625,10 +806,31 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
         <span className="text-zinc-600">·</span>
         <span>Hover any timestamp to see full ISO-8601</span>
       </div>
+      </div>
+      {/* end Overview tab */}
 
+      {/* Alert Rules tab */}
+      <div
+        id="contract-tabpanel-rules"
+        role="tabpanel"
+        aria-labelledby="contract-tab-rules"
+        hidden={activeTab !== 'rules'}
+        className="space-y-8"
+      >
       {/* Active Rules */}
       <div>
-        <h2 className="text-lg font-semibold text-zinc-100 mb-3">Active Rules</h2>
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <h2 className="text-lg font-semibold text-zinc-100">Active Rules</h2>
+          {contract.rules.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowCopyRules(true)}
+              className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+            >
+              Copy rules
+            </button>
+          )}
+        </div>
         {contract.rules.length === 0 ? (
           <p className="text-sm text-zinc-500">No rules configured.</p>
         ) : (
@@ -655,7 +857,17 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
           <AlertHeatmap alerts={alerts} contractId={contract.contract_id} />
         </div>
       </div>
+      </div>
+      {/* end Alert Rules tab */}
 
+      {/* Webhook History tab */}
+      <div
+        id="contract-tabpanel-webhooks"
+        role="tabpanel"
+        aria-labelledby="contract-tab-webhooks"
+        hidden={activeTab !== 'webhooks'}
+        className="space-y-8"
+      >
       {/* Alert History */}
       <div>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
@@ -757,6 +969,8 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
           )}
         </div>
       </div>
+      </div>
+      {/* end Webhook History tab */}
 
       {/* Edit Metadata Modal */}
       {showEditMetadata && (
@@ -928,12 +1142,29 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
         />
       )}
 
+      {showCopyRules && (
+        <CopyRulesModal
+          sourceContractId={contract.id}
+          rules={contract.rules}
+          onClose={() => setShowCopyRules(false)}
+        />
+      )}
+
       {showDelete && (
         <DeleteContractModal
           contractLabel={contract.label}
           alertCount={alerts.length}
           onConfirm={handleDelete}
           onClose={() => setShowDelete(false)}
+        />
+      )}
+
+      {showClearHistory && (
+        <ClearHistoryModal
+          contractLabel={contract.label}
+          alertCount={getAlerts(contract.contract_id).length}
+          onConfirm={handleClearHistory}
+          onClose={() => setShowClearHistory(false)}
         />
       )}
     </div>

@@ -11,6 +11,32 @@ interface EditRulesModalProps {
   onRuleEvent?: (rules: AlertRule[], action: 'add' | 'update' | 'remove') => void
 }
 
+/** Returns a validation error message for a rule, or null if it is valid. */
+export function validateRule(rule: AlertRule): string | null {
+  switch (rule.type) {
+    case 'LargeTransfer':
+      if (!rule.threshold_xlm || rule.threshold_xlm <= 0) {
+        return 'Threshold must be a positive number'
+      }
+      return null
+    case 'FunctionCalled':
+      if (!rule.function_name || rule.function_name.trim() === '') {
+        return 'Function name is required'
+      }
+      return null
+    case 'AdminFunctionCalled':
+      if (!rule.function_names || rule.function_names.length === 0) {
+        return 'At least one function name is required'
+      }
+      return null
+    case 'AnyTransaction':
+    case 'TransactionFailed':
+      return null
+    default:
+      return null
+  }
+}
+
 export default function EditRulesModal({
   initialRules,
   onSave,
@@ -21,8 +47,13 @@ export default function EditRulesModal({
   const [error, setError] = useState<string | null>(null)
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
 
+  const ruleErrors = rules.map(validateRule)
+  const hasInvalidRules = ruleErrors.some((e) => e !== null)
+
   function handleSave() {
     if (rules.length === 0) { setError('Add at least one rule'); return }
+    if (hasInvalidRules) { setError('Fix the highlighted rule errors before saving'); return }
+    setError(null)
     onSave(rules)
   }
 
@@ -45,11 +76,23 @@ export default function EditRulesModal({
             onChange={setRules}
             onRulesChanged={onRuleEvent}
           />
+          {ruleErrors.some((e) => e !== null) && (
+            <ul className="space-y-1" data-testid="rule-validation-errors">
+              {ruleErrors.map((ruleError, i) =>
+                ruleError ? (
+                  <li key={i} className="text-xs text-red-400">
+                    Rule {i + 1}: {ruleError}
+                  </li>
+                ) : null
+              )}
+            </ul>
+          )}
           {error && <p className="text-xs text-red-400">{error}</p>}
           <div className="flex gap-3 pt-2">
             <button
               onClick={handleSave}
-              className="flex-1 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white transition-colors"
+              disabled={hasInvalidRules}
+              className="flex-1 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-white transition-colors"
             >
               Save Rules
             </button>

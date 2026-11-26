@@ -1,10 +1,20 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { AlertRule, AlertRuleType, RuleTemplate } from '@/types'
+import { useState, useEffect, useRef, type ChangeEvent } from 'react'
+import { AlertRule, AlertRuleType } from '@/types'
 import { formatRuleSummary } from '@/lib/format'
+import { parseRulesToml } from '@/lib/tomlRules'
+import { HORIZON_URLS } from '@/lib/stellar'
 import { STORAGE_KEYS } from '@/lib/storageKeys'
 import AlertRuleBadge from './AlertRuleBadge'
+import { fetchContractFunctions } from '@/lib/api'
+import type { Network } from '@/types'
+import {
+  getRuleTemplates,
+  saveRuleTemplate,
+  deleteRuleTemplate,
+  onRuleTemplatesChange,
+} from '@/lib/storage'
 
 const RULE_TYPES: AlertRuleType[] = [
   'AnyTransaction',
@@ -43,6 +53,15 @@ const WRAP_RULE_OPTIONS: AlertRuleType[] = [
 ]
 
 const TEMPLATE_STORAGE_KEY = STORAGE_KEYS.RULE_TEMPLATES
+const ALERT_RULES_DOC_URL = 'https://docs.txwatch.dev/alert-rules'
+/** Rules beyond this count may cause core-engine evaluation slowdowns. */
+const RULE_COUNT_WARNING_THRESHOLD = 20
+
+interface DryRunResult {
+  matched: number
+  total: number
+  matchedHashes: string[]
+}
 
 const G_ADDRESS_REGEX = /^G[A-Z2-7]{55}$/
 const SAC_CONTRACT_ID_REGEX = /^C[A-Z2-7]{55}$/
@@ -61,6 +80,32 @@ function saveTemplates(templates: RuleTemplate[]) {
   window.localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(templates))
 }
 
+interface RuleBuilderProps {
+  rules: AlertRule[]
+  onChange: (rules: AlertRule[]) => void
+  /** Optional callback fired whenever a rule is added, updated, or removed.
+   *  Intended as an analytics hook point — no behavior depends on it. */
+  onRulesChanged?: (rules: AlertRule[], action: 'add' | 'update' | 'remove') => void
+  /** Contract ID whose Soroban spec should be fetched for function-name
+   *  autocomplete. Shared across the FunctionCalled and AdminFunctionCalled
+   *  inputs. When omitted, those inputs fall back to plain free text. */
+  contractId?: string
+  network?: Network
+}
+
+const emptyRule = (): AlertRule => ({ type: 'AnyTransaction' })
+const newTemplateId = () => `tpl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+
+const SAC_CONTRACT_ID_REGEX = /^C[A-Z2-7]{55}$/
+
+const ALERT_RULES_DOC_URL = 'https://github.com/Tx-wat/stellar-txwatch-web/wiki/alert-rules'
+
+interface DryRunResult {
+  matched: number
+  total: number
+  matchedHashes: string[]
+}
+
 /** Fetches the number of decimals for a token contract via its `decimals()` function.
  *  Returns null when the value cannot be determined. */
 async function fetchTokenDecimals(asset: string): Promise<number | null> {
@@ -75,20 +120,7 @@ async function fetchTokenDecimals(asset: string): Promise<number | null> {
   }
 }
 
-interface RuleBuilderProps {
-  rules: AlertRule[]
-  onChange: (rules: AlertRule[]) => void
-  /** Optional callback fired whenever a rule is added, updated, or removed.
-   *  Intended as an analytics hook point — no behavior depends on it. */
-  onRulesChanged?: (rules: AlertRule[], action: 'add' | 'update' | 'remove') => void
-  /** Exported function names parsed from the contract spec. When null/empty,
-   *  function name inputs fall back to plain free text. */
-  exportedFunctions?: string[] | null
-}
-
-const emptyRule = (): AlertRule => ({ type: 'AnyTransaction' })
-
-export default function RuleBuilder({ rules, onChange, onRulesChanged, exportedFunctions }: RuleBuilderProps) {
+export default function RuleBuilder({ rules, onChange, onRulesChanged, contractId, network = 'testnet' }: RuleBuilderProps) {
   const [draft, setDraft] = useState<AlertRule>(emptyRule())
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -96,20 +128,48 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, exportedF
   const [templates, setTemplates] = useState<RuleTemplate[]>([])
   const [showTemplateModal, setShowTemplateModal] = useState(false)
   const [templateName, setTemplateName] = useState('')
-
-  // LargeTransfer token decimals state
-  const [tokenDecimals, setTokenDecimals] = useState<number | null>(null)
-  const [decimalsError, setDecimalsError] = useState<string | null>(null)
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
   const [decimalsLoading, setDecimalsLoading] = useState(false)
+  const [decimalsError, setDecimalsError] = useState<string | null>(null)
+  const [tokenDecimals, setTokenDecimals] = useState<number | null>(null)
 
   useEffect(() => {
     setTemplates(loadTemplates())
   }, [])
 
-  const specFunctions = exportedFunctions ?? []
+  // Shared contract-function autocomplete for FunctionCalled and
+  // AdminFunctionCalled inputs (issue #626). Cached per contract_id inside
+  // fetchContractFunctions, so switching rule type doesn't re-fetch.
+  const [specFunctions, setSpecFunctions] = useState<string[]>([])
+  const [specLoading, setSpecLoading] = useState(false)
+
+  useEffect(() => {
+    if (!contractId) {
+      setSpecFunctions([])
+      return
+    }
+    let cancelled = false
+    setSpecLoading(true)
+    fetchContractFunctions(contractId, network)
+      .then((names) => {
+        if (!cancelled) setSpecFunctions(names)
+      })
+      .finally(() => {
+        if (!cancelled) setSpecLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [contractId, network])
+
   const hasSpec = specFunctions.length > 0
   const specFunctionSet = new Set(specFunctions)
   const datalistId = 'rule-builder-function-names'
+
+  // LargeTransfer token-decimals lookup state (kept local; unrelated to #626).
+  const [tokenDecimals, setTokenDecimals] = useState<number | null>(null)
+  const [decimalsError, setDecimalsError] = useState<string | null>(null)
+  const [decimalsLoading, setDecimalsLoading] = useState(false)
 
   function unknownFunctionNames(): string[] {
     if (!hasSpec) return []
@@ -312,6 +372,17 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, exportedF
     setDecimalsLoading(false)
   }
 
+  // Dry-run evaluation against recent transactions is not implemented yet;
+  // keep the hook point stubbed so the UI doesn't offer a non-functional
+  // action (out of scope for #626).
+  function isDraftTestable(): boolean {
+    return false
+  }
+
+  function handleTestRule() {
+    // no-op: see isDraftTestable above
+  }
+
   function startEdit(index: number) {
     const rule = rules[index]
     setDraft(rule)
@@ -354,6 +425,26 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, exportedF
     const updated = rules.filter((_, i) => i !== index)
     onChange(updated)
     onRulesChanged?.(updated, 'remove')
+  }
+
+  function handleDragStart(index: number) {
+    setDragIndex(index)
+  }
+
+  function handleDragOver(e: React.DragEvent, overIndex: number) {
+    e.preventDefault()
+    if (dragIndex === null || dragIndex === overIndex) return
+    const updated = [...rules]
+    const [moved] = updated.splice(dragIndex, 1)
+    updated.splice(overIndex, 0, moved)
+    onChange(updated)
+    // If we were editing the dragged rule, follow it to its new position
+    if (editingIndex === dragIndex) setEditingIndex(overIndex)
+    setDragIndex(overIndex)
+  }
+
+  function handleDragEnd() {
+    setDragIndex(null)
   }
 
   function saveAsTemplate() {
@@ -400,16 +491,46 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, exportedF
     setShowTemplateModal(true)
   }
 
-  /** Parse a comma-separated string of integers into a sorted number array. */
-  function parseIntList(raw: string): number[] {
-    return raw
-      .split(',')
-      .map((s) => parseInt(s.trim(), 10))
-      .filter((n) => !isNaN(n))
+  // Import rules from a txwatch-core TOML config (#646)
+  const [importMessage, setImportMessage] = useState<string | null>(null)
+  const tomlInputRef = useRef<HTMLInputElement>(null)
+
+  const handleTomlFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    const { rules: imported, skipped } = parseRulesToml(await file.text())
+    if (imported.length > 0) {
+      const updated = [...rules, ...imported]
+      onChange(updated)
+      onRulesChanged?.(updated, 'add')
+    }
+    setImportMessage(
+      `Imported ${imported.length} ${imported.length === 1 ? 'rule' : 'rules'}` +
+        (skipped > 0 ? `, skipped ${skipped} invalid` : ''),
+    )
   }
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => tomlInputRef.current?.click()}
+          className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-xs font-medium text-zinc-200 hover:border-zinc-600"
+        >
+          Import from TOML
+        </button>
+        <input
+          ref={tomlInputRef}
+          type="file"
+          accept=".toml,text/plain"
+          className="hidden"
+          onChange={handleTomlFile}
+          aria-label="TOML rule config file"
+        />
+        {importMessage && <p role="status" className="text-xs text-zinc-400">{importMessage}</p>}
+      </div>
       <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4 space-y-3">
         {/* Rule Type */}
         <div>
@@ -497,6 +618,10 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, exportedF
               <option key={name} value={name} />
             ))}
           </datalist>
+        )}
+
+        {(draft.type === 'FunctionCalled' || draft.type === 'AdminFunctionCalled') && specLoading && (
+          <p className="text-xs text-zinc-500">Loading contract functions…</p>
         )}
 
         {draft.type === 'FunctionCalled' && (
@@ -685,18 +810,21 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, exportedF
 
       {/* Rule list */}
       {rules.length > 0 && (
-        <ul className="space-y-2">
+        <ul className="space-y-2" aria-label="Alert rules — drag to reorder">
           {rules.map((rule, i) => (
             <li
               key={i}
-              className={`flex items-center justify-between rounded-lg px-3 py-2 border ${
-                editingIndex === i
-                  ? 'bg-indigo-900/30 border-indigo-600'
-                  : 'bg-zinc-900 border-zinc-800'
-              }`}
+              draggable
+              aria-grabbed={dragIndex === i}
+              onDragStart={() => handleDragStart(i)}
+              onDragOver={(e) => handleDragOver(e, i)}
+              onDragEnd={handleDragEnd}
+              className={`flex items-center justify-between rounded-lg px-3 py-2 border cursor-grab active:cursor-grabbing ${
+                editingIndex === i ? 'bg-indigo-900/30 border-indigo-600' : 'bg-zinc-900 border-zinc-800'
+              } ${dragIndex === i ? 'opacity-50' : ''}`}
             >
               <div className="flex items-center gap-2 flex-wrap">
-                <AlertRuleBadge type={rule.type} />
+                <AlertRuleBadge type={rule.type} asset={rule.asset} name={rule.name} />
                 {rule.name && (
                   <span className="text-xs font-medium text-zinc-200">{rule.name}</span>
                 )}

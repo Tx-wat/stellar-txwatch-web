@@ -1,4 +1,6 @@
 import { HORIZON_URLS, isValidUrl } from '@/lib/stellar'
+import { env } from '@/lib/env'
+import { getApiKey } from '@/lib/storage'
 import type { Network } from '@/types'
 
 const BASE_URL = env.NEXT_PUBLIC_API_URL
@@ -23,8 +25,9 @@ export async function apiFetch<T>(
       Object.assign(headersRecord, options.headers)
     }
   }
-  for (const [name, value] of Object.entries(getAuthHeaders())) {
-    headers.set(name, value)
+  const apiKey = getApiKey()
+  if (apiKey) {
+    headersRecord['Authorization'] = `Bearer ${apiKey}`
   }
 
   const res = await fetch(`${BASE_URL}${path}`, {
@@ -113,6 +116,60 @@ export async function fetchContractInstance(
   return { liveUntilLedgerSeq: Number(entry.liveUntilLedgerSeq) }
 }
 
+const contractFunctionsCache = new Map<string, string[]>()
+
+/**
+ * Fetches the list of exported function names from a contract's Soroban
+ * spec, shared by both the FunctionCalled and AdminFunctionCalled rule
+ * inputs in RuleBuilder (issue #626). Results are cached per
+ * `network:contract_id` so re-opening the rule builder for the same
+ * contract doesn't re-fetch. Falls back to an empty list (plain text
+ * entry) if the spec can't be read, instead of throwing.
+ */
+export async function fetchContractFunctions(
+  contractId: string,
+  network: Network = 'testnet'
+): Promise<string[]> {
+  const cacheKey = `${network}:${contractId}`
+  const cached = contractFunctionsCache.get(cacheKey)
+  if (cached) return cached
+
+  try {
+    const { Contract, rpc } = await import('@stellar/stellar-sdk')
+    const server = new rpc.Server(SOROBAN_RPC_URLS[network])
+    const contract = new Contract(contractId)
+    // getContractSpec parses the WASM's exported contractspecv0 section
+    // into function/type definitions.
+    const spec = await (server as unknown as {
+      getContractSpec: (c: unknown) => Promise<{ funcs: () => Array<{ name: () => string }> }>
+    }).getContractSpec(contract)
+    const names = spec.funcs().map((f) => f.name()).filter(Boolean)
+    contractFunctionsCache.set(cacheKey, names)
+    return names
+  } catch {
+    contractFunctionsCache.set(cacheKey, [])
+    return []
+  }
+}
+
+/**
+ * Checks whether a contract instance exists on the given network by
+ * querying Soroban RPC for its ledger entry. Used to validate a
+ * contract_id before switching a watched contract to a new network
+ * (see issue #627).
+ */
+export async function contractExistsOnNetwork(
+  contractId: string,
+  network: Network
+): Promise<boolean> {
+  try {
+    await fetchContractInstance(contractId, network)
+    return true
+  } catch {
+    return false
+  }
+}
+
 /**
  * Invokes the token contract's `decimals()` function via Soroban RPC
  * simulation and returns the token's decimal precision.
@@ -157,12 +214,20 @@ export async function fetchTokenDecimals(
   return value
 }
 
+export interface TestWebhookResult {
+  status: number
+  ok: boolean
+  /** First 200 chars of the response body, for display purposes. */
+  bodyPreview: string
+}
+
 export async function sendTestWebhook(
   webhookUrl: string,
   contractId: string,
   network: Network = 'testnet',
-  timeoutMs = 10000
-): Promise<void> {
+  signal?: AbortSignal,
+  signers?: string[]
+): Promise<{ status: number; ok: boolean }> {
   if (!webhookUrl || !isValidUrl(webhookUrl)) {
     throw new Error('Invalid webhook URL')
   }
@@ -179,15 +244,14 @@ export async function sendTestWebhook(
     ...(signers && signers.length > 0 ? { signers } : {}),
   }
 
-  let signal: AbortSignal | undefined
+  // Callers pass their own AbortSignal; without one, fall back to a 10s timeout.
   let timeoutId: ReturnType<typeof setTimeout> | undefined
+  let requestSignal = signal
 
-  if (typeof timeoutOrSignal === 'number') {
+  if (!requestSignal) {
     const controller = new AbortController()
-    timeoutId = setTimeout(() => controller.abort(), timeoutOrSignal)
-    signal = controller.signal
-  } else {
-    signal = timeoutOrSignal
+    timeoutId = setTimeout(() => controller.abort(), 10000)
+    requestSignal = controller.signal
   }
 
   try {
@@ -195,9 +259,16 @@ export async function sendTestWebhook(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-      signal,
+      signal: requestSignal,
     })
-    return { status: res.status, ok: res.ok }
+    let bodyPreview = ''
+    try {
+      const text = await res.text()
+      bodyPreview = text.slice(0, 200)
+    } catch {
+      bodyPreview = ''
+    }
+    return { status: res.status, ok: res.ok, bodyPreview }
   } catch (error) {
     const err = error as { name?: string }
     if (err?.name === 'AbortError') {
