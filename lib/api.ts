@@ -1,4 +1,6 @@
 import { HORIZON_URLS, isValidUrl } from '@/lib/stellar'
+import { env } from '@/lib/env'
+import { getApiKey } from '@/lib/storage'
 import type { Network } from '@/types'
 
 const BASE_URL = env.NEXT_PUBLIC_API_URL
@@ -23,8 +25,9 @@ export async function apiFetch<T>(
       Object.assign(headersRecord, options.headers)
     }
   }
-  for (const [name, value] of Object.entries(getAuthHeaders())) {
-    headers.set(name, value)
+  const apiKey = getApiKey()
+  if (apiKey) {
+    headersRecord['Authorization'] = `Bearer ${apiKey}`
   }
 
   const res = await fetch(`${BASE_URL}${path}`, {

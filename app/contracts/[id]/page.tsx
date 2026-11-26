@@ -5,8 +5,10 @@ import { useRouter } from 'next/navigation'
 import { WatchedContract, AlertPayload, AlertRule } from '@/types'
 import { getContract, deleteContract, deleteAlerts, getAlerts, saveContract } from '@/lib/storage'
 import { truncateId, explorerContractUrl, isValidUrl } from '@/lib/stellar'
-import { formatDate, formatRuleSummary } from '@/lib/format'
+import { formatDate, formatRuleSummary, formatRelativeTime } from '@/lib/format'
 import { useAnalytics } from '@/hooks/useAnalytics'
+import { useContracts } from '@/hooks/useContracts'
+import SyncIndicator from '@/components/SyncIndicator'
 import NetworkBadge from '@/components/NetworkBadge'
 import AlertRuleBadge from '@/components/AlertRuleBadge'
 import CopyButton from '@/components/CopyButton'
@@ -25,6 +27,7 @@ import ContractDetailLoading from './loading'
 export default function ContractDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const { trackEvent } = useAnalytics()
+  const { syncStatus, lastSyncedAt } = useContracts()
 
   const [contract, setContract] = useState<WatchedContract | null>(null)
   const [alerts, setAlerts] = useState<AlertPayload[]>([])
@@ -411,6 +414,13 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
 
   const isPaused = contract.enabled === false
 
+  function handleToggleEnabled() {
+    if (!contract) return
+    const updated: WatchedContract = { ...contract, enabled: contract.enabled === false, updated_at: Date.now() }
+    saveContract(updated)
+    setContract(updated)
+  }
+
   const isMainnet = contract.network === 'mainnet'
   const canDelete = !isMainnet || deleteConfirmText === contract.label
 
@@ -445,6 +455,14 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl font-bold text-zinc-100">{contract.label}</h1>
             <NetworkBadge network={contract.network} />
+            <div className="flex items-center gap-1.5">
+              <SyncIndicator status={syncStatus} />
+              {lastSyncedAt && (
+                <span className="text-xs text-zinc-500" title={formatDate(lastSyncedAt)}>
+                  · polled {formatRelativeTime(lastSyncedAt)}
+                </span>
+              )}
+            </div>
             {isPaused && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-900/30 border border-amber-700 text-xs font-medium text-amber-400">
                 Paused
@@ -463,7 +481,10 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
             <CopyButton text={contract.contract_id} />
           </div>
         </div>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+        <div className="no-print flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+          <Button onClick={() => window.print()} variant="secondary" size="sm">
+            Print / Export PDF
+          </Button>
           <Button onClick={handleToggleEnabled} variant="secondary" size="sm">
             {isPaused ? 'Resume' : 'Pause'}
           </Button>
@@ -722,7 +743,18 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
       >
       {/* Active Rules */}
       <div>
-        <h2 className="text-lg font-semibold text-zinc-100 mb-3">Active Rules</h2>
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <h2 className="text-lg font-semibold text-zinc-100">Active Rules</h2>
+          {contract.rules.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowCopyRules(true)}
+              className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+            >
+              Copy rules
+            </button>
+          )}
+        </div>
         {contract.rules.length === 0 ? (
           <p className="text-sm text-zinc-500">No rules configured.</p>
         ) : (
@@ -1031,6 +1063,14 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
               ruleCount: rules.length,
             })
           }
+        />
+      )}
+
+      {showCopyRules && (
+        <CopyRulesModal
+          sourceContractId={contract.id}
+          rules={contract.rules}
+          onClose={() => setShowCopyRules(false)}
         />
       )}
 

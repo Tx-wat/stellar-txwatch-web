@@ -17,7 +17,7 @@ interface ContractCardProps {
 function ContractCard({ contract, lastAlertTime, highlight, missing }: ContractCardProps) {
   const router = useRouter()
   const hasWebhook = Boolean(contract.webhook_url)
-  const isPaused = (contract as WatchedContract & { enabled?: boolean }).enabled === false
+  const isPaused = contract.enabled === false
   const [active, setActive] = useState(highlight)
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -116,6 +116,11 @@ function ContractCard({ contract, lastAlertTime, highlight, missing }: ContractC
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <span>Not found — network may have been reset</span>
+              </span>
+            )}
+            {isPaused && (
+              <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-900/30 border border-amber-700 text-amber-400">
+                Disabled
               </span>
             )}
           </div>

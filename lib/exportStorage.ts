@@ -71,6 +71,28 @@ export function exportContractsAsBlob(storageKey?: string): Blob {
   return new Blob([exportContractsAsJson(storageKey)], { type: 'application/json' })
 }
 
+/** Same snapshot format as `buildContractSnapshot`, limited to the given contract IDs (#653). */
+export function buildSelectedContractSnapshot(
+  ids: string[],
+  storageKey: string = STORAGE_KEYS.CONTRACTS,
+): ContractExportSnapshot {
+  const wanted = new Set(ids)
+  const contracts = readContractsFromStorage(storageKey)
+    .filter((contract) => wanted.has(contract.id))
+    .map(normalizeContract)
+  return {
+    version: SNAPSHOT_VERSION,
+    exportedAt: new Date().toISOString(),
+    count: contracts.length,
+    contracts,
+  }
+}
+
+export function exportSelectedContractsAsBlob(ids: string[], storageKey?: string): Blob {
+  const json = JSON.stringify(buildSelectedContractSnapshot(ids, storageKey), null, 2)
+  return new Blob([json], { type: 'application/json' })
+}
+
 /**
  * Validates and parses a JSON string that was previously exported via
  * `exportContractsAsJson`. Throws a descriptive error on invalid input.
