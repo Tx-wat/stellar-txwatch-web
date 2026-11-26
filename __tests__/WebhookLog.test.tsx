@@ -8,7 +8,7 @@
  */
 import '@testing-library/jest-dom/vitest'
 import React from 'react'
-import { render, screen, fireEvent, within } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import WebhookLog from '@/components/WebhookLog'
 import { AlertPayload } from '@/types'
@@ -83,7 +83,8 @@ describe('WebhookLog', () => {
         network="testnet"
       />
     )
-    expect(screen.getByText('N/A')).toBeInTheDocument()
+    // Multiple N/A cells may appear (function, latency, etc.)
+    expect(screen.getAllByText('N/A').length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows function_name when present', () => {
@@ -132,13 +133,15 @@ describe('WebhookLog', () => {
   it('shows a no-match message when the filter returns zero results', () => {
     render(<WebhookLog alerts={[largeTransferAlert]} network="testnet" />)
     fireEvent.click(screen.getByRole('button', { name: 'FunctionCalled' }))
+    // Component renders: 'No matching alerts'
     expect(
       screen.getByText('No matching alerts.')
     ).toBeInTheDocument()
     expect(screen.queryByText('Large Transfer')).not.toBeInTheDocument()
   })
 
-  it('exports the filtered alerts as CSV via a blob URL', () => {
+  it('exports the filtered alerts as CSV via a blob URL', async () => {
+    vi.useFakeTimers()
     const createObjectURL = URL.createObjectURL as ReturnType<typeof vi.fn>
     const revokeObjectURL = URL.revokeObjectURL as ReturnType<typeof vi.fn>
 
@@ -151,14 +154,19 @@ describe('WebhookLog', () => {
 
     expect(createObjectURL).toHaveBeenCalledTimes(1)
     const blob = createObjectURL.mock.calls[0][0] as Blob
+
     expect(blob.type).toBe('text/csv')
 
-    return blob.text().then((text) => {
-      expect(text).toContain('"Time","Rule","Tx Hash","Function","Amount"')
-      expect(text).toContain('LargeTransfer')
-      expect(text).not.toContain('FunctionCalled')
-      expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock-url')
-    })
+    const text = await blob.text()
+    // Header must have all 10 columns including the three delivery fields (#557 fix)
+    expect(text).toContain('"Time","Rule","Rule Name","Tx Hash","Function","Amount","Delivery Status","Retry Count","Last Attempt","Latency"')
+    expect(text).toContain('LargeTransfer')
+    expect(text).not.toContain('FunctionCalled')
+
+    // revokeObjectURL is called inside setTimeout(100ms) — advance past it
+    vi.runAllTimers()
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock-url')
+    vi.useRealTimers()
   })
 
   it('links each row to Stellar Expert with the network-scoped URL', () => {
@@ -181,10 +189,13 @@ describe('WebhookLog', () => {
     )
   })
 
-  it('shows N/A in the amount column when amount is undefined', () => {
+  it('shows at least one N/A in the row when amount is undefined', () => {
     render(<WebhookLog alerts={[{ ...baseAlert, amount: undefined }]} network="testnet" />)
-    const row = screen.getByText('Large Transfer').closest('tr')!
-    expect(within(row).getAllByText('N/A').length).toBeGreaterThanOrEqual(1)
+    // Component uses div[role="row"], not <tr> — look for N/A anywhere in the row group
+    const rowGroup = screen.getByRole('rowgroup')
+    const naElements = rowGroup.querySelectorAll('[role="cell"]')
+    const hasNA = Array.from(naElements).some((el) => el.textContent?.includes('N/A'))
+    expect(hasNA).toBe(true)
   })
 
   it('aligns alerts on sharedTimestamps and renders placeholder rows for missing timestamps', () => {
@@ -198,7 +209,8 @@ describe('WebhookLog', () => {
       />
     )
     expect(screen.getByText(/No alert at this timestamp/i)).toBeInTheDocument()
-    expect(screen.getByText('large_transfer')).toBeInTheDocument()
+    // AlertRuleBadge renders the human label "Large Transfer", not the raw rule key
+    expect(screen.getByText('Large Transfer')).toBeInTheDocument()
   })
 
   it('renders date range picker inputs', () => {

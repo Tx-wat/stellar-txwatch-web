@@ -1,4 +1,5 @@
 import { AlertRule } from '@/types'
+import { truncateId } from '@/lib/stellar'
 export { truncateId as formatId } from '@/lib/stellar'
 
 /**
@@ -43,7 +44,9 @@ export function formatRelativeTime(timestamp: number, now: number = Date.now()):
 export function formatRuleSummary(rule: AlertRule): string {
   switch (rule.type) {
     case 'LargeTransfer':
-      return `>= ${rule.threshold_xlm} XLM`
+      return rule.asset
+        ? `>= ${rule.threshold} (${truncateId(rule.asset)})`
+        : `>= ${rule.threshold_xlm} XLM`
     case 'FunctionCalled':
       return rule.function_name || 'function'
     case 'AdminFunctionCalled':

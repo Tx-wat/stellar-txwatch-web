@@ -11,6 +11,39 @@ import { Network } from '@/types'
 import NetworkBadge from '@/components/NetworkBadge'
 import { STORAGE_KEYS } from '@/lib/storageKeys'
 
+/** Exports the provided alerts as a CSV file download. */
+function exportAlertHistoryCSV(alerts: AlertPayload[], contractMap: Record<string, WatchedContract>) {
+  const rows = [
+    ['Time', 'Contract', 'Network', 'Rule', 'Rule Name', 'Tx Hash', 'Function', 'Amount', 'Delivery Status', 'Retry Count', 'Last Attempt', 'Latency'],
+    ...alerts.map((a) => [
+      new Date(a.timestamp).toLocaleString(),
+      contractMap[a.contract_id]?.label || a.contract_id,
+      a.network,
+      a.rule_triggered,
+      a.rule_name ?? '',
+      a.transaction_hash,
+      a.function_name ?? 'N/A',
+      a.amount !== undefined ? `${a.amount} XLM` : 'N/A',
+      a.delivery_status ?? 'unknown',
+      a.delivery_retry_count !== undefined ? String(a.delivery_retry_count) : 'N/A',
+      a.delivery_last_attempt ? new Date(a.delivery_last_attempt).toLocaleString() : 'N/A',
+      a.delivery_ms !== undefined
+        ? a.delivery_ms < 1000
+          ? `${a.delivery_ms} ms`
+          : `${(a.delivery_ms / 1000).toFixed(2)} s`
+        : 'N/A',
+    ]),
+  ]
+  const csv = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `alert-history-${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 100)
+}
+
 export default function GlobalAlertsPage() {
   const { contracts } = useContracts()
   const [allAlerts, setAllAlerts] = useState<AlertPayload[]>([])
@@ -85,6 +118,18 @@ export default function GlobalAlertsPage() {
           <h1 className="text-2xl font-bold text-zinc-100">Global Alert Feed</h1>
           <p className="text-sm text-zinc-500 mt-1">View alerts across all registered contracts</p>
         </div>
+        {filteredAlerts.length > 0 && (
+          <button
+            onClick={() => exportAlertHistoryCSV(filteredAlerts, contractMap)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
+            title="Export filtered alerts as CSV"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Export CSV
+          </button>
+        )}
       </div>
 
       {/* Filters */}
@@ -252,5 +297,3 @@ function loadAllAlerts(): AlertPayload[] {
     return []
   }
 }
-
-import { AlertPayload } from '@/types'
