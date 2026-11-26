@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { contractExistsOnNetwork } from '@/lib/api';
 
 export type StellarNetwork = 'mainnet' | 'testnet' | 'futurenet';
 
@@ -8,6 +9,8 @@ interface NetworkEditFieldProps {
   currentNetwork: StellarNetwork;
   onNetworkChange: (network: StellarNetwork) => void | Promise<void>;
   disabled?: boolean;
+  /** Contract ID to validate against the newly selected network before saving (issue #627). */
+  contractId?: string;
 }
 
 const NETWORK_OPTIONS: { value: StellarNetwork; label: string }[] = [
@@ -32,22 +35,37 @@ export function NetworkEditField({
   currentNetwork,
   onNetworkChange,
   disabled = false,
+  contractId,
 }: NetworkEditFieldProps) {
   const [editing, setEditing]         = useState(false);
   const [pendingNetwork, setPending]  = useState<StellarNetwork | null>(null);
   const [saving, setSaving]           = useState(false);
   const [showWarning, setShowWarning] = useState(false);
+  const [checkingContract, setCheckingContract] = useState(false);
+  const [contractNotFound, setContractNotFound] = useState(false);
 
   function handleSelectChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const selected = e.target.value as StellarNetwork;
     if (selected === currentNetwork) return;
     setPending(selected);
     setShowWarning(true);
+    setContractNotFound(false);
   }
 
   async function handleConfirm() {
     if (!pendingNetwork) return;
     setSaving(true);
+    if (contractId) {
+      setCheckingContract(true);
+      setContractNotFound(false);
+      const exists = await contractExistsOnNetwork(contractId, pendingNetwork);
+      setCheckingContract(false);
+      if (!exists) {
+        setContractNotFound(true);
+        setSaving(false);
+        return;
+      }
+    }
     try {
       await onNetworkChange(pendingNetwork);
     } finally {
@@ -61,6 +79,7 @@ export function NetworkEditField({
   function handleCancel() {
     setPending(null);
     setShowWarning(false);
+    setContractNotFound(false);
   }
 
   if (!editing) {
@@ -134,6 +153,13 @@ export function NetworkEditField({
               </p>
             </div>
           </div>
+          {contractNotFound && (
+            <div role="alert" className="rounded-md border border-red-400 bg-red-50 dark:bg-red-900/20 p-3">
+              <p className="text-xs font-medium text-red-800 dark:text-red-300">
+                Contract not found on {pendingNetwork}. It will not be watchable until it is deployed there.
+              </p>
+            </div>
+          )}
           <div className="flex gap-2 justify-end">
             <button
               type="button"
@@ -150,7 +176,7 @@ export function NetworkEditField({
               aria-label={`Confirm switch to ${pendingNetwork}`}
               className="rounded-md bg-yellow-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-yellow-600 transition-colors disabled:opacity-50"
             >
-              {saving ? 'Saving…' : `Switch to ${pendingNetwork}`}
+              {checkingContract ? 'Checking contract…' : saving ? 'Saving…' : `Switch to ${pendingNetwork}`}
             </button>
           </div>
         </div>

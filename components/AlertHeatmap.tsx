@@ -158,6 +158,13 @@ export default function AlertHeatmap({
         </div>
       </div>
 
+      {/* Live region announces the hovered/focused cell's count for screen readers (issue #628) */}
+      <div className="sr-only" role="status" aria-live="polite">
+        {hoveredIndex !== null && dailyCounts[hoveredIndex]
+          ? `${dailyCounts[hoveredIndex].count} ${dailyCounts[hoveredIndex].count === 1 ? 'alert' : 'alerts'} on ${formatTooltipDate(dailyCounts[hoveredIndex].date)}`
+          : ''}
+      </div>
+
       {/* Date range footer */}
       <div className="flex justify-between items-center text-[11px] text-zinc-500 pt-0.5">
         <span>{firstDate}</span>

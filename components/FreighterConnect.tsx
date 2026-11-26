@@ -1,68 +1,27 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Networks } from '@stellar/stellar-sdk'
+import {
+  isConnected as freighterIsConnected,
+  requestAccess,
+  getPublicKey,
+} from '@stellar/freighter-api'
 import { STORAGE_KEYS } from '@/lib/storageKeys'
 
-declare global {
-  interface Window {
-    freighter?: {
-      isConnected: () => Promise<boolean>
-      getPublicKey: () => Promise<string>
-      getNetworkDetails: () => Promise<{ networkPassphrase: string }>
-    }
-    __freighterPublicKey?: string | null
-  }
-}
-
-type FreighterErrorState = 'not-installed' | 'not-allowed' | 'unsupported-browser' | 'unknown' | null
-
-function classifyError(err: unknown): { state: FreighterErrorState; message: string } {
-  const raw = err instanceof Error ? err.message : String(err ?? '')
-  const message = raw.toLowerCase()
-
-  if (
-    message.includes('denied') ||
-    message.includes('rejected') ||
-    message.includes('not allowed') ||
-    message.includes('permission')
-  ) {
-    return { state: 'not-allowed', message: 'Connection rejected / permission denied' }
-  }
-  if (message.includes('not installed') || message.includes('not available')) {
-    return { state: 'not-installed', message: 'Freighter not installed - install the extension and reload' }
-  }
-  return { state: 'unknown', message: raw || 'Connection rejected' }
-}
-
-/**
- * Freighter ships as a Chromium/Firefox extension only - Safari does not
- * support the extension APIs Freighter relies on, so no amount of
- * reloading will make it show up there.
- */
-function isSafariBrowser(): boolean {
-  if (typeof navigator === 'undefined') return false
-  const ua = navigator.userAgent
-  return /^((?!chrome|android|crios|fxios).)*safari/i.test(ua)
-}
-
-async function isConnected(): Promise<boolean> {
-  return Boolean(window.freighter) && (await window.freighter!.isConnected())
-}
-
-const WALLET_STORAGE_KEY = STORAGE_KEYS.FREIGHTER_PUBLIC_KEY
+type FreighterErrorState = 'not-installed' | 'not-allowed' | 'locked' | 'unknown' | null
 
 interface FreighterConnectProps {
   className?: string
   onConnect?: (publicKey: string) => void
 }
 
+const WALLET_STORAGE_KEY = STORAGE_KEYS.FREIGHTER_PUBLIC_KEY
+
 export default function FreighterConnect({ onConnect, className = '' }: FreighterConnectProps) {
   const [publicKey, setPublicKey] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [errorState, setErrorState] = useState<FreighterErrorState>(null)
-  const [isConnecting, setIsConnecting] = useState(false)
   const [isInitializing, setIsInitializing] = useState(true)
 
   useEffect(() => {
@@ -72,16 +31,19 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
 
   async function checkConnection() {
     try {
-      const connected = await isConnected()
-      if (!connected) {
+      const { isConnected: connected, error: checkError } = await freighterIsConnected()
+      if (checkError) {
+        setIsInitializing(false)
         return
       }
 
-      const key = await window.freighter?.getPublicKey()
-      if (key) {
-        setPublicKey(key)
-        window.__freighterPublicKey = key
-        onConnect?.(key)
+      if (connected) {
+        const { publicKey: key, error: keyError } = await getPublicKey()
+        if (!keyError && key) {
+          setPublicKey(key)
+          window.__freighterPublicKey = key
+          onConnect?.(key)
+        }
       }
     } catch {
       // Connection check failed
@@ -91,54 +53,47 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
   }
 
   async function connect() {
-    if (isConnecting) return
-    setIsConnecting(true)
     setLoading(true)
     setError(null)
     setErrorState(null)
 
     try {
-      if (isSafariBrowser()) {
-        setErrorState('unsupported-browser')
-        setError(
-          'Freighter is not available on Safari. Switch to Chrome or Firefox, or use the Stellar Laboratory to manage this contract without a browser wallet.'
-        )
-        return
-      }
-
-      const connected = await isConnected()
-      if (!connected) {
+      const { isConnected: installed, error: checkError } = await freighterIsConnected()
+      if (checkError || !installed) {
         setErrorState('not-installed')
         setError('Freighter not installed - install the extension and reload')
         return
       }
 
-      const key = await window.freighter?.getPublicKey()
-      const networkDetails = await window.freighter?.getNetworkDetails()
-      const networkPassphrase = networkDetails?.networkPassphrase
+      const { address, error: accessError } = await requestAccess()
+      if (accessError) {
+        if (accessError.code === 'NOT_ALLOWED') {
+          setErrorState('not-allowed')
+          setError('Connection rejected / permission denied')
+        } else if (accessError.code === 'LOCKED') {
+          setErrorState('locked')
+          setError('Freighter is locked - unlock it and try again')
+        } else {
+          setErrorState('unknown')
+          setError('Connection rejected')
+        }
+        return
+      }
 
-      if (!key || !networkPassphrase) {
+      if (!address) {
         setError('Failed to retrieve wallet information')
         return
       }
 
-      const knownPassphrases = [Networks.PUBLIC, Networks.TESTNET, Networks.FUTURENET]
-      if (!knownPassphrases.includes(networkPassphrase as Networks)) {
-        setError('Wallet is on a custom network')
-        return
-      }
-
-      setPublicKey(key)
-      window.__freighterPublicKey = key
-      localStorage.setItem(WALLET_STORAGE_KEY, key)
-      onConnect?.(key)
+      setPublicKey(address)
+      window.__freighterPublicKey = address
+      localStorage.setItem(WALLET_STORAGE_KEY, address)
+      onConnect?.(address)
     } catch (err) {
-      const classified = classifyError(err)
-      setErrorState(classified.state)
-      setError(classified.message)
+      setErrorState('unknown')
+      setError(err instanceof Error ? err.message : 'Connection rejected')
     } finally {
       setLoading(false)
-      setIsConnecting(false)
     }
   }
 
