@@ -7,12 +7,9 @@
 .yarn/install-state.gz
 
 # testing
-/coverage/
-**/__snapshots__/
-
-# playwright
-/playwright-report/
-/test-results/
+/coverage
+**/__snapshots__
+*.snap
 
 # next.js
 /.next/
@@ -46,6 +43,14 @@ next-env.d.ts
 # project notes
 vrickish.md
 
-# IDE and tool caches
-.kiro/
-.claude/
+# editor/IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# playwright
+/test-results/
+/playwright-report/
+/playwright/.cache/

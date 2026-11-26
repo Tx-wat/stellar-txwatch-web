@@ -9,6 +9,7 @@ import { formatDateTime as defaultFormatDateTime } from '@/lib/format'
 import { useTimezone } from './TimezoneProvider'
 import AlertRuleBadge from './AlertRuleBadge'
 import CopyButton from './CopyButton'
+import { useSortedLog } from '@/hooks/useSortedLog'
 
 interface WebhookLogProps {
   alerts: AlertPayload[]
@@ -94,13 +95,28 @@ export default function WebhookLog({
     return true
   })
 
+  // Sorting applies only to the standalone log; shared timelines keep their axis order (#651)
+  const { sortedEntries: sortedAlerts, sortField, sortDirection, setSortField, setSortDirection } =
+    useSortedLog(filteredAlerts, 'desc', 'timestamp')
+
   // When sharedTimestamps is provided, align rows to the shared timeline axis
   const timelineSlots: { timestamp: number; alert: AlertPayload | null }[] = sharedTimestamps
     ? sharedTimestamps.map((ts: number) => ({
         timestamp: ts,
         alert: filteredAlerts.find((a: AlertPayload) => a.timestamp === ts) ?? null,
       }))
-    : filteredAlerts.map((a: AlertPayload) => ({ timestamp: a.timestamp, alert: a }))
+    : sortedAlerts.map((a: AlertPayload) => ({ timestamp: a.timestamp, alert: a }))
+
+  // Options map to a field and direction: failed first is ascending by delivery status (#651)
+  const sortValue = sortField === 'delivery_status'
+    ? (sortDirection === 'asc' ? 'failed-first' : 'delivered-first')
+    : (sortDirection === 'desc' ? 'newest' : 'oldest')
+  const handleSortChange = (value: string) => {
+    if (value === 'newest') { setSortField('timestamp'); setSortDirection('desc') }
+    if (value === 'oldest') { setSortField('timestamp'); setSortDirection('asc') }
+    if (value === 'failed-first') { setSortField('delivery_status'); setSortDirection('asc') }
+    if (value === 'delivered-first') { setSortField('delivery_status'); setSortDirection('desc') }
+  }
 
   const internalRef = useRef<HTMLDivElement>(null)
   const parentRef = scrollContainerRef ?? internalRef
@@ -210,6 +226,17 @@ export default function WebhookLog({
           <span className="text-xs text-zinc-500">
             {filteredAlerts.length} of {alerts.length} alerts
           </span>
+          <select
+            aria-label="Sort log"
+            value={sortValue}
+            onChange={(e) => handleSortChange(e.target.value)}
+            className="text-xs bg-zinc-950 border border-zinc-800 rounded-md px-2 py-1 text-zinc-300"
+          >
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="failed-first">Failed first</option>
+            <option value="delivered-first">Delivered first</option>
+          </select>
           {/* exportCSV receives the full filtered set, not the virtual window */}
           <button
             onClick={() => exportCSV(filteredAlerts)}
@@ -234,7 +261,7 @@ export default function WebhookLog({
             {/* Header */}
             <div
               role="row"
-              className="grid border-b border-zinc-800 pb-3 mb-0"
+              className="grid sticky top-0 z-10 bg-zinc-900 border-b border-zinc-800 pb-3 mb-0"
               style={{ gridTemplateColumns: '160px 180px 1fr 140px 120px 120px' }}
             >
               {['Time', 'Rule', 'Tx Hash', 'Function', 'Amount', 'Latency'].map((h) => (
