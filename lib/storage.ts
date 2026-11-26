@@ -197,6 +197,11 @@ export function migrateStorage(
   setStorageVersion(targetVersion)
 }
 
+const DEFAULT_SETTINGS: AppSettings = {
+  explorer: 'stellar-expert',
+  soundNotification: false,
+}
+
 /**
  * Migration to v2:
  * - Normalizes LargeTransfer rules that only have `threshold_xlm` into the

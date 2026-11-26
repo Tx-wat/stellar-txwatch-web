@@ -286,6 +286,108 @@ function CompareViewContent() {
         </div>
       )}
 
+      {/* Rule Diff */}
+      {contractA && contractB && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-4">
+          <h2 className="text-lg font-semibold text-zinc-100">Rule Comparison</h2>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" data-testid="rule-diff">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+                {contractA.label} only
+              </p>
+              {contractA.rules
+                .filter(
+                  (ra) =>
+                    !contractB.rules.some(
+                      (rb) => rb.type === ra.type && rb.function_name === ra.function_name
+                    )
+                )
+                .map((rule, i) => (
+                  <div
+                    key={i}
+                    className="text-xs font-mono bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 rounded px-2 py-1 mb-1"
+                    data-testid="rule-only-a"
+                  >
+                    {rule.type}{rule.function_name ? ` (${rule.function_name})` : ''}
+                  </div>
+                ))}
+              {contractA.rules.filter(
+                (ra) =>
+                  !contractB.rules.some(
+                    (rb) => rb.type === ra.type && rb.function_name === ra.function_name
+                  )
+              ).length === 0 && (
+                <p className="text-xs text-zinc-500">No unique rules</p>
+              )}
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+                {contractB.label} only
+              </p>
+              {contractB.rules
+                .filter(
+                  (rb) =>
+                    !contractA.rules.some(
+                      (ra) => ra.type === rb.type && ra.function_name === rb.function_name
+                    )
+                )
+                .map((rule, i) => (
+                  <div
+                    key={i}
+                    className="text-xs font-mono bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 rounded px-2 py-1 mb-1"
+                    data-testid="rule-only-b"
+                  >
+                    {rule.type}{rule.function_name ? ` (${rule.function_name})` : ''}
+                  </div>
+                ))}
+              {contractB.rules.filter(
+                (rb) =>
+                  !contractA.rules.some(
+                    (ra) => ra.type === rb.type && ra.function_name === rb.function_name
+                  )
+              ).length === 0 && (
+                <p className="text-xs text-zinc-500">No unique rules</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Alert Count Chart */}
+      {contractA && contractB && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-4" data-testid="alert-count-chart">
+          <h2 className="text-lg font-semibold text-zinc-100">Alert Count Comparison</h2>
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-zinc-400 w-36 truncate">{contractA.label}</span>
+              <div className="flex-1 bg-zinc-800 rounded-full h-3 overflow-hidden">
+                <div
+                  className="bg-emerald-500 h-3 rounded-full transition-all"
+                  style={{
+                    width: `${alertsA.length + alertsB.length === 0 ? 0 : Math.round((alertsA.length / (alertsA.length + alertsB.length)) * 100)}%`,
+                  }}
+                  aria-label={`${contractA.label}: ${alertsA.length} alerts`}
+                />
+              </div>
+              <span className="text-xs text-zinc-300 w-10 text-right">{alertsA.length}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-zinc-400 w-36 truncate">{contractB.label}</span>
+              <div className="flex-1 bg-zinc-800 rounded-full h-3 overflow-hidden">
+                <div
+                  className="bg-indigo-500 h-3 rounded-full transition-all"
+                  style={{
+                    width: `${alertsA.length + alertsB.length === 0 ? 0 : Math.round((alertsB.length / (alertsA.length + alertsB.length)) * 100)}%`,
+                  }}
+                  aria-label={`${contractB.label}: ${alertsB.length} alerts`}
+                />
+              </div>
+              <span className="text-xs text-zinc-300 w-10 text-right">{alertsB.length}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Two-Column Alert History */}
       {!contractA && !contractB ? (
         <EmptyState
