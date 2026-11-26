@@ -10,8 +10,7 @@ import ToastProvider from '@/components/ToastProvider'
 import TimezoneProvider from '@/components/TimezoneProvider'
 import OnboardingTour from '@/components/OnboardingTour'
 import HeaderSyncStatus from '@/components/HeaderSyncStatus'
-import ThemeProvider from '@/components/ThemeProvider'
-import ThemeToggle from '@/components/ThemeToggle'
+import NewContractShortcut from '@/components/NewContractShortcut'
 
 export const metadata: Metadata = {
   title: {
@@ -32,18 +31,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="dark">
       <body className="min-h-screen bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 transition-colors duration-200">
         <WebVitals />
-        <ThemeProvider>
-          <ToastProvider>
-            <TimezoneProvider>
-              <StorageContext>
-                <header className="border-b border-zinc-200 bg-white/80 dark:border-zinc-800 dark:bg-zinc-950/80 backdrop-blur-sm sticky top-0 z-50">
-                  <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-                    <Link href="/" className="flex items-center gap-2 font-bold text-lg tracking-tight">
-                      <span className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-white text-xs font-black">
-                        TX
-                      </span>
-                      <span className="text-zinc-900 dark:text-zinc-100">TxWatch</span>
-                    </Link>
+        <NewContractShortcut />
+        <ToastProvider>
+          <TimezoneProvider>
+            <StorageContext>
+              <header className="no-print border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-sm sticky top-0 z-50">
+                <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+                  <Link href="/" className="flex items-center gap-2 font-bold text-lg tracking-tight">
+                    <span className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-white text-xs font-black">
+                      TX
+                    </span>
+                    <span className="text-zinc-100">TxWatch</span>
+                  </Link>
 
                     <nav className="hidden sm:flex items-center gap-6 text-sm text-zinc-600 dark:text-zinc-400">
                       <Link href="/dashboard" className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">Dashboard</Link>

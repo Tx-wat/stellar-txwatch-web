@@ -1,5 +1,23 @@
 'use client'
 
+/**
+ * AlertHeatmap — 30-day (or configurable) alert activity grid.
+ *
+ * ## Timezone behaviour
+ * Alert timestamps are Unix milliseconds produced by the txwatch-core engine,
+ * which always uses UTC.  All date bucketing in this component and in the
+ * underlying `getDailyAlertCounts` helper therefore uses UTC methods
+ * (`getUTCFullYear`, `getUTCDate`, etc.) so that a bucket labelled
+ * "2024-01-15" always covers the UTC calendar day
+ * 2024-01-15T00:00:00Z – 2024-01-15T23:59:59.999Z, regardless of the
+ * viewer's local timezone.
+ *
+ * Tooltip dates are formatted with `timeZone: 'UTC'` for the same reason —
+ * constructing the display date from the YYYY-MM-DD key via `Date.UTC` avoids
+ * the browser reinterpreting midnight as a local timestamp and shifting the
+ * displayed day by one for users behind UTC.
+ */
+
 import { useMemo, useState } from 'react'
 import { AlertPayload } from '@/types'
 import { getDailyAlertCounts, DailyAlertCount } from '@/lib/storage'
@@ -11,14 +29,22 @@ export interface AlertHeatmapProps {
   className?: string
 }
 
+/**
+ * Formats a "YYYY-MM-DD" UTC date key for display.
+ *
+ * The key always represents a UTC calendar day, so we construct the Date with
+ * `Date.UTC` to avoid the browser reinterpreting it in the local timezone
+ * (which would shift the displayed date by one day for users behind UTC).
+ */
 function formatTooltipDate(dateStr: string): string {
   try {
     const [year, month, day] = dateStr.split('-').map(Number)
-    const date = new Date(year, month - 1, day)
+    const date = new Date(Date.UTC(year, month - 1, day))
     return date.toLocaleDateString(undefined, {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
+      timeZone: 'UTC',
     })
   } catch {
     return dateStr
