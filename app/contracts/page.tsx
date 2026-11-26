@@ -1,16 +1,17 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { WatchedContract, Network } from '@/types'
-import { getContracts, deleteContract, saveContract } from '@/lib/storage'
+import { getContracts, deleteContract, saveContract, getTodayAlertCount } from '@/lib/storage'
 import { STORAGE_KEYS } from '@/lib/storageKeys'
 import { useContractListState } from '@/hooks/useContractListState'
 import { useLastAlertTimes } from '@/hooks/useAlerts'
 import ContractCard from '@/components/ContractCard'
 import ContractListToolbar from '@/components/ContractListToolbar'
 import BulkActionBar from '@/components/BulkActionBar'
+import { exportSelectedContractsAsBlob } from '@/lib/exportStorage'
 import EmptyState from '@/components/EmptyState'
 
 const NETWORK_LABELS: Record<Network, string> = {
@@ -150,7 +151,57 @@ function importContractsFromCsv(text: string): CsvImportResult {
   return { imported, skipped, errors }
 }
 
+const CONTRACT_CARD_SELECTOR = '[data-contract-card="true"]'
+
+export function handleContractGridKeyDown(
+  event: React.KeyboardEvent<HTMLDivElement>,
+  router: ReturnType<typeof useRouter>,
+  toggleSelected: (id: string) => void
+) {
+  const target = event.target as HTMLElement
+  const card = target.closest(CONTRACT_CARD_SELECTOR) as HTMLElement | null
+  if (!card) return
+
+  const cards = Array.from(
+    event.currentTarget.querySelectorAll<HTMLElement>(CONTRACT_CARD_SELECTOR)
+  )
+  const index = cards.indexOf(card)
+  if (index === -1) return
+
+  switch (event.key) {
+    case 'ArrowRight':
+    case 'ArrowDown': {
+      event.preventDefault()
+      const next = cards[index + 1]
+      next?.focus()
+      break
+    }
+    case 'ArrowLeft':
+    case 'ArrowUp': {
+      event.preventDefault()
+      const prev = cards[index - 1]
+      prev?.focus()
+      break
+    }
+    case 'Enter': {
+      event.preventDefault()
+      const id = card.dataset.contractId
+      if (id) router.push(`/contracts/${id}`)
+      break
+    }
+    case ' ': {
+      event.preventDefault()
+      const id = card.dataset.contractId
+      if (id) toggleSelected(id)
+      break
+    }
+    default:
+      break
+  }
+}
+
 export default function ContractsPage() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const [allContracts, setAllContracts] = useState<WatchedContract[]>([])
   const [mounted, setMounted] = useState(false)
@@ -218,6 +269,16 @@ export default function ContractsPage() {
     setAllContracts(getContracts())
   }
 
+  // Downloads only the selected contracts, in the same format as the full export (#653)
+  const handleExportSelected = () => {
+    const url = URL.createObjectURL(exportSelectedContractsAsBlob(list.selectedIds))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'txwatch-selected-contracts.json'
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
   const handleCsvFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     event.target.value = ''
@@ -230,12 +291,22 @@ export default function ContractsPage() {
   if (!mounted) return null
 
   const hasAnyContracts = allContracts.length > 0
+  // Totals for the footer (#648). Alert count is read on render, so it refreshes with the page.
+  const totalRules = allContracts.reduce((sum, contract) => sum + contract.rules.length, 0)
+  const todayAlertCount = getTodayAlertCount()
   const hasFilteredContracts = list.filtered.length > 0
 
   const renderCard = (contract: WatchedContract) => {
     const selected = list.selectedIds.includes(contract.id)
     return (
-      <div key={contract.id} className="relative">
+      <div
+        key={contract.id}
+        className="relative focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 rounded-xl"
+        data-contract-card="true"
+        data-contract-id={contract.id}
+        tabIndex={0}
+        aria-label={`${contract.label} contract card. Use arrow keys to navigate, Enter to open, Space to select.`}
+      >
         <ContractCard
           contract={contract}
           lastAlertTime={lastAlertTimes[contract.contract_id]}
@@ -266,6 +337,8 @@ export default function ContractsPage() {
         onViewModeChange={list.setViewMode}
         hasAnyContracts={hasAnyContracts}
         resultCount={list.filtered.length}
+        allVisibleSelected={list.allVisibleSelected}
+        onToggleSelectAll={list.toggleSelectAllVisible}
       />
 
       <div className="flex justify-end">
@@ -320,6 +393,7 @@ export default function ContractsPage() {
           selectedCount={list.selectedIds.length}
           allVisibleSelected={list.allVisibleSelected}
           onToggleSelectAll={list.toggleSelectAllVisible}
+          onExportSelected={handleExportSelected}
           onClearSelection={list.clearSelection}
           onDeleteSelected={handleDeleteSelected}
         />
@@ -341,7 +415,11 @@ export default function ContractsPage() {
       ) : !hasFilteredContracts ? (
         <EmptyState
           title={search.trim() ? 'No contracts match your search' : 'No contracts found'}
-          description="No contracts match the active search or network filter. Try clearing the search or selecting a different network."
+          description={
+            search.trim()
+              ? `No contracts match "${search.trim()}" with the current network filter. Clear the search to see more.`
+              : 'No contracts match the active network filter. Try selecting a different network.'
+          }
           action={
             <button
               onClick={list.clearFilters}
@@ -363,7 +441,10 @@ export default function ContractsPage() {
                   {label}
                   <span className="text-sm font-normal text-zinc-500">({networkContracts.length})</span>
                 </h2>
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div
+                  className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4"
+                  onKeyDown={(e) => handleContractGridKeyDown(e, router, list.toggleSelected)}
+                >
                   {networkContracts.map(renderCard)}
                 </div>
               </section>
@@ -395,7 +476,11 @@ export default function ContractsPage() {
                   </button>
                 </h2>
                 {!collapsed && (
-                  <div id={`group-section-${group.key}`} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div
+                    id={`group-section-${group.key}`}
+                    className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4"
+                    onKeyDown={(e) => handleContractGridKeyDown(e, router, list.toggleSelected)}
+                  >
                     {group.contracts.map(renderCard)}
                   </div>
                 )}
@@ -405,7 +490,10 @@ export default function ContractsPage() {
         </div>
       ) : (
         <>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div
+            className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4"
+            onKeyDown={(e) => handleContractGridKeyDown(e, router, list.toggleSelected)}
+          >
             {list.paginated.map(renderCard)}
           </div>
 
@@ -433,6 +521,14 @@ export default function ContractsPage() {
             </div>
           )}
         </>
+      )}
+
+      {hasAnyContracts && (
+        <footer className="flex flex-wrap gap-x-6 gap-y-1 border-t border-zinc-800 pt-4 text-sm text-zinc-400">
+          <span>{allContracts.length} {allContracts.length === 1 ? 'contract' : 'contracts'}</span>
+          <span>{totalRules} {totalRules === 1 ? 'rule' : 'rules'}</span>
+          <span>{todayAlertCount} {todayAlertCount === 1 ? 'alert' : 'alerts'} today</span>
+        </footer>
       )}
     </div>
   )

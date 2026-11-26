@@ -28,6 +28,14 @@ export function sortByLastAlert<T extends StoredContract & { contract_id: string
   })
 }
 
+export function sortByRuleCount<T extends StoredContract & { rules: unknown[] }>(contracts: T[]): T[] {
+  return [...contracts].sort((a, b) => {
+    const diff = (b.rules?.length ?? 0) - (a.rules?.length ?? 0)
+    if (diff !== 0) return diff
+    return a.label.toLowerCase().localeCompare(b.label.toLowerCase())
+  })
+}
+
 export function sortContracts<T extends StoredContract>(contracts: T[]): T[] {
   return [...contracts].sort((a, b) => {
     const netDiff = networkRank(a.network) - networkRank(b.network);
