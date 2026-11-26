@@ -1,13 +1,14 @@
 import { StrKey } from '@stellar/stellar-sdk'
 import { Network } from '@/types'
-import { StrKey } from '@stellar/stellar-sdk'
-import { SorobanRpc, Horizon, contract } from '@stellar/stellar-sdk'
 
 const DEFAULT_HORIZON_URLS: Record<Network, string> = {
   mainnet: 'https://horizon.stellar.org',
   testnet: 'https://horizon-testnet.stellar.org',
   futurenet: 'https://horizon-futurenet.stellar.org',
 }
+
+// Used by explorerTxUrl and explorerContractUrl; was referenced but never defined (#659).
+export const HORIZON_URLS: Record<Network, string> = DEFAULT_HORIZON_URLS
 
 const mainnetRpcUrl =
   process.env.NEXT_PUBLIC_SOROBAN_RPC_URL_MAINNET ||
@@ -123,6 +124,18 @@ export function explorerContractUrl(
  * @returns The identifier unchanged when short enough, otherwise
  *   `${first}...${last}`.
  */
+/**
+ * Native XLM balance for a Stellar account. Contract (C...) addresses have no
+ * Horizon account record, so they resolve to null (#649).
+ */
+export async function fetchNativeBalance(network: Network, accountId: string): Promise<string | null> {
+  if (!StrKey.isValidEd25519PublicKey(accountId)) return null
+  const server = new Horizon.Server(DEFAULT_HORIZON_URLS[network])
+  const account = await server.accounts().accountId(accountId).call()
+  const native = account.balances.find((balance) => balance.asset_type === 'native')
+  return native?.balance ?? null
+}
+
 export function truncateId(id: string, chars = 8): string {
   if (id.length <= chars * 2 + 3) return id
   return `${id.slice(0, chars)}...${id.slice(-chars)}`
@@ -158,6 +171,8 @@ export type ContractIdValidationResult =
   | { valid: true }
   | { valid: false; reason: 'format' | 'checksum'; message: string }
 
+const CONTRACT_ID_FORMAT = /^C[A-Z2-7]{55}$/
+
 /**
  * Validate a Stellar contract ID (StrKey `C...`).
  *
@@ -173,5 +188,36 @@ export function validateContractId(id: string): ContractIdValidationResult {
       message:
         'Invalid contract ID format: expected a 56-character string starting with "C" using the base32 alphabet (A-Z, 2-7).',
     }
+  }
+  try {
+    if (StrKey.isValidContract(id)) {
+      return { valid: true }
+    }
+    return {
+      valid: false,
+      reason: 'checksum',
+      message: 'Contract ID checksum is invalid. Check for a typo.',
+    }
+  } catch {
+    return {
+      valid: false,
+      reason: 'checksum',
+      message: 'Contract ID checksum is invalid. Check for a typo.',
+    }
+  }
+}
+
+/**
+ * Validate a URL for use as a webhook endpoint.
+ *
+ * @param url - Candidate URL string.
+ * @returns `true` only for valid HTTPS URLs.
+ */
+export function isValidUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'https:'
+  } catch {
+    return false
   }
 }

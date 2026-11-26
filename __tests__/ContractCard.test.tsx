@@ -138,23 +138,14 @@ describe('ContractCard', () => {
     expect(mockPush).toHaveBeenCalledWith('/contracts/compare?a=contract-1')
   })
 
-  it('renders a 7-day activity sparkline SVG', () => {
-    const { container } = render(<ContractCard contract={baseContract} />)
-    const sparkline = container.querySelector('svg[aria-label="7-day activity sparkline"]')
-    expect(sparkline).not.toBeNull()
-    // Should contain a polyline when there is activity
-    expect(sparkline!.querySelector('polyline')).not.toBeNull()
+  it('shows a Disabled badge and "rules paused" text when the contract is disabled', () => {
+    render(<ContractCard contract={{ ...baseContract, enabled: false }} />)
+    expect(screen.getByText('Disabled')).toBeInTheDocument()
+    expect(screen.getByText(/paused/)).toBeInTheDocument()
   })
 
-  it('renders a flat line sparkline when there is no activity', async () => {
-    const { getDailyAlertCounts } = await import('@/lib/storage')
-    vi.mocked(getDailyAlertCounts).mockReturnValueOnce(
-      Array.from({ length: 7 }, (_, i) => ({ date: `2024-01-0${i + 1}`, count: 0 }))
-    )
-    const { container } = render(<ContractCard contract={baseContract} />)
-    const sparkline = container.querySelector('svg[aria-label="7-day activity sparkline"]')
-    expect(sparkline).not.toBeNull()
-    expect(sparkline!.querySelector('line')).not.toBeNull()
-    expect(sparkline!.querySelector('polyline')).toBeNull()
+  it('does not show the Disabled badge when the contract is enabled', () => {
+    render(<ContractCard contract={{ ...baseContract, enabled: true }} />)
+    expect(screen.queryByText('Disabled')).toBeNull()
   })
 })

@@ -1,8 +1,12 @@
+import { formatDate, formatDateTime } from '@/lib/format'
+
 interface MetadataSectionProps {
   label: string
   value?: string | number
   loading?: boolean
   children?: React.ReactNode
+  /** Unix ms timestamp of when the contract was created. Rendered as a small "Created" line. */
+  createdAt?: number
 }
 
 export default function MetadataSection({
@@ -10,6 +14,7 @@ export default function MetadataSection({
   value,
   loading = false,
   children,
+  createdAt,
 }: MetadataSectionProps) {
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
@@ -23,6 +28,11 @@ export default function MetadataSection({
         <div className="text-sm text-zinc-300 break-all">{children}</div>
       ) : (
         <p className="text-sm text-zinc-300 break-all">{value}</p>
+      )}
+      {!loading && createdAt !== undefined && (
+        <p className="text-xs text-zinc-500 mt-2" title={formatDateTime(createdAt)}>
+          Created {formatDate(createdAt)}
+        </p>
       )}
     </div>
   )

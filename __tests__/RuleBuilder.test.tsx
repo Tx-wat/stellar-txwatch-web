@@ -6,18 +6,24 @@
  * duplicate detection, and the edit / cancel / remove flows.
  */
 import '@testing-library/jest-dom/vitest'
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import React, { useState } from 'react'
 import RuleBuilder from '@/components/RuleBuilder'
 import { AlertRule, AlertRuleType } from '@/types'
 
+vi.mock('@/lib/api', () => ({
+  fetchContractFunctions: vi.fn(),
+}))
+import { fetchContractFunctions } from '@/lib/api'
+
 /** Stateful harness so the controlled `rules` prop stays in sync. */
-function Harness({ initial = [], onChange }: { initial?: AlertRule[]; onChange?: (r: AlertRule[]) => void }) {
+function Harness({ initial = [], onChange, contractId }: { initial?: AlertRule[]; onChange?: (r: AlertRule[]) => void; contractId?: string }) {
   const [rules, setRules] = useState<AlertRule[]>(initial)
   return (
     <RuleBuilder
       rules={rules}
+      contractId={contractId}
       onChange={(r) => {
         setRules(r)
         onChange?.(r)
@@ -29,6 +35,44 @@ function Harness({ initial = [], onChange }: { initial?: AlertRule[]; onChange?:
 function selectType(type: AlertRuleType) {
   fireEvent.change(screen.getByRole('combobox'), { target: { value: type } })
 }
+
+describe('RuleBuilder function autocomplete (issue #626)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('shows a loading indicator while the contract spec is being fetched', async () => {
+    let resolveFn: (v: string[]) => void = () => {}
+    (fetchContractFunctions as ReturnType<typeof vi.fn>).mockImplementation(
+      () => new Promise((resolve) => { resolveFn = resolve })
+    )
+    render(<Harness contractId="CABC123" />)
+    selectType('FunctionCalled')
+    expect(screen.getByText(/Loading contract functions/)).toBeInTheDocument()
+    resolveFn(['transfer', 'mint'])
+  })
+
+  it('shares the fetched function list between FunctionCalled and AdminFunctionCalled', async () => {
+    (fetchContractFunctions as ReturnType<typeof vi.fn>).mockResolvedValue(['transfer', 'mint'])
+    render(<Harness contractId="CABC123" />)
+    selectType('FunctionCalled')
+    const input = await screen.findByPlaceholderText('e.g. transfer')
+    expect(input).toHaveAttribute('list', 'rule-builder-function-names')
+
+    selectType('AdminFunctionCalled')
+    const adminInput = screen.getByPlaceholderText('e.g. set_admin, upgrade, migrate')
+    expect(adminInput).toHaveAttribute('list', 'rule-builder-function-names')
+    expect(fetchContractFunctions).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not fetch or show a datalist when no contractId is provided', () => {
+    render(<Harness />)
+    selectType('FunctionCalled')
+    const input = screen.getByPlaceholderText('e.g. transfer')
+    expect(input).not.toHaveAttribute('list')
+    expect(fetchContractFunctions).not.toHaveBeenCalled()
+  })
+})
 
 describe('RuleBuilder', () => {
   it('renders the rule type dropdown with AnyTransaction as default', () => {
@@ -179,41 +223,16 @@ describe('RuleBuilder', () => {
     expect(screen.getByText('Tx Failed')).toBeInTheDocument()
   })
 
-  it('renders rule list with aria-label indicating drag-to-reorder', () => {
-    render(
-      <Harness initial={[{ type: 'AnyTransaction' }, { type: 'TransactionFailed' }]} />
-    )
-    const list = screen.getByRole('list', { name: /drag to reorder/i })
-    expect(list).toBeInTheDocument()
+  it('shows the rule count badge without a warning under the limit', () => {
+    render(<Harness initial={[{ type: 'AnyTransaction' }]} />)
+    expect(screen.getByTestId('rule-count-badge')).toHaveTextContent('1 rule')
+    expect(screen.queryByTestId('rule-count-warning')).not.toBeInTheDocument()
   })
 
-  it('each draggable rule item has aria-grabbed attribute', () => {
-    render(
-      <Harness initial={[{ type: 'AnyTransaction' }, { type: 'TransactionFailed' }]} />
-    )
-    const items = screen.getAllByRole('listitem')
-    items.forEach((item) => {
-      expect(item).toHaveAttribute('aria-grabbed')
-    })
-  })
-
-  it('reorders rules after a drag sequence', () => {
-    const onChange = vi.fn()
-    render(
-      <Harness
-        initial={[{ type: 'AnyTransaction' }, { type: 'TransactionFailed' }]}
-        onChange={onChange}
-      />
-    )
-    const items = screen.getAllByRole('listitem')
-    // Simulate dragging item 0 over item 1
-    fireEvent.dragStart(items[0])
-    fireEvent.dragOver(items[1])
-    fireEvent.dragEnd(items[0])
-
-    expect(onChange).toHaveBeenCalledWith([
-      { type: 'TransactionFailed' },
-      { type: 'AnyTransaction' },
-    ])
+  it('shows a warning badge when rule count exceeds the threshold', () => {
+    const manyRules: AlertRule[] = Array.from({ length: 21 }, () => ({ type: 'AnyTransaction' }))
+    render(<Harness initial={manyRules} />)
+    expect(screen.getByTestId('rule-count-badge')).toHaveTextContent('21 rules')
+    expect(screen.getByTestId('rule-count-warning')).toBeInTheDocument()
   })
 })

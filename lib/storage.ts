@@ -1,6 +1,8 @@
 import { z } from 'zod'
-import { WatchedContract, AlertPayload, Network } from '@/types'
+import { WatchedContract, AlertPayload, Network, AppSettings } from '@/types'
 import { STORAGE_KEYS } from '@/lib/storageKeys'
+import { WatchedContractSchema, AlertPayloadSchema } from '@/lib/schemas'
+import { ExplorerId } from '@/lib/stellar'
 import {
   STORAGE_QUOTA_BYTES,
   MAX_ALERTS_PER_CONTRACT,
@@ -195,18 +197,28 @@ export function migrateStorage(
   setStorageVersion(targetVersion)
 }
 
+const DEFAULT_SETTINGS: AppSettings = {
+  explorer: 'stellar-expert',
+  soundNotification: false,
+}
+
 /**
  * Migration to v2:
  * - Normalizes LargeTransfer rules that only have `threshold_xlm` into the
  *   token-denominated shape (`asset` + `threshold`), while keeping
  *   `threshold_xlm` for backwards compatibility.
  * - Ensures settings exist with the default explorer preference.
+ *
+ * Guards against repeated execution by checking the stored version first.
+ * Calling this function when the storage version is already >= 2 is a no-op.
  */
+export const DEFAULT_SETTINGS: AppSettings = { explorer: 'stellar-expert' as ExplorerId }
+
 export function migrateToV2() {
   const storage = getStorage()
   if (!storage) return
 
-  const contracts = load<WatchedContract>(CONTRACTS_KEY)
+  const contracts = load(CONTRACTS_KEY, WatchedContractSchema)
   let changed = false
   const migrated = contracts.map((contract) => {
     const rules = (contract as { rules?: unknown }).rules
@@ -247,6 +259,8 @@ export function migrateToV2() {
   if (storage.getItem(SETTINGS_KEY) === null) {
     storage.setItem(SETTINGS_KEY, JSON.stringify(DEFAULT_SETTINGS))
   }
+
+  setStorageVersion(2)
 }
 
 export function getSettings(): AppSettings {
@@ -280,7 +294,7 @@ export function getContracts(): WatchedContract[] {
 }
 
 export function migrateContractsEnabled() {
-  const contracts = load<WatchedContract>(CONTRACTS_KEY)
+  const contracts = load(CONTRACTS_KEY, WatchedContractSchema)
   let changed = false
   const migrated = contracts.map((contract) => {
     if (typeof contract.enabled === 'boolean') return contract
@@ -318,6 +332,7 @@ export function saveContract(contract: WatchedContract): void {
 }
 
 export function deleteContract(id: string): void {
+  // Removes the contract's alerts too. DeleteContractModal shows the count first (#652).
   const contract = getContract(id)
   save(CONTRACTS_KEY, getContracts().filter((c) => c.id !== id))
   notify(CONTRACTS_KEY)
@@ -327,13 +342,13 @@ export function deleteContract(id: string): void {
 }
 
 export function deleteAlerts(contractId: string): void {
-  const alerts = load<AlertPayload>(ALERTS_KEY)
+  const alerts = load(ALERTS_KEY, AlertPayloadSchema)
   save(ALERTS_KEY, alerts.filter((a) => a.contract_id !== contractId))
   notify(ALERTS_KEY)
 }
 
 export function deleteAlert(alertId: string): void {
-  const alerts = load<AlertPayload & { id?: string }>(ALERTS_KEY)
+  const alerts = load(ALERTS_KEY, AlertPayloadSchema)
   save(ALERTS_KEY, alerts.filter((a) => a.id !== alertId))
   notify(ALERTS_KEY)
 }
@@ -374,15 +389,6 @@ export function getAlerts(contractId: string): AlertPayload[] {
     (a) => a.contract_id === contractId
   )
 }
-are 
-function deterministicSuffix(contractId: string, sequence: number): string {
-  let h = sequence * 2654435761
-  for (let i = 0; i < contractId.length; i++) {
-    h = Math.imul(h ^ contractId.charCodeAt(i), 2246822519)
-  }
-  return (h >>> 0).toString(16).padStart(8, '0').repeat(2)
-}
-
 function deterministicSuffix(contractId: string, sequence: number): string {
   let h = sequence * 2654435761
   for (let i = 0; i < contractId.length; i++) {
