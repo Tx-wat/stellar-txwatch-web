@@ -27,8 +27,8 @@ export const STORAGE_KEYS = {
   NEW_CONTRACT_DRAFT: 'txwatch_new_contract_draft',
   /** localStorage — whether the user has completed the onboarding tour */
   ONBOARDING_COMPLETED: 'txwatch_onboarding_completed',
-  /** localStorage — contract list display mode: 'grid' or 'list' */
-  CONTRACT_DISPLAY_MODE: 'txwatch_contract_display_mode',
+  /** localStorage — recently viewed contract ids (up to 5, newest first) */
+  RECENTLY_VIEWED: 'txwatch_recently_viewed',
 } as const
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS]

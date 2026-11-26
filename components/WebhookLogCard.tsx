@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
-import { explorerTxUrl, getExplorerName } from '@/lib/explorer';
-import { useExplorerPreference } from '@/hooks/useExplorerPreference';
+import React from 'react';
+import { EXPLORERS, explorerTxUrl } from '@/lib/stellar';
+import { getSettings } from '@/lib/storage';
+import type { Network } from '@/types';
 
 export interface WebhookEntry {
   id: string;
@@ -13,6 +14,8 @@ export interface WebhookEntry {
   amount?: string;
   asset?: string;
   txHash?: string;
+  /** Network the transaction ran on; the explorer link defaults to testnet. */
+  network?: Network;
 }
 
 interface WebhookLogCardProps {
@@ -41,22 +44,10 @@ function truncateHash(hash: string, chars = 8): string {
   return `${hash.slice(0, chars)}…${hash.slice(-chars)}`;
 }
 
-interface AlertPayloadModalProps {
-  entry: WebhookEntry;
-  onClose: () => void;
-}
-
-function AlertPayloadModal({ entry, onClose }: AlertPayloadModalProps) {
-  const [copied, setCopied] = useState(false);
-
-  const payload = JSON.stringify(entry, null, 2);
-
-  function handleCopy() {
-    navigator.clipboard.writeText(payload).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  }
+export function WebhookLogCard({ entry }: WebhookLogCardProps) {
+  // Explorer comes from the saved settings, not a separate hook (#551).
+  const explorer = getSettings().explorer;
+  const explorerName = EXPLORERS.find((e) => e.id === explorer)?.name ?? explorer;
 
   return (
     <div
@@ -126,45 +117,15 @@ export function WebhookLogCard({ entry }: WebhookLogCardProps) {
           <span aria-label="Time">{formatTimestamp(entry.timestamp)}</span>
         </div>
 
-        {entry.contractAddress && (
-          <div className="text-xs">
-            <span className="text-muted-foreground">Contract: </span>
-            <span className="font-mono break-all text-foreground">
-              {truncateHash(entry.contractAddress, 6)}
-            </span>
-          </div>
-        )}
-
-        {entry.amount && (
-          <div className="text-xs">
-            <span className="text-muted-foreground">Amount: </span>
-            <span className="font-medium text-foreground">
-              {entry.amount} {entry.asset ?? ''}
-            </span>
-          </div>
-        )}
-
-        {entry.txHash && (
-          <div className="text-xs">
-            <span className="text-muted-foreground">Tx: </span>
-            <a
-              href={explorerTxUrl(entry.txHash, explorer)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-mono text-primary hover:underline break-all"
-              aria-label={`View transaction ${entry.txHash} on ${getExplorerName(explorer)}`}
-            >
-              {truncateHash(entry.txHash)}
-            </a>
-          </div>
-        )}
-
-        <div className="pt-1">
-          <button
-            type="button"
-            onClick={() => setShowPayload(true)}
-            className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
-            aria-label="View full alert payload"
+      {entry.txHash && (
+        <div className="text-xs">
+          <span className="text-muted-foreground">Tx: </span>
+          <a
+            href={explorerTxUrl(entry.network ?? 'testnet', entry.txHash, explorer)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-mono text-primary hover:underline break-all"
+            aria-label={`View transaction ${entry.txHash} on ${explorerName}`}
           >
             View Payload
           </button>
@@ -174,7 +135,29 @@ export function WebhookLogCard({ entry }: WebhookLogCardProps) {
       {showPayload && (
         <AlertPayloadModal entry={entry} onClose={() => setShowPayload(false)} />
       )}
-    </>
+
+      {/* Explicit explorer links, so Horizon and Stellar Expert are always one click away (#659) */}
+      {entry.txHash && (
+        <div className="flex flex-wrap gap-3 text-xs">
+          <a
+            href={explorerTxUrl(entry.network ?? 'testnet', entry.txHash, 'horizon')}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline"
+          >
+            View on Horizon
+          </a>
+          <a
+            href={explorerTxUrl(entry.network ?? 'testnet', entry.txHash, 'stellar-expert')}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline"
+          >
+            View on Stellar Expert
+          </a>
+        </div>
+      )}
+    </article>
   );
 }
 

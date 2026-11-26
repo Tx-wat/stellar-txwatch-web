@@ -59,6 +59,8 @@ export interface WatchedContract {
   instanceLiveUntilLedgerSeq?: number
   /** Free-text folder/group name used to organise contracts (e.g. "Production", "Client A"). */
   group?: string
+  /** When `false`, monitoring is paused for this contract (webhook alerts are not sent). Defaults to `true`/enabled when absent. */
+  enabled?: boolean
 }
 
 export type DeliveryStatus = 'delivered' | 'retrying' | 'failed'

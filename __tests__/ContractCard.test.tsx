@@ -129,4 +129,15 @@ describe('ContractCard', () => {
     fireEvent.click(compareBtn)
     expect(mockPush).toHaveBeenCalledWith('/contracts/compare?a=contract-1')
   })
+
+  it('shows a Disabled badge and "rules paused" text when the contract is disabled', () => {
+    render(<ContractCard contract={{ ...baseContract, enabled: false }} />)
+    expect(screen.getByText('Disabled')).toBeInTheDocument()
+    expect(screen.getByText(/paused/)).toBeInTheDocument()
+  })
+
+  it('does not show the Disabled badge when the contract is enabled', () => {
+    render(<ContractCard contract={{ ...baseContract, enabled: true }} />)
+    expect(screen.queryByText('Disabled')).toBeNull()
+  })
 })
