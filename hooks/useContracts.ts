@@ -30,6 +30,12 @@ export type ExistenceResult = boolean | 'unknown'
 
 export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error'
 
+export interface SyncState {
+  status: SyncStatus
+  /** Unix ms timestamp of the most recent successful sync. Null until first success. */
+  lastSyncedAt: number | null
+}
+
 export async function checkContractsExistence(
   contracts: WatchedContract[]
 ): Promise<Map<string, ExistenceResult>> {
@@ -127,6 +133,7 @@ export function useContracts() {
       try {
         await saveContractToApi(contract)
         setSyncStatus('synced')
+        setLastSyncedAt(Date.now())
       } catch {
         setSyncStatus('error')
       }
@@ -142,6 +149,7 @@ export function useContracts() {
       try {
         await deleteContractFromApi(id)
         setSyncStatus('synced')
+        setLastSyncedAt(Date.now())
       } catch {
         setSyncStatus('error')
       }

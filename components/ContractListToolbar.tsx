@@ -199,6 +199,26 @@ export default function ContractListToolbar({
             </div>
           )}
 
+          {hasAnyContracts && onInfiniteScrollChange && viewMode === 'flat' && (
+            <button
+              type="button"
+              onClick={() => onInfiniteScrollChange(!infiniteScroll)}
+              title={infiniteScroll ? 'Switch to paginated view' : 'Switch to infinite scroll'}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                infiniteScroll
+                  ? 'bg-indigo-600 border-indigo-500 text-white'
+                  : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-600'
+              }`}
+              aria-pressed={infiniteScroll}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+              </svg>
+              Infinite scroll
+            </button>
+          )}
+
           <Link
             href="/contracts/new"
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white transition-colors"

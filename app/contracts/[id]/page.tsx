@@ -132,7 +132,8 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
     if (!c) { setContractNotFound(true); return }
     setContract(c)
     setAlerts(getAlerts(params.id))
-  }, [params.id])
+    recordView(params.id)
+  }, [params.id, recordView])
 
   const filteredAlerts = useMemo(() => {
     if (!searchHash) return alerts
