@@ -403,7 +403,11 @@ export default function ContractsPage() {
       ) : !hasFilteredContracts ? (
         <EmptyState
           title={search.trim() ? 'No contracts match your search' : 'No contracts found'}
-          description="No contracts match the active search or network filter. Try clearing the search or selecting a different network."
+          description={
+            search.trim()
+              ? `No contracts match "${search.trim()}" with the current network filter. Clear the search to see more.`
+              : 'No contracts match the active network filter. Try selecting a different network.'
+          }
           action={
             <button
               onClick={list.clearFilters}
