@@ -200,6 +200,11 @@ export function useContractListState(contracts: WatchedContract[], initialSearch
     }
   }, [state.page, totalPages])
 
+  useEffect(() => {
+    options?.onPageChange?.(state.page)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.page])
+
   // Drop selections for contracts that no longer exist
   useEffect(() => {
     const existing = new Set(contracts.map((contract) => contract.id))

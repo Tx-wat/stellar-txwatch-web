@@ -85,6 +85,12 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
   const [showWebhookSecret, setShowWebhookSecret] = useState(false)
   const [secretVisible, setSecretVisible] = useState(false)
   const [metadataError, setMetadataError] = useState<string | null>(null)
+
+  // Inline webhook URL edit state (Issue #618)
+  const [editingWebhook, setEditingWebhook] = useState(false)
+  const [inlineWebhookUrl, setInlineWebhookUrl] = useState('')
+  const [inlineWebhookError, setInlineWebhookError] = useState<string | null>(null)
+  const [webhookSaving, setWebhookSaving] = useState(false)
   const [relativeCreatedAt, setRelativeCreatedAt] = useState<string>('')
 
   useEffect(() => {
@@ -98,6 +104,13 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
 
   // Explorer preference
   const [explorer, setExplorer] = useState<ExplorerId>('stellar-expert')
+
+  useEffect(() => {
+    setExplorer(getSettings().explorer as ExplorerId)
+    return onSettingsChange(() => {
+      setExplorer(getSettings().explorer as ExplorerId)
+    })
+  }, [])
 
   // Contract instance TTL state
   const [liveUntilLedgerSeq, setLiveUntilLedgerSeq] = useState<number | null>(null)
@@ -318,8 +331,23 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
   }
 
   // Metadata editing functions
-  function openEditMetadata() {
-    setEditedLabel(contract!.label)
+  function handleInlineWebhookSave() {
+    const trimmed = inlineWebhookUrl.trim()
+    if (trimmed && !isValidUrl(trimmed)) {
+      setInlineWebhookError('Enter a valid HTTPS URL')
+      return
+    }
+    setWebhookSaving(true)
+    setInlineWebhookError(null)
+    const updated = { ...contract!, webhook_url: trimmed }
+    saveContract(updated)
+    setContract(updated)
+    setEditingWebhook(false)
+    setWebhookSaving(false)
+    trackEvent('webhook_url_updated', { contractId: contract!.id })
+  }
+
+  function openEditMetadata() {    setEditedLabel(contract!.label)
     setEditedWebhookUrl(contract!.webhook_url)
     setEditedWebhookSecret(contract!.webhook_secret || '')
     setShowWebhookSecret(false)
@@ -563,38 +591,92 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
       {/* Metadata */}
       <div className="grid sm:grid-cols-3 gap-4">
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-xs text-zinc-500">Webhook URL</p>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleTestWebhook}
-                disabled={testStatus === 'sending'}
-                className="px-2 py-0.5 rounded-md border border-zinc-700 hover:border-zinc-500 text-xs text-zinc-300 hover:text-zinc-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Send a test payload to this webhook endpoint"
-                data-tour-test-webhook
-              >
-                {testStatus === 'sending' ? 'Sending…' : testStatus === 'ok' ? `${testStatusCode} OK` : testStatus === 'error' ? `${testStatusCode ?? 'ERR'} Failed` : 'Send test'}
-              </button>
-              <CopyButton text={contract.webhook_url} />
+          {/* Webhook URL — inline edit */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-zinc-500 uppercase tracking-wider">Webhook URL</span>
+              <div className="flex items-center gap-2">
+                {!editingWebhook && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleTestWebhook}
+                      disabled={testStatus === 'sending'}
+                      className="px-2 py-0.5 rounded-md border border-zinc-700 hover:border-zinc-500 text-xs text-zinc-300 hover:text-zinc-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Send a test payload to this webhook endpoint"
+                      data-tour-test-webhook
+                    >
+                      {testStatus === 'sending' ? 'Sending…' : testStatus === 'ok' ? `${testStatusCode} OK` : testStatus === 'error' ? `${testStatusCode ?? 'ERR'} Failed` : 'Send test'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setEditingWebhook(true); setInlineWebhookUrl(contract.webhook_url); setInlineWebhookError(null) }}
+                      className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                    >
+                      Edit
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
+            {editingWebhook ? (
+              <div className="space-y-2">
+                <input
+                  type="url"
+                  value={inlineWebhookUrl}
+                  onChange={(e) => setInlineWebhookUrl(e.target.value)}
+                  placeholder="https://your-server.com/webhook"
+                  className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm font-mono text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                />
+                {inlineWebhookError && (
+                  <p className="text-xs text-red-400">{inlineWebhookError}</p>
+                )}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleInlineWebhookSave}
+                    disabled={webhookSaving}
+                    className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-xs font-medium text-white transition-colors"
+                  >
+                    {webhookSaving ? 'Saving…' : 'Save'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setEditingWebhook(false); setInlineWebhookError(null) }}
+                    className="px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                {contract.webhook_url ? (
+                  <>
+                    <CopyButton text={contract.webhook_url} />
+                    <a
+                      href={contract.webhook_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-indigo-400 hover:text-indigo-300 font-mono truncate max-w-xs"
+                    >
+                      {contract.webhook_url}
+                    </a>
+                  </>
+                ) : (
+                  <span className="text-sm text-zinc-500">Not configured</span>
+                )}
+              </div>
+            )}
+            {testStatus === 'error' && testError && !editingWebhook && (
+              <p className="mt-1 text-xs text-red-400">{testError}</p>
+            )}
+            {testStatus === 'ok' && !editingWebhook && (
+              <p className="mt-1 text-xs text-emerald-400">
+                Test payload delivered — {testStatusCode} received{testLatency !== null ? ` · ${testLatency}ms` : ''}
+              </p>
+            )}
           </div>
-          <a
-            href={contract.webhook_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors break-all"
-          >
-            {contract.webhook_url}
-          </a>
-          {testStatus === 'error' && testError && (
-            <p className="mt-1 text-xs text-red-400">{testError}</p>
-          )}
-          {testStatus === 'ok' && (
-            <p className="mt-1 text-xs text-emerald-400">
-              Test payload delivered — {testStatusCode} received{testLatency !== null ? ` · ${testLatency}ms` : ''}
-            </p>
-          )}
         </div>
         {contract.webhook_secret && (
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">

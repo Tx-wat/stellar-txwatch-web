@@ -125,3 +125,17 @@ describe('useContractListState — derivations', () => {
     expect(countByNetwork(contracts)).toEqual({ all: 3, mainnet: 1, testnet: 1, futurenet: 1 })
   })
 })
+
+describe('useContractListState — page persistence options', () => {
+  it('uses initialPage from options', () => {
+    const state = (() => {
+      const { search, initialPage } = { search: '', initialPage: 3 }
+      return { ...createInitialState(search), page: initialPage }
+    })()
+    expect(state.page).toBe(3)
+  })
+
+  it('defaults to page 1 when no initialPage provided', () => {
+    expect(createInitialState('').page).toBe(1)
+  })
+})
