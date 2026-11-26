@@ -22,14 +22,12 @@ describe('apiFetch', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('/test'),
       expect.objectContaining({
-        headers: expect.any(Headers),
+        headers: expect.objectContaining({
+          'Content-Type': 'application/json',
+          'X-Custom': 'value',
+        }),
       })
     )
-    // Verify the actual header values via the Headers object
-    const call = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]
-    const headers: Headers = call[1].headers
-    expect(headers.get('Content-Type')).toBe('application/json')
-    expect(headers.get('X-Custom')).toBe('value')
     expect(result).toEqual(mockData)
   })
 

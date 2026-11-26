@@ -27,7 +27,6 @@ const RULE_TYPES: AlertRuleType[] = [
   'SourceAccountMatch',
   'TimeWindow',
 ]
-
 const RULE_EXAMPLES: Record<AlertRuleType, string> = {
   AnyTransaction: 'Alert on every transaction',
   LargeTransfer: 'Alert when transfer amount exceeds threshold',
@@ -132,6 +131,11 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
   const [decimalsLoading, setDecimalsLoading] = useState(false)
   const [decimalsError, setDecimalsError] = useState<string | null>(null)
   const [tokenDecimals, setTokenDecimals] = useState<number | null>(null)
+
+  // Token decimals state for LargeTransfer asset field
+  const [tokenDecimals, setTokenDecimals] = useState<number | null>(null)
+  const [decimalsLoading, setDecimalsLoading] = useState(false)
+  const [decimalsError, setDecimalsError] = useState<string | null>(null)
 
   useEffect(() => {
     setTemplates(loadTemplates())
@@ -309,7 +313,7 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
     if (draft.type === 'FunctionCalled') {
       if (!draft.function_name?.trim()) {
         setError('Enter a function name')
-        return false
+        return
       }
       if (!isValidFunctionName(draft.function_name.trim())) {
         setError(
@@ -321,7 +325,7 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
     if (draft.type === 'AdminFunctionCalled') {
       if (!draft.function_names?.length) {
         setError('Enter at least one function name')
-        return false
+        return
       }
     }
     if (draft.type === 'SourceAccountMatch') {
@@ -343,8 +347,6 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
     return true
   }
 
-  function addRule() {
-    if (!validateDraft()) return
     if (draft.type === 'AdminFunctionCalled') {
       draft.function_names = [...(draft.function_names ?? [])].sort()
     }
@@ -571,8 +573,7 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
               )}
               {!decimalsLoading && !decimalsError && tokenDecimals !== null && (
                 <p className="text-xs text-zinc-500 mt-1">Token decimals: {tokenDecimals}</p>
-              )}
-            </div>
+              )}            </div>
             {draft.asset ? (
               <div>
                 <label className="block text-xs font-medium text-zinc-400 mb-1">
@@ -589,6 +590,7 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
                   }
                   className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
                 />
+                {liveThresholdError && <p className="text-xs text-red-400 mt-1">{liveThresholdError}</p>}
               </div>
             ) : (
               <div>
@@ -606,6 +608,7 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
                   }
                   className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
                 />
+                {liveThresholdError && <p className="text-xs text-red-400 mt-1">{liveThresholdError}</p>}
               </div>
             )}
           </div>
@@ -635,6 +638,7 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
               onChange={(e) => updateDraft({ function_name: e.target.value })}
               className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
             />
+            {liveFunctionNameError && <p className="text-xs text-red-400 mt-1">{liveFunctionNameError}</p>}
           </div>
         )}
 
@@ -757,6 +761,7 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
           {draft.name !== undefined && (
             <p className="text-xs text-zinc-600 mt-0.5 text-right">{draft.name.length}/60</p>
           )}
+          {liveNameError && <p className="text-xs text-red-400 mt-1">{liveNameError}</p>}
         </div>
 
         {error && <p className="text-xs text-red-400">{error}</p>}
@@ -767,7 +772,8 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
           <button
             type="button"
             onClick={addRule}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white transition-colors"
+            disabled={isAddDisabled}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-white transition-colors"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path

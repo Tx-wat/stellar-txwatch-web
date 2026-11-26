@@ -30,10 +30,18 @@ export async function apiFetch<T>(
     headersRecord['Authorization'] = `Bearer ${apiKey}`
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, {
-    ...options,
-    headers: headersRecord,
-  })
+  let res: Response
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      ...options,
+      headers: headersRecord,
+    })
+  } catch (err) {
+    if (err instanceof TypeError) {
+      throw new Error('Network offline — check your internet connection')
+    }
+    throw err
+  }
 
   if (!res.ok) {
     const text = await res.text()
@@ -241,7 +249,6 @@ export async function sendTestWebhook(
       'TEST_HASH_0000000000000000000000000000000000000000000000000000000000000000',
     timestamp: Date.now(),
     horizon_link: `${HORIZON_URLS[network]}/transactions/test`,
-    ...(signers && signers.length > 0 ? { signers } : {}),
   }
 
   // Callers pass their own AbortSignal; without one, fall back to a 10s timeout.
