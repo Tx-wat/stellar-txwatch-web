@@ -214,6 +214,13 @@ export async function fetchTokenDecimals(
   return value
 }
 
+export interface TestWebhookResult {
+  status: number
+  ok: boolean
+  /** First 200 chars of the response body, for display purposes. */
+  bodyPreview: string
+}
+
 export async function sendTestWebhook(
   webhookUrl: string,
   contractId: string,
@@ -254,7 +261,14 @@ export async function sendTestWebhook(
       body: JSON.stringify(payload),
       signal: requestSignal,
     })
-    return { status: res.status, ok: res.ok }
+    let bodyPreview = ''
+    try {
+      const text = await res.text()
+      bodyPreview = text.slice(0, 200)
+    } catch {
+      bodyPreview = ''
+    }
+    return { status: res.status, ok: res.ok, bodyPreview }
   } catch (error) {
     const err = error as { name?: string }
     if (err?.name === 'AbortError') {

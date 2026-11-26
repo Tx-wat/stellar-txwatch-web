@@ -30,7 +30,8 @@ function writeStoredSort(sortBy: SortOption): void {
 
 export interface ContractListState {
   search: string
-  networkFilter: NetworkFilter
+  /** Empty array means "all networks" */
+  networkFilters: Network[]
   sortBy: SortOption
   viewMode: ViewMode
   page: number
@@ -39,7 +40,8 @@ export interface ContractListState {
 
 export type ContractListAction =
   | { type: 'setSearch'; search: string }
-  | { type: 'setNetworkFilter'; networkFilter: NetworkFilter }
+  | { type: 'toggleNetworkFilter'; network: Network }
+  | { type: 'setNetworkFilters'; networks: Network[] }
   | { type: 'setSortBy'; sortBy: SortOption }
   | { type: 'setViewMode'; viewMode: ViewMode }
   | { type: 'setPage'; page: number }
@@ -51,7 +53,7 @@ export type ContractListAction =
 export function createInitialState(search = ''): ContractListState {
   return {
     search,
-    networkFilter: 'all',
+    networkFilters: [],
     sortBy: 'newest',
     viewMode: 'flat',
     page: 1,
@@ -76,7 +78,7 @@ export function contractListReducer(
     case 'setPage':
       return { ...state, page: Math.max(1, action.page) }
     case 'clearFilters':
-      return { ...state, search: '', networkFilter: 'all', page: 1 }
+      return { ...state, search: '', networkFilters: [], page: 1 }
     case 'toggleSelected':
       return {
         ...state,
@@ -95,13 +97,13 @@ export function contractListReducer(
 
 export function filterContracts(
   contracts: WatchedContract[],
-  networkFilter: NetworkFilter,
+  networkFilters: Network[],
   search: string
 ): WatchedContract[] {
   const byNetwork =
-    networkFilter === 'all'
+    networkFilters.length === 0
       ? contracts
-      : contracts.filter((contract) => contract.network === networkFilter)
+      : contracts.filter((contract) => networkFilters.includes(contract.network))
 
   const query = search.trim().toLowerCase()
   if (!query) return byNetwork
@@ -217,8 +219,12 @@ export function useContractListState(contracts: WatchedContract[], initialSearch
     visible.length > 0 && visible.every((contract) => state.selectedIds.includes(contract.id))
 
   const setSearch = useCallback((search: string) => dispatch({ type: 'setSearch', search }), [])
-  const setNetworkFilter = useCallback(
-    (networkFilter: NetworkFilter) => dispatch({ type: 'setNetworkFilter', networkFilter }),
+  const toggleNetworkFilter = useCallback(
+    (network: Network) => dispatch({ type: 'toggleNetworkFilter', network }),
+    []
+  )
+  const setNetworkFilters = useCallback(
+    (networks: Network[]) => dispatch({ type: 'setNetworkFilters', networks }),
     []
   )
   const setSortBy = useCallback((sortBy: SortOption) => {
@@ -250,7 +256,8 @@ export function useContractListState(contracts: WatchedContract[], initialSearch
     isSearchPending,
     allVisibleSelected,
     setSearch,
-    setNetworkFilter,
+    toggleNetworkFilter,
+    setNetworkFilters,
     setSortBy,
     setViewMode,
     setPage,
