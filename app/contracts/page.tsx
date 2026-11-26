@@ -11,10 +11,11 @@ import { useLastAlertTimes } from '@/hooks/useAlerts'
 import { useRecentlyViewed } from '@/hooks/useRecentlyViewed'
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll'
 import ContractCard from '@/components/ContractCard'
-import ContractListToolbar from '@/components/ContractListToolbar'
+import ContractListToolbar, { DisplayMode } from '@/components/ContractListToolbar'
 import BulkActionBar from '@/components/BulkActionBar'
 import { exportSelectedContractsAsBlob } from '@/lib/exportStorage'
 import EmptyState from '@/components/EmptyState'
+import NetworkBadge from '@/components/NetworkBadge'
 
 const NETWORK_LABELS: Record<Network, string> = {
   mainnet: 'Mainnet',
@@ -210,6 +211,7 @@ export default function ContractsPage() {
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
   const [importResult, setImportResult] = useState<CsvImportResult | null>(null)
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('grid')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const lastAlertTimes = useLastAlertTimes()
   const list = useContractListState(allContracts, searchParams?.get('q') ?? '')
@@ -252,6 +254,10 @@ export default function ContractsPage() {
   useEffect(() => {
     document.title = 'Contracts · TxWatch'
     setAllContracts(getContracts())
+    const stored = localStorage.getItem(STORAGE_KEYS.CONTRACT_DISPLAY_MODE)
+    if (stored === 'list' || stored === 'grid') {
+      setDisplayMode(stored)
+    }
     setMounted(true)
   }, [])
 
@@ -274,6 +280,15 @@ export default function ContractsPage() {
       // ignore (server-side or storage issues)
     }
   }, [])
+
+  const handleDisplayModeChange = (mode: DisplayMode) => {
+    setDisplayMode(mode)
+    try {
+      localStorage.setItem(STORAGE_KEYS.CONTRACT_DISPLAY_MODE, mode)
+    } catch {
+      // ignore storage errors
+    }
+  }
 
   const handleDeleteSelected = () => {
     for (const id of list.selectedIds) {
@@ -312,6 +327,31 @@ export default function ContractsPage() {
 
   const renderCard = (contract: WatchedContract) => {
     const selected = list.selectedIds.includes(contract.id)
+    if (displayMode === 'list') {
+      return (
+        <div key={contract.id} className="relative flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3 hover:border-zinc-600 transition-colors">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={() => list.toggleSelected(contract.id)}
+            aria-label={`Select ${contract.label}`}
+            className="h-4 w-4 rounded border-zinc-600 bg-zinc-800 accent-indigo-600 shrink-0"
+          />
+          <Link
+            href={`/contracts/${contract.id}`}
+            className="flex-1 min-w-0 flex items-center gap-3 hover:text-indigo-400 transition-colors"
+          >
+            <span className="font-medium text-sm text-zinc-100 truncate">{contract.label}</span>
+            <span className="text-xs text-zinc-500 font-mono truncate hidden sm:block">
+              {contract.contract_id.slice(0, 8)}…{contract.contract_id.slice(-8)}
+            </span>
+            <span className="ml-auto shrink-0">
+              <NetworkBadge network={contract.network} />
+            </span>
+          </Link>
+        </div>
+      )
+    }
     return (
       <div
         key={contract.id}
@@ -349,6 +389,8 @@ export default function ContractsPage() {
         onSortChange={list.setSortBy}
         viewMode={list.viewMode}
         onViewModeChange={list.setViewMode}
+        displayMode={displayMode}
+        onDisplayModeChange={handleDisplayModeChange}
         hasAnyContracts={hasAnyContracts}
         resultCount={list.filtered.length}
         allVisibleSelected={list.allVisibleSelected}

@@ -26,6 +26,8 @@ interface ContractListToolbarProps {
   onSortChange: (sortBy: SortOption) => void
   viewMode: ViewMode
   onViewModeChange: (viewMode: ViewMode) => void
+  displayMode: DisplayMode
+  onDisplayModeChange: (displayMode: DisplayMode) => void
   hasAnyContracts: boolean
   resultCount: number
   allVisibleSelected: boolean
@@ -42,6 +44,8 @@ export default function ContractListToolbar({
   onSortChange,
   viewMode,
   onViewModeChange,
+  displayMode,
+  onDisplayModeChange,
   hasAnyContracts,
   resultCount,
   allVisibleSelected,

@@ -201,6 +201,9 @@ export function migrateStorage(
  *   token-denominated shape (`asset` + `threshold`), while keeping
  *   `threshold_xlm` for backwards compatibility.
  * - Ensures settings exist with the default explorer preference.
+ *
+ * Guards against repeated execution by checking the stored version first.
+ * Calling this function when the storage version is already >= 2 is a no-op.
  */
 export function migrateToV2() {
   const storage = getStorage()
@@ -247,6 +250,8 @@ export function migrateToV2() {
   if (storage.getItem(SETTINGS_KEY) === null) {
     storage.setItem(SETTINGS_KEY, JSON.stringify(DEFAULT_SETTINGS))
   }
+
+  setStorageVersion(2)
 }
 
 export function getSettings(): AppSettings {
