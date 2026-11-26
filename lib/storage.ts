@@ -10,6 +10,10 @@ import {
   MAX_NOTES_LENGTH,
 } from './constants'
 
+const DEFAULT_SETTINGS: AppSettings = {
+  explorer: 'stellar-expert',
+}
+
 const CONTRACTS_KEY = STORAGE_KEYS.CONTRACTS
 const ALERTS_KEY = STORAGE_KEYS.ALERTS
 const SETTINGS_KEY = STORAGE_KEYS.SETTINGS
@@ -516,13 +520,27 @@ export interface DailyAlertCount {
   count: number
 }
 
+/**
+ * Formats a Date as a UTC date key "YYYY-MM-DD".
+ *
+ * Alert timestamps are always UTC (Unix ms from the txwatch-core engine).
+ * Using UTC methods here ensures that an alert at e.g. 2024-01-15T01:00:00Z
+ * is counted on 2024-01-15 regardless of the user's local timezone.
+ */
 function formatDateKey(d: Date): string {
-  const year = d.getFullYear()
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
+  const year = d.getUTCFullYear()
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(d.getUTCDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
 }
 
+/**
+ * Returns `days` consecutive UTC date buckets (oldest first) with alert counts.
+ *
+ * All date arithmetic uses UTC so that the heatmap is consistent across
+ * timezones — a bucket labelled "2024-01-15" always covers the UTC calendar
+ * day 2024-01-15T00:00:00Z – 2024-01-15T23:59:59.999Z.
+ */
 export function getDailyAlertCounts(
   contractIdOrAlerts: string | AlertPayload[],
   days = 30
@@ -540,12 +558,15 @@ export function getDailyAlertCounts(
   }
 
   const result: DailyAlertCount[] = []
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  // Anchor "today" to midnight UTC so the grid is timezone-stable.
+  const nowUtc = new Date()
+  const todayUtc = new Date(
+    Date.UTC(nowUtc.getUTCFullYear(), nowUtc.getUTCMonth(), nowUtc.getUTCDate())
+  )
 
   for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(today)
-    d.setDate(d.getDate() - i)
+    const d = new Date(todayUtc)
+    d.setUTCDate(d.getUTCDate() - i)
     const key = formatDateKey(d)
     result.push({
       date: key,
