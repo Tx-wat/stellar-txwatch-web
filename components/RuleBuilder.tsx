@@ -33,6 +33,15 @@ const RULE_EXAMPLES: Record<AlertRuleType, string> = {
 }
 
 const TEMPLATE_STORAGE_KEY = STORAGE_KEYS.RULE_TEMPLATES
+const ALERT_RULES_DOC_URL = 'https://docs.txwatch.dev/alert-rules'
+/** Rules beyond this count may cause core-engine evaluation slowdowns. */
+const RULE_COUNT_WARNING_THRESHOLD = 20
+
+interface DryRunResult {
+  matched: number
+  total: number
+  matchedHashes: string[]
+}
 
 interface RuleTemplate {
   id: string
@@ -104,6 +113,9 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
   const [showTemplateModal, setShowTemplateModal] = useState(false)
   const [templateName, setTemplateName] = useState('')
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
+  const [decimalsLoading, setDecimalsLoading] = useState(false)
+  const [decimalsError, setDecimalsError] = useState<string | null>(null)
+  const [tokenDecimals, setTokenDecimals] = useState<number | null>(null)
 
   useEffect(() => {
     setTemplates(loadTemplates())
@@ -616,22 +628,6 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
             </svg>
             {editingIndex !== null ? 'Update Rule' : 'Add Rule'}
           </button>
-
-          {isDraftTestable() && (
-            <button
-              type="button"
-              onClick={handleTestRule}
-              disabled={dryRunStatus === 'running'}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-sm font-medium text-zinc-200 transition-colors"
-              title={!contractId ? 'Enter a contract ID to enable dry-run testing' : 'Evaluate this rule against the last 20 transactions'}
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              {dryRunStatus === 'running' ? 'Testing…' : 'Test Rule'}
-            </button>
-          )}
 
           {editingIndex !== null && (
             <button

@@ -67,6 +67,7 @@ export function useContracts() {
   const [missingIds, setMissingIds] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle')
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null)
 
   const refresh = useCallback(async () => {
     setContracts(await adapter.getContracts())
@@ -88,8 +89,10 @@ export function useContracts() {
       }
       setContracts(getContracts())
       setSyncStatus('synced')
+      setLastSyncedAt(Date.now())
     } catch {
       setSyncStatus('error')
+      setLastSyncedAt(Date.now())
     }
   }, [])
 
@@ -161,6 +164,7 @@ export function useContracts() {
     missingIds,
     loading,
     syncStatus,
+    lastSyncedAt,
     add,
     remove,
     update,
