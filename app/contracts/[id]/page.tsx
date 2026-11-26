@@ -411,6 +411,13 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
 
   const isPaused = contract.enabled === false
 
+  function handleToggleEnabled() {
+    if (!contract) return
+    const updated: WatchedContract = { ...contract, enabled: contract.enabled === false, updated_at: Date.now() }
+    saveContract(updated)
+    setContract(updated)
+  }
+
   const isMainnet = contract.network === 'mainnet'
   const canDelete = !isMainnet || deleteConfirmText === contract.label
 

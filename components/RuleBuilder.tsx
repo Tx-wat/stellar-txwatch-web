@@ -647,7 +647,7 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
           {rules.map((rule, i) => (
             <li key={i} className={`flex items-center justify-between rounded-lg px-3 py-2 border ${editingIndex === i ? 'bg-indigo-900/30 border-indigo-600' : 'bg-zinc-900 border-zinc-800'}`}>
               <div className="flex items-center gap-2 flex-wrap">
-                <AlertRuleBadge type={rule.type} />
+                <AlertRuleBadge type={rule.type} asset={rule.asset} name={rule.name} />
                 {rule.name && (
                   <span className="text-xs font-medium text-zinc-200">{rule.name}</span>
                 )}
