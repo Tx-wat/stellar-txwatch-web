@@ -7,9 +7,9 @@
 .yarn/install-state.gz
 
 # testing
-/coverage/
-__snapshots__/
-**/__snapshots__/
+/coverage
+**/__snapshots__
+*.snap
 
 # next.js
 /.next/
@@ -31,6 +31,7 @@ yarn-error.log*
 
 # local env files
 .env*.local
+*.local
 
 # vercel
 .vercel
@@ -42,14 +43,14 @@ next-env.d.ts
 # project notes
 vrickish.md
 
-# editor
-.vscode/
+# editor/IDE
 .idea/
+.vscode/
 *.swp
 *.swo
+.DS_Store
 
-# claude
-.claude/
-
-# size-limit output
-.size-limit-results.json
+# playwright
+/test-results/
+/playwright-report/
+/playwright/.cache/

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { getApiKey, setApiKey, clearApiKey, getSettings, saveSettings } from '@/lib/storage'
 import { testApiConnection } from '@/lib/api'
+import { EXPLORERS, ExplorerId } from '@/lib/stellar'
 import Toast from '@/components/Toast'
 
 type TestStatus = 'idle' | 'testing' | 'ok' | 'error'
@@ -20,8 +21,7 @@ export default function SettingsPage() {
   const [testMessage, setTestMessage] = useState<string | null>(null)
   const testAbortRef = useRef<AbortController | null>(null)
 
-  const [soundEnabled, setSoundEnabled] = useState(false)
-  const [pushEnabled, setPushEnabled] = useState(false)
+  const [explorer, setExplorerState] = useState<ExplorerId>('stellar-expert')
 
   const apiConfigured = !!process.env.NEXT_PUBLIC_API_URL
 
@@ -33,8 +33,7 @@ export default function SettingsPage() {
       setInputKey(stored)
     }
     const settings = getSettings()
-    setSoundEnabled(settings.soundNotification)
-    setPushEnabled(settings.pushNotification ?? false)
+    setExplorerState(settings.explorer)
     setMounted(true)
   }, [])
 
@@ -99,6 +98,12 @@ export default function SettingsPage() {
       setTestStatus('error')
       setTestMessage(err instanceof Error ? err.message : 'Connection failed')
     }
+  }
+
+  function handleSaveExplorer(id: ExplorerId) {
+    setExplorerState(id)
+    saveSettings({ explorer: id })
+    setToast({ message: 'Explorer preference saved', type: 'success' })
   }
 
   if (!mounted) return null
@@ -215,6 +220,33 @@ export default function SettingsPage() {
               </div>
             </>
           )}
+        </div>
+
+        {/* Explorer Preference card */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold text-zinc-100">Explorer Preference</h2>
+            <p className="text-sm text-zinc-500 mt-1">
+              Choose which block explorer opens when you click transaction and contract links.
+            </p>
+          </div>
+          <div className="space-y-2">
+            {EXPLORERS.map((e) => (
+              <button
+                key={e.id}
+                type="button"
+                onClick={() => handleSaveExplorer(e.id)}
+                className={`w-full text-left rounded-lg border px-4 py-3 transition-colors ${
+                  explorer === e.id
+                    ? 'border-indigo-500 bg-indigo-500/10 text-zinc-100'
+                    : 'border-zinc-700 hover:border-zinc-500 text-zinc-300'
+                }`}
+              >
+                <p className="text-sm font-medium">{e.name}</p>
+                <p className="text-xs text-zinc-500 mt-0.5">{e.description}</p>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Test Connection card */}

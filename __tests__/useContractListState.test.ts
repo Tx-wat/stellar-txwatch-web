@@ -31,13 +31,22 @@ const contracts = [
 
 describe('useContractListState — reducer', () => {
   it('creates initial state with the given search', () => {
-    expect(createInitialState('foo')).toMatchObject({ search: 'foo', networkFilter: 'all', sortBy: 'newest', page: 1 })
+    expect(createInitialState('foo')).toMatchObject({ search: 'foo', networkFilters: [], sortBy: 'newest', page: 1 })
   })
 
   it('resets page when search or network filter changes', () => {
     const state = { ...createInitialState(), page: 3 }
     expect(contractListReducer(state, { type: 'setSearch', search: 'x' }).page).toBe(1)
-    expect(contractListReducer(state, { type: 'setNetworkFilter', networkFilter: 'mainnet' }).page).toBe(1)
+    expect(contractListReducer(state, { type: 'toggleNetworkFilter', network: 'mainnet' }).page).toBe(1)
+  })
+
+  it('toggles multiple network filters on and off', () => {
+    let state = contractListReducer(createInitialState(), { type: 'toggleNetworkFilter', network: 'mainnet' })
+    expect(state.networkFilters).toEqual(['mainnet'])
+    state = contractListReducer(state, { type: 'toggleNetworkFilter', network: 'testnet' })
+    expect(state.networkFilters).toEqual(['mainnet', 'testnet'])
+    state = contractListReducer(state, { type: 'toggleNetworkFilter', network: 'mainnet' })
+    expect(state.networkFilters).toEqual(['testnet'])
   })
 
   it('keeps page when sort changes', () => {
@@ -50,8 +59,8 @@ describe('useContractListState — reducer', () => {
   })
 
   it('clearFilters resets search and network filter', () => {
-    const state = { ...createInitialState('abc'), networkFilter: 'mainnet' as const, page: 4 }
-    expect(contractListReducer(state, { type: 'clearFilters' })).toMatchObject({ search: '', networkFilter: 'all', page: 1 })
+    const state = { ...createInitialState('abc'), networkFilters: ['mainnet' as const], page: 4 }
+    expect(contractListReducer(state, { type: 'clearFilters' })).toMatchObject({ search: '', networkFilters: [], page: 1 })
   })
 
   it('toggles selection on and off', () => {
@@ -71,18 +80,22 @@ describe('useContractListState — reducer', () => {
 
 describe('useContractListState — derivations', () => {
   it('filters by network', () => {
-    expect(filterContracts(contracts, 'mainnet', '').map((c) => c.id)).toEqual(['1'])
-    expect(filterContracts(contracts, 'all', '')).toHaveLength(3)
+    expect(filterContracts(contracts, ['mainnet'], '').map((c) => c.id)).toEqual(['1'])
+    expect(filterContracts(contracts, [], '')).toHaveLength(3)
+  })
+
+  it('filters by multiple networks', () => {
+    expect(filterContracts(contracts, ['mainnet', 'futurenet'], '').map((c) => c.id).sort()).toEqual(['1', '3'])
   })
 
   it('filters by label or contract id, case-insensitively', () => {
-    expect(filterContracts(contracts, 'all', 'ESCROW').map((c) => c.id)).toEqual(['1'])
-    expect(filterContracts(contracts, 'all', 'ctoken').map((c) => c.id)).toEqual(['3'])
-    expect(filterContracts(contracts, 'all', '   ')).toHaveLength(3)
+    expect(filterContracts(contracts, [], 'ESCROW').map((c) => c.id)).toEqual(['1'])
+    expect(filterContracts(contracts, [], 'ctoken').map((c) => c.id)).toEqual(['3'])
+    expect(filterContracts(contracts, [], '   ')).toHaveLength(3)
   })
 
   it('combines network and search filters', () => {
-    expect(filterContracts(contracts, 'testnet', 'escrow')).toHaveLength(0)
+    expect(filterContracts(contracts, ['testnet'], 'escrow')).toHaveLength(0)
   })
 
   it('sorts by every option', () => {
@@ -110,5 +123,19 @@ describe('useContractListState — derivations', () => {
     expect(groups.mainnet.map((c) => c.id)).toEqual(['1'])
     expect(groups.testnet.map((c) => c.id)).toEqual(['2'])
     expect(countByNetwork(contracts)).toEqual({ all: 3, mainnet: 1, testnet: 1, futurenet: 1 })
+  })
+})
+
+describe('useContractListState — page persistence options', () => {
+  it('uses initialPage from options', () => {
+    const state = (() => {
+      const { search, initialPage } = { search: '', initialPage: 3 }
+      return { ...createInitialState(search), page: initialPage }
+    })()
+    expect(state.page).toBe(3)
+  })
+
+  it('defaults to page 1 when no initialPage provided', () => {
+    expect(createInitialState('').page).toBe(1)
   })
 })
