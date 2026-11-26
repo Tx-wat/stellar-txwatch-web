@@ -18,6 +18,8 @@ import ContractHeader from '@/components/ContractHeader'
 import ContractMetadataCards from '@/components/ContractMetadataCards'
 import ActiveRulesList from '@/components/ActiveRulesList'
 import EditDetailsModal from '@/components/EditDetailsModal'
+import MetadataSection from '@/components/MetadataSection'
+import { MAX_NOTES_LENGTH } from '@/lib/constants'
 import EditRulesModal from '@/components/EditRulesModal'
 import DeleteContractModal from '@/components/DeleteContractModal'
 import ClearHistoryModal from '@/components/ClearHistoryModal'
@@ -82,6 +84,7 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
   const [editedLabel, setEditedLabel] = useState('')
   const [editedWebhookUrl, setEditedWebhookUrl] = useState('')
   const [editedWebhookSecret, setEditedWebhookSecret] = useState('')
+  const [editedNotes, setEditedNotes] = useState('')
   const [showWebhookSecret, setShowWebhookSecret] = useState(false)
   const [secretVisible, setSecretVisible] = useState(false)
   const [metadataError, setMetadataError] = useState<string | null>(null)
@@ -353,6 +356,7 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
   function openEditMetadata() {    setEditedLabel(contract!.label)
     setEditedWebhookUrl(contract!.webhook_url)
     setEditedWebhookSecret(contract!.webhook_secret || '')
+    setEditedNotes(contract!.notes ?? '')
     setShowWebhookSecret(false)
     setMetadataError(null)
     setShowEditMetadata(true)
@@ -385,8 +389,8 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
       return
     }
 
-    if (editedNotes.length > 1000) {
-      setMetadataError('Notes must be 1000 characters or less')
+    if (editedNotes.trim().length > MAX_NOTES_LENGTH) {
+      setMetadataError(`Notes must be ${MAX_NOTES_LENGTH} characters or less`)
       return
     }
 
@@ -396,6 +400,7 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
       label: trimmedLabel,
       webhook_url: trimmedWebhookUrl,
       webhook_secret: editedWebhookSecret.trim() || undefined,
+      notes: editedNotes.trim() || undefined,
     }
     saveContract(updated)
     setShowEditMetadata(false)
@@ -403,7 +408,12 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
   }
 
   function hasMetadataChanges(): boolean {
-    return editedLabel !== contract?.label || editedWebhookUrl !== contract?.webhook_url || editedWebhookSecret !== (contract?.webhook_secret || '')
+    return (
+      editedLabel !== contract?.label ||
+      editedWebhookUrl !== contract?.webhook_url ||
+      editedWebhookSecret !== (contract?.webhook_secret || '') ||
+      editedNotes !== (contract?.notes ?? '')
+    )
   }
 
   function handleCancelMetadataEdit() {
@@ -732,6 +742,13 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
             ) : (
               <p className="text-sm text-zinc-500">Unavailable</p>
             )}
+          </div>
+        )}
+        {contract.notes && (
+          <div className="sm:col-span-3">
+            <MetadataSection label="Notes">
+              <p className="whitespace-pre-wrap break-words">{contract.notes}</p>
+            </MetadataSection>
           </div>
         )}
         {!chainMetadataError && (
@@ -1077,6 +1094,30 @@ const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
                 </p>
                 <p className="text-xs text-amber-500 mt-1">
                   Rotating the secret will invalidate existing signatures — update your receiver before saving.
+                </p>
+              </div>
+
+              {/* Notes field */}
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <label htmlFor="edit-notes" className="block text-sm font-medium text-zinc-300">
+                    Notes (Optional)
+                  </label>
+                  <span className="text-xs text-zinc-500">
+                    {editedNotes.length}/{MAX_NOTES_LENGTH}
+                  </span>
+                </div>
+                <textarea
+                  id="edit-notes"
+                  value={editedNotes}
+                  onChange={(e) => setEditedNotes(e.target.value)}
+                  placeholder="What does this contract do? Anything worth remembering."
+                  maxLength={MAX_NOTES_LENGTH}
+                  rows={4}
+                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-y"
+                />
+                <p className="text-xs text-zinc-500 mt-1">
+                  Free-text notes shown on this page. Up to {MAX_NOTES_LENGTH} characters.
                 </p>
               </div>
             </div>

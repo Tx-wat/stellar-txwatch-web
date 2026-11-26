@@ -39,7 +39,7 @@ function forwardToSentry(ctx: StorageErrorContext): void {
   }
 }
 
-function emitStorageError(ctx: StorageErrorContext): void {
+export function emitStorageError(ctx: StorageErrorContext): void {
   const isDev = env.NODE_ENV !== 'production';
   const debugEnabled = env.DEBUG_STORAGE;
 
