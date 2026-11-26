@@ -6,6 +6,7 @@ interface BulkActionBarProps {
   onToggleSelectAll: () => void
   onClearSelection: () => void
   onDeleteSelected: () => void
+  onExportSelected: () => void
 }
 
 export default function BulkActionBar({
@@ -62,6 +63,13 @@ export default function BulkActionBar({
                 className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-600"
               >
                 Clear selection
+              </button>
+              <button
+                type="button"
+                onClick={onExportSelected}
+                className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-600"
+              >
+                Export selected
               </button>
               <button
                 type="button"

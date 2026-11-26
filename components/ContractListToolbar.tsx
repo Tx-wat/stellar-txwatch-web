@@ -1,8 +1,8 @@
 import Link from 'next/link'
 import { NetworkFilter, SortOption, ViewMode } from '@/hooks/useContractListState'
+import { Network } from '@/types'
 
-const NETWORK_FILTERS: { value: NetworkFilter; label: string }[] = [
-  { value: 'all', label: 'All Networks' },
+const NETWORK_FILTERS: { value: Network; label: string }[] = [
   { value: 'mainnet', label: 'Mainnet' },
   { value: 'testnet', label: 'Testnet' },
   { value: 'futurenet', label: 'Futurenet' },
@@ -19,13 +19,15 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
 interface ContractListToolbarProps {
   search: string
   onSearchChange: (search: string) => void
-  networkFilter: NetworkFilter
-  onNetworkFilterChange: (filter: NetworkFilter) => void
+  networkFilters: Network[]
+  onNetworkFilterToggle: (network: Network) => void
   networkCounts: Record<NetworkFilter, number>
   sortBy: SortOption
   onSortChange: (sortBy: SortOption) => void
   viewMode: ViewMode
   onViewModeChange: (viewMode: ViewMode) => void
+  displayMode: DisplayMode
+  onDisplayModeChange: (displayMode: DisplayMode) => void
   hasAnyContracts: boolean
   resultCount: number
   allVisibleSelected: boolean
@@ -35,13 +37,15 @@ interface ContractListToolbarProps {
 export default function ContractListToolbar({
   search,
   onSearchChange,
-  networkFilter,
-  onNetworkFilterChange,
+  networkFilters,
+  onNetworkFilterToggle,
   networkCounts,
   sortBy,
   onSortChange,
   viewMode,
   onViewModeChange,
+  displayMode,
+  onDisplayModeChange,
   hasAnyContracts,
   resultCount,
   allVisibleSelected,
@@ -85,6 +89,19 @@ export default function ContractListToolbar({
               placeholder="Search by label or contract ID"
               className="w-full rounded-lg border border-zinc-700 bg-zinc-900 py-2 pl-10 pr-3 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
             />
+            {isSearchPending && (
+              <span
+                data-testid="search-pending-indicator"
+                role="status"
+                aria-label="Searching"
+                className="pointer-events-none absolute inset-y-0 right-3 flex items-center"
+              >
+                <svg className="w-4 h-4 animate-spin text-zinc-500" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+              </span>
+            )}
           </div>
 
           {search && (
@@ -101,24 +118,43 @@ export default function ContractListToolbar({
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-1 p-1 bg-zinc-900 border border-zinc-800 rounded-lg w-fit" role="group" aria-label="Filter by network">
+          <button
+            onClick={() => networkFilters.forEach((n) => onNetworkFilterToggle(n))}
+            aria-pressed={networkFilters.length === 0}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              networkFilters.length === 0
+                ? 'bg-indigo-600 text-white'
+                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+            }`}
+          >
+            All Networks
+            <span className={`text-xs px-1.5 py-0.5 rounded-full ${networkFilters.length === 0 ? 'bg-indigo-500 text-indigo-100' : 'bg-zinc-800 text-zinc-500'}`}>
+              {networkCounts.all}
+            </span>
+          </button>
           {NETWORK_FILTERS.map(({ value, label }) => {
-            const isActive = networkFilter === value
+            const isActive = networkFilters.includes(value)
             return (
-              <button
+              <label
                 key={value}
-                onClick={() => onNetworkFilterChange(value)}
-                aria-pressed={isActive}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                   isActive
                     ? 'bg-indigo-600 text-white'
                     : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
                 }`}
               >
+                <input
+                  type="checkbox"
+                  checked={isActive}
+                  onChange={() => onNetworkFilterToggle(value)}
+                  className="sr-only"
+                  aria-label={`Filter by ${label}`}
+                />
                 {label}
                 <span className={`text-xs px-1.5 py-0.5 rounded-full ${isActive ? 'bg-indigo-500 text-indigo-100' : 'bg-zinc-800 text-zinc-500'}`}>
                   {networkCounts[value]}
                 </span>
-              </button>
+              </label>
             )
           })}
         </div>
@@ -165,6 +201,26 @@ export default function ContractListToolbar({
                 By Network
               </button>
             </div>
+          )}
+
+          {hasAnyContracts && onInfiniteScrollChange && viewMode === 'flat' && (
+            <button
+              type="button"
+              onClick={() => onInfiniteScrollChange(!infiniteScroll)}
+              title={infiniteScroll ? 'Switch to paginated view' : 'Switch to infinite scroll'}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                infiniteScroll
+                  ? 'bg-indigo-600 border-indigo-500 text-white'
+                  : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-600'
+              }`}
+              aria-pressed={infiniteScroll}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+              </svg>
+              Infinite scroll
+            </button>
           )}
 
           <Link

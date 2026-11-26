@@ -8,6 +8,8 @@
 
 # testing
 /coverage
+**/__snapshots__
+*.snap
 
 # next.js
 /.next/
@@ -16,17 +18,24 @@
 # production
 /build
 
-# misc
+# editor & OS
 .DS_Store
+Thumbs.db
 *.pem
+.idea/
+.vscode/
+*.swp
+*.swo
 
 # debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+*.log
 
 # local env files
 .env*.local
+*.local
 
 # vercel
 .vercel
@@ -37,3 +46,15 @@ next-env.d.ts
 
 # project notes
 vrickish.md
+
+# editor/IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# playwright
+/test-results/
+/playwright-report/
+/playwright/.cache/

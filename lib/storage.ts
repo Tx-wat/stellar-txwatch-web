@@ -1,8 +1,8 @@
 import { z } from 'zod'
 import { WatchedContract, AlertPayload, Network, AppSettings } from '@/types'
-import { WatchedContractSchema, AlertPayloadSchema } from './schemas'
-import { safeParseStorage, emitStorageError } from './storageLogger'
 import { STORAGE_KEYS } from '@/lib/storageKeys'
+import { WatchedContractSchema, AlertPayloadSchema } from '@/lib/schemas'
+import { ExplorerId } from '@/lib/stellar'
 import {
   STORAGE_QUOTA_BYTES,
   MAX_ALERTS_PER_CONTRACT,
@@ -200,13 +200,23 @@ export function migrateStorage(
   setStorageVersion(targetVersion)
 }
 
+const DEFAULT_SETTINGS: AppSettings = {
+  explorer: 'stellar-expert',
+  soundNotification: false,
+}
+
 /**
  * Migration to v2:
  * - Normalizes LargeTransfer rules that only have `threshold_xlm` into the
  *   token-denominated shape (`asset` + `threshold`), while keeping
  *   `threshold_xlm` for backwards compatibility.
  * - Ensures settings exist with the default explorer preference.
+ *
+ * Guards against repeated execution by checking the stored version first.
+ * Calling this function when the storage version is already >= 2 is a no-op.
  */
+export const DEFAULT_SETTINGS: AppSettings = { explorer: 'stellar-expert' as ExplorerId }
+
 export function migrateToV2() {
   const storage = getStorage()
   if (!storage) return
@@ -252,6 +262,8 @@ export function migrateToV2() {
   if (storage.getItem(SETTINGS_KEY) === null) {
     storage.setItem(SETTINGS_KEY, JSON.stringify(DEFAULT_SETTINGS))
   }
+
+  setStorageVersion(2)
 }
 
 export function getSettings(): AppSettings {
@@ -377,6 +389,7 @@ export function saveContract(contract: WatchedContract): void {
 }
 
 export function deleteContract(id: string): void {
+  // Removes the contract's alerts too. DeleteContractModal shows the count first (#652).
   const contract = getContract(id)
   save(CONTRACTS_KEY, getContracts().filter((c) => c.id !== id))
   notify(CONTRACTS_KEY)
