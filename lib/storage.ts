@@ -206,7 +206,7 @@ export function migrateToV2() {
   const storage = getStorage()
   if (!storage) return
 
-  const contracts = load<WatchedContract>(CONTRACTS_KEY)
+  const contracts = load(CONTRACTS_KEY, WatchedContractSchema)
   let changed = false
   const migrated = contracts.map((contract) => {
     const rules = (contract as { rules?: unknown }).rules
@@ -280,7 +280,7 @@ export function getContracts(): WatchedContract[] {
 }
 
 export function migrateContractsEnabled() {
-  const contracts = load<WatchedContract>(CONTRACTS_KEY)
+  const contracts = load(CONTRACTS_KEY, WatchedContractSchema)
   let changed = false
   const migrated = contracts.map((contract) => {
     if (typeof contract.enabled === 'boolean') return contract
@@ -318,6 +318,7 @@ export function saveContract(contract: WatchedContract): void {
 }
 
 export function deleteContract(id: string): void {
+  // Removes the contract's alerts too. DeleteContractModal shows the count first (#652).
   const contract = getContract(id)
   save(CONTRACTS_KEY, getContracts().filter((c) => c.id !== id))
   notify(CONTRACTS_KEY)
@@ -327,13 +328,13 @@ export function deleteContract(id: string): void {
 }
 
 export function deleteAlerts(contractId: string): void {
-  const alerts = load<AlertPayload>(ALERTS_KEY)
+  const alerts = load(ALERTS_KEY, AlertPayloadSchema)
   save(ALERTS_KEY, alerts.filter((a) => a.contract_id !== contractId))
   notify(ALERTS_KEY)
 }
 
 export function deleteAlert(alertId: string): void {
-  const alerts = load<AlertPayload & { id?: string }>(ALERTS_KEY)
+  const alerts = load(ALERTS_KEY, AlertPayloadSchema)
   save(ALERTS_KEY, alerts.filter((a) => a.id !== alertId))
   notify(ALERTS_KEY)
 }

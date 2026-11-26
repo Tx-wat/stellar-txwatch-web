@@ -5,6 +5,7 @@ import { WatchedContract } from '@/types'
 import { getContracts, saveContract, deleteContract } from '@/lib/storage'
 import { checkContractExists } from '@/lib/stellar'
 import { useStorageAdapter } from '@/lib/useStorageAdapter'
+import { STORAGE_KEYS } from '@/lib/storageKeys'
 import {
   isApiConfigured,
   fetchContractsFromApi,
@@ -97,6 +98,7 @@ export function useContracts() {
       setLastSyncedAt(Date.now())
     } catch {
       setSyncStatus('error')
+      setLastSyncedAt(Date.now())
     }
   }, [])
 
@@ -106,6 +108,21 @@ export function useContracts() {
       if (change === 'contracts') refresh()
     })
   }, [adapter, refresh])
+
+  // Other tabs write to localStorage directly; the storage event only fires
+  // in tabs that did not perform the write, so this picks up cross-tab edits.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    function handleStorageEvent(event: StorageEvent) {
+      if (event.key === STORAGE_KEYS.CONTRACTS) {
+        refresh()
+      }
+    }
+
+    window.addEventListener('storage', handleStorageEvent)
+    return () => window.removeEventListener('storage', handleStorageEvent)
+  }, [refresh])
 
   async function add(contract: WatchedContract): Promise<void> {
     saveContract(contract)
@@ -156,7 +173,6 @@ export function useContracts() {
     loading,
     syncStatus,
     lastSyncedAt,
-    apiEnabled: isApiConfigured(),
     add,
     remove,
     update,

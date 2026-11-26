@@ -1,8 +1,8 @@
 import Link from 'next/link'
 import { NetworkFilter, SortOption, ViewMode } from '@/hooks/useContractListState'
+import { Network } from '@/types'
 
-const NETWORK_FILTERS: { value: NetworkFilter; label: string }[] = [
-  { value: 'all', label: 'All Networks' },
+const NETWORK_FILTERS: { value: Network; label: string }[] = [
   { value: 'mainnet', label: 'Mainnet' },
   { value: 'testnet', label: 'Testnet' },
   { value: 'futurenet', label: 'Futurenet' },
@@ -13,13 +13,14 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: 'oldest', label: 'Oldest first' },
   { value: 'label-asc', label: 'Label A–Z' },
   { value: 'label-desc', label: 'Label Z–A' },
+  { value: 'rule-count-desc', label: 'Rule Count' },
 ]
 
 interface ContractListToolbarProps {
   search: string
   onSearchChange: (search: string) => void
-  networkFilter: NetworkFilter
-  onNetworkFilterChange: (filter: NetworkFilter) => void
+  networkFilters: Network[]
+  onNetworkFilterToggle: (network: Network) => void
   networkCounts: Record<NetworkFilter, number>
   sortBy: SortOption
   onSortChange: (sortBy: SortOption) => void
@@ -27,17 +28,15 @@ interface ContractListToolbarProps {
   onViewModeChange: (viewMode: ViewMode) => void
   hasAnyContracts: boolean
   resultCount: number
-  /** When true, the flat list uses infinite scroll instead of pagination. */
-  infiniteScroll?: boolean
-  /** Callback to toggle infinite scroll mode. */
-  onInfiniteScrollChange?: (enabled: boolean) => void
+  allVisibleSelected: boolean
+  onToggleSelectAll: () => void
 }
 
 export default function ContractListToolbar({
   search,
   onSearchChange,
-  networkFilter,
-  onNetworkFilterChange,
+  networkFilters,
+  onNetworkFilterToggle,
   networkCounts,
   sortBy,
   onSortChange,
@@ -45,11 +44,23 @@ export default function ContractListToolbar({
   onViewModeChange,
   hasAnyContracts,
   resultCount,
-  infiniteScroll = false,
-  onInfiniteScrollChange,
+  allVisibleSelected,
+  onToggleSelectAll,
 }: ContractListToolbarProps) {
   return (
     <>
+      {/* Select all visible contracts (#658) */}
+      <label className="inline-flex items-center gap-2 text-sm text-zinc-300 w-fit">
+        <input
+          type="checkbox"
+          checked={allVisibleSelected}
+          onChange={onToggleSelectAll}
+          disabled={resultCount === 0}
+          className="h-4 w-4 accent-indigo-500"
+        />
+        Select all
+      </label>
+
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-zinc-100">Contracts</h1>
@@ -74,6 +85,19 @@ export default function ContractListToolbar({
               placeholder="Search by label or contract ID"
               className="w-full rounded-lg border border-zinc-700 bg-zinc-900 py-2 pl-10 pr-3 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
             />
+            {isSearchPending && (
+              <span
+                data-testid="search-pending-indicator"
+                role="status"
+                aria-label="Searching"
+                className="pointer-events-none absolute inset-y-0 right-3 flex items-center"
+              >
+                <svg className="w-4 h-4 animate-spin text-zinc-500" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+              </span>
+            )}
           </div>
 
           {search && (
@@ -90,24 +114,43 @@ export default function ContractListToolbar({
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-1 p-1 bg-zinc-900 border border-zinc-800 rounded-lg w-fit" role="group" aria-label="Filter by network">
+          <button
+            onClick={() => networkFilters.forEach((n) => onNetworkFilterToggle(n))}
+            aria-pressed={networkFilters.length === 0}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              networkFilters.length === 0
+                ? 'bg-indigo-600 text-white'
+                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+            }`}
+          >
+            All Networks
+            <span className={`text-xs px-1.5 py-0.5 rounded-full ${networkFilters.length === 0 ? 'bg-indigo-500 text-indigo-100' : 'bg-zinc-800 text-zinc-500'}`}>
+              {networkCounts.all}
+            </span>
+          </button>
           {NETWORK_FILTERS.map(({ value, label }) => {
-            const isActive = networkFilter === value
+            const isActive = networkFilters.includes(value)
             return (
-              <button
+              <label
                 key={value}
-                onClick={() => onNetworkFilterChange(value)}
-                aria-pressed={isActive}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                   isActive
                     ? 'bg-indigo-600 text-white'
                     : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
                 }`}
               >
+                <input
+                  type="checkbox"
+                  checked={isActive}
+                  onChange={() => onNetworkFilterToggle(value)}
+                  className="sr-only"
+                  aria-label={`Filter by ${label}`}
+                />
                 {label}
                 <span className={`text-xs px-1.5 py-0.5 rounded-full ${isActive ? 'bg-indigo-500 text-indigo-100' : 'bg-zinc-800 text-zinc-500'}`}>
                   {networkCounts[value]}
                 </span>
-              </button>
+              </label>
             )
           })}
         </div>
