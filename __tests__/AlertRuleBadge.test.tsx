@@ -8,17 +8,21 @@
  */
 import '@testing-library/jest-dom/vitest'
 import React from 'react'
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import AlertRuleBadge from '@/components/AlertRuleBadge'
 import { AlertRuleType } from '@/types'
 
 const VARIANTS: Array<{ type: AlertRuleType; label: string; colorClass: string }> = [
-  { type: 'LargeTransfer', label: 'Large Transfer', colorClass: 'bg-orange-500/20' },
-  { type: 'AdminFunctionCalled', label: 'Admin Function', colorClass: 'bg-red-500/20' },
-  { type: 'AnyTransaction', label: 'Any Transaction', colorClass: 'bg-blue-500/20' },
-  { type: 'FunctionCalled', label: 'Function Called', colorClass: 'bg-cyan-500/20' },
-  { type: 'TransactionFailed', label: 'Tx Failed', colorClass: 'bg-rose-500/20' },
+  { type: 'LargeTransfer',       label: 'Large Transfer',      colorClass: 'bg-orange-500/20'  },
+  { type: 'AdminFunctionCalled', label: 'Admin Function',      colorClass: 'bg-red-500/20'     },
+  { type: 'AnyTransaction',      label: 'Any Transaction',     colorClass: 'bg-blue-500/20'    },
+  { type: 'FunctionCalled',      label: 'Function Called',     colorClass: 'bg-cyan-500/20'    },
+  { type: 'TransactionFailed',   label: 'Tx Failed',           colorClass: 'bg-rose-500/20'    },
+  { type: 'SorobanInvocation',   label: 'Soroban Invoke',      colorClass: 'bg-violet-500/20'  },
+  { type: 'InsufficientFunds',   label: 'Insufficient Funds',  colorClass: 'bg-yellow-500/20'  },
+  { type: 'SourceAccountMatch',  label: 'Source Account',      colorClass: 'bg-teal-500/20'    },
+  { type: 'TimeWindow',          label: 'Time Window',         colorClass: 'bg-sky-500/20'     },
 ]
 
 describe('AlertRuleBadge', () => {
@@ -57,6 +61,14 @@ describe('AlertRuleBadge', () => {
     expect(
       screen.queryByText('Alert when a transfer exceeds the specified XLM threshold')
     ).not.toBeInTheDocument()
+  })
+
+  it('prefixes the tooltip with the rule name when provided', () => {
+    render(<AlertRuleBadge type="LargeTransfer" name="Treasury withdraw" />)
+    fireEvent.mouseEnter(screen.getByText('Large Transfer'))
+    expect(
+      screen.getByText('"Treasury withdraw" — Alert when a transfer exceeds the specified XLM threshold')
+    ).toBeInTheDocument()
   })
 
   it('renders gracefully for an unknown rule type without throwing', () => {

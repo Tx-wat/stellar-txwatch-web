@@ -16,10 +16,10 @@ const AUTH_CLOSE_CODES = [4001, 4003]
  * Intended to be mounted once (e.g. in a root layout) when WebSocket
  * updates are desired; `enabled` gates the connection.
  *
- * Returns `authError` — a non-null string when the server rejected credentials,
- * which callers can display to the user.
+ * @param soundEnabled - Play a short Web Audio tone on each new alert.
+ * @param pushEnabled  - Fire a browser push notification on each new alert.
  */
-export function useAlertsWebSocket(enabled: boolean) {
+export function useAlertsWebSocket(enabled: boolean, soundEnabled?: boolean, pushEnabled?: boolean) {
   const adapter = useStorageAdapter()
   const wsUrl =
     typeof process !== 'undefined' && process.env.NEXT_PUBLIC_ALERTS_WS_URL
@@ -51,6 +51,51 @@ export function useAlertsWebSocket(enabled: boolean) {
         const payload = JSON.parse(event.data) as AlertPayload
         if (payload && payload.transaction_hash) {
           adapter.addAlert(payload)
+
+          if (soundEnabled) {
+            try {
+              const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+              const oscillator = ctx.createOscillator()
+              const gain = ctx.createGain()
+              oscillator.connect(gain)
+              gain.connect(ctx.destination)
+              oscillator.type = 'sine'
+              oscillator.frequency.setValueAtTime(880, ctx.currentTime)
+              gain.gain.setValueAtTime(0.1, ctx.currentTime)
+              gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.4)
+              oscillator.start(ctx.currentTime)
+              oscillator.stop(ctx.currentTime + 0.4)
+              oscillator.onended = () => ctx.close()
+            } catch {
+              // Browser autoplay policy or AudioContext not available — ignore silently.
+            }
+          }
+
+          if (pushEnabled && 'Notification' in window) {
+            if (Notification.permission === 'default') {
+              Notification.requestPermission().then((perm) => {
+                if (perm === 'granted') {
+                  try {
+                    new Notification(`Alert: ${payload.label}`, {
+                      body: `Rule: ${payload.rule_triggered}`,
+                      tag: payload.transaction_hash,
+                    })
+                  } catch {
+                    // Notification failed
+                  }
+                }
+              })
+            } else if (Notification.permission === 'granted') {
+              try {
+                new Notification(`Alert: ${payload.label}`, {
+                  body: `Rule: ${payload.rule_triggered}`,
+                  tag: payload.transaction_hash,
+                })
+              } catch {
+                // Notification failed
+              }
+            }
+          }
         }
       } catch {
         // Ignore malformed alert frames.
@@ -82,7 +127,7 @@ export function useAlertsWebSocket(enabled: boolean) {
       }
       ws.close()
     }
-  }, [enabled, wsUrl, adapter])
+  }, [enabled, wsUrl, adapter, soundEnabled, pushEnabled])
 
   useEffect(() => {
     const unsub = connect()

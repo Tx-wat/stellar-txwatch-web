@@ -19,3 +19,19 @@ body {
     text-wrap: balance;
   }
 }
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #fff;
+    color: #000;
+  }
+
+  main {
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+}

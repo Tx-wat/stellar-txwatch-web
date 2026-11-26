@@ -9,12 +9,13 @@ const ASSET_DECIMALS: Record<string, number> = {
 const DEFAULT_DECIMALS = 7;
 
 export function formatAmount(
-  raw: string | number,
+  raw: string | number | null | undefined,
   asset: string = 'XLM',
   stroops = false,
   decimals?: number,
 ): string {
-  const num = typeof raw === 'string' ? parseFloat(raw) : raw;
+  // A missing amount renders as a dash, never as "NaN" (#647).
+  const num = raw == null ? NaN : typeof raw === 'string' ? parseFloat(raw) : raw;
   if (!isFinite(num)) return `— ${asset}`;
   const resolvedDecimals =
     decimals !== undefined && isFinite(decimals) && decimals >= 0
