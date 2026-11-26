@@ -387,6 +387,26 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
     onRulesChanged?.(updated, 'remove')
   }
 
+  function handleDragStart(index: number) {
+    setDragIndex(index)
+  }
+
+  function handleDragOver(e: React.DragEvent, overIndex: number) {
+    e.preventDefault()
+    if (dragIndex === null || dragIndex === overIndex) return
+    const updated = [...rules]
+    const [moved] = updated.splice(dragIndex, 1)
+    updated.splice(overIndex, 0, moved)
+    onChange(updated)
+    // If we were editing the dragged rule, follow it to its new position
+    if (editingIndex === dragIndex) setEditingIndex(overIndex)
+    setDragIndex(overIndex)
+  }
+
+  function handleDragEnd() {
+    setDragIndex(null)
+  }
+
   function saveAsTemplate() {
     if (!templateName.trim()) {
       setError('Enter a template name')
@@ -678,9 +698,19 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged, contractI
       </div>
 
       {rules.length > 0 && (
-        <ul className="space-y-2">
+        <ul className="space-y-2" aria-label="Alert rules — drag to reorder">
           {rules.map((rule, i) => (
-            <li key={i} className={`flex items-center justify-between rounded-lg px-3 py-2 border ${editingIndex === i ? 'bg-indigo-900/30 border-indigo-600' : 'bg-zinc-900 border-zinc-800'}`}>
+            <li
+              key={i}
+              draggable
+              aria-grabbed={dragIndex === i}
+              onDragStart={() => handleDragStart(i)}
+              onDragOver={(e) => handleDragOver(e, i)}
+              onDragEnd={handleDragEnd}
+              className={`flex items-center justify-between rounded-lg px-3 py-2 border cursor-grab active:cursor-grabbing ${
+                editingIndex === i ? 'bg-indigo-900/30 border-indigo-600' : 'bg-zinc-900 border-zinc-800'
+              } ${dragIndex === i ? 'opacity-50' : ''}`}
+            >
               <div className="flex items-center gap-2 flex-wrap">
                 <AlertRuleBadge type={rule.type} asset={rule.asset} name={rule.name} />
                 {rule.name && (
