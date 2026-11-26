@@ -2,9 +2,11 @@ interface EmptyStateProps {
   title: string
   description: string
   action?: React.ReactNode
+  /** Optional keyboard-shortcut hint rendered below the action. */
+  shortcutHint?: string
 }
 
-export default function EmptyState({ title, description, action }: EmptyStateProps) {
+export default function EmptyState({ title, description, action, shortcutHint }: EmptyStateProps) {
   return (
     <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
       <div className="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center mb-4">
@@ -16,6 +18,15 @@ export default function EmptyState({ title, description, action }: EmptyStatePro
       <h3 className="text-lg font-semibold text-zinc-200 mb-1">{title}</h3>
       <p className="text-sm text-zinc-500 max-w-sm mb-6">{description}</p>
       {action}
+      {shortcutHint && (
+        <p className="mt-4 text-xs text-zinc-500">
+          Tip: press{' '}
+          <kbd className="rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 font-mono text-[11px] text-zinc-300">
+            {shortcutHint}
+          </kbd>{' '}
+          to add a contract
+        </p>
+      )}
     </div>
   )
 }

@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { WatchedContract } from '@/types'
 import { isValidUrl } from '@/lib/stellar'
 import { getContracts } from '@/lib/storage'
+import { MAX_NOTES_LENGTH } from '@/lib/constants'
 
 interface EditDetailsModalProps {
   contract: WatchedContract
@@ -16,6 +17,7 @@ export default function EditDetailsModal({ contract, onSave, onClose, existingGr
   const [label, setLabel] = useState(contract.label)
   const [webhookUrl, setWebhookUrl] = useState(contract.webhook_url)
   const [group, setGroup] = useState(contract.group ?? '')
+  const [notes, setNotes] = useState(contract.notes ?? '')
   const [error, setError] = useState<string | null>(null)
 
   const groupOptions = useMemo(() => {
@@ -28,18 +30,24 @@ export default function EditDetailsModal({ contract, onSave, onClose, existingGr
     const trimmedLabel = label.trim()
     const trimmedUrl = webhookUrl.trim()
     const trimmedGroup = group.trim()
+    const trimmedNotes = notes.trim()
 
     if (!trimmedLabel) { setError('Label is required'); return }
     if (trimmedLabel.length > 100) { setError('Label must be 100 characters or less'); return }
     if (!trimmedUrl) { setError('Webhook URL is required'); return }
     if (!isValidUrl(trimmedUrl)) { setError('Please enter a valid HTTP or HTTPS URL'); return }
     if (trimmedGroup.length > 50) { setError('Group must be 50 characters or less'); return }
+    if (trimmedNotes.length > MAX_NOTES_LENGTH) {
+      setError(`Notes must be ${MAX_NOTES_LENGTH} characters or less`)
+      return
+    }
 
     onSave({
       ...contract,
       label: trimmedLabel,
       webhook_url: trimmedUrl,
       group: trimmedGroup || undefined,
+      notes: trimmedNotes || undefined,
     })
   }
 
@@ -47,7 +55,8 @@ export default function EditDetailsModal({ contract, onSave, onClose, existingGr
     const isDirty =
       label !== contract.label ||
       webhookUrl !== contract.webhook_url ||
-      group !== (contract.group ?? '')
+      group !== (contract.group ?? '') ||
+      notes !== (contract.notes ?? '')
     if (isDirty) {
       if (confirm('You have unsaved changes. Are you sure you want to discard them?')) onClose()
     } else {
@@ -112,6 +121,29 @@ export default function EditDetailsModal({ contract, onSave, onClose, existingGr
               ))}
             </datalist>
             <p className="text-xs text-zinc-500 mt-1">Organise contracts into folders. Leave empty for no group.</p>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label htmlFor="edit-notes" className="block text-sm font-medium text-zinc-300">
+                Notes <span className="text-zinc-500 font-normal">(optional)</span>
+              </label>
+              <span className="text-xs text-zinc-500">
+                {notes.length}/{MAX_NOTES_LENGTH}
+              </span>
+            </div>
+            <textarea
+              id="edit-notes"
+              value={notes}
+              onChange={(e) => { setNotes(e.target.value); setError(null) }}
+              placeholder="What does this contract do? Anything worth remembering."
+              maxLength={MAX_NOTES_LENGTH}
+              rows={4}
+              className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-y"
+            />
+            <p className="text-xs text-zinc-500 mt-1">
+              Free-text notes shown on the contract page. Up to {MAX_NOTES_LENGTH} characters.
+            </p>
           </div>
         </div>
 

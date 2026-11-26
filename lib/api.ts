@@ -1,4 +1,6 @@
 import { HORIZON_URLS, isValidUrl } from '@/lib/stellar'
+import { env } from '@/lib/env'
+import { getApiKey } from '@/lib/storage'
 import type { Network } from '@/types'
 
 const BASE_URL = env.NEXT_PUBLIC_API_URL
@@ -23,14 +25,23 @@ export async function apiFetch<T>(
       Object.assign(headersRecord, options.headers)
     }
   }
-  for (const [name, value] of Object.entries(getAuthHeaders())) {
-    headers.set(name, value)
+  const apiKey = getApiKey()
+  if (apiKey) {
+    headersRecord['Authorization'] = `Bearer ${apiKey}`
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, {
-    ...options,
-    headers: headersRecord,
-  })
+  let res: Response
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      ...options,
+      headers: headersRecord,
+    })
+  } catch (err) {
+    if (err instanceof TypeError) {
+      throw new Error('Network offline — check your internet connection')
+    }
+    throw err
+  }
 
   if (!res.ok) {
     const text = await res.text()
@@ -211,6 +222,13 @@ export async function fetchTokenDecimals(
   return value
 }
 
+export interface TestWebhookResult {
+  status: number
+  ok: boolean
+  /** First 200 chars of the response body, for display purposes. */
+  bodyPreview: string
+}
+
 export async function sendTestWebhook(
   webhookUrl: string,
   contractId: string,
@@ -231,7 +249,6 @@ export async function sendTestWebhook(
       'TEST_HASH_0000000000000000000000000000000000000000000000000000000000000000',
     timestamp: Date.now(),
     horizon_link: `${HORIZON_URLS[network]}/transactions/test`,
-    ...(signers && signers.length > 0 ? { signers } : {}),
   }
 
   // Callers pass their own AbortSignal; without one, fall back to a 10s timeout.
@@ -251,7 +268,14 @@ export async function sendTestWebhook(
       body: JSON.stringify(payload),
       signal: requestSignal,
     })
-    return { status: res.status, ok: res.ok }
+    let bodyPreview = ''
+    try {
+      const text = await res.text()
+      bodyPreview = text.slice(0, 200)
+    } catch {
+      bodyPreview = ''
+    }
+    return { status: res.status, ok: res.ok, bodyPreview }
   } catch (error) {
     const err = error as { name?: string }
     if (err?.name === 'AbortError') {

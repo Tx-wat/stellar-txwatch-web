@@ -3,7 +3,8 @@
  * WebhookLog.test.tsx
  *
  * Component tests covering empty state, alert rows, explorer links,
- * amount/function formatting, rule-type filtering, and CSV export.
+ * amount/function formatting, rule-type filtering, date range filter (#614),
+ * and CSV export.
  */
 import '@testing-library/jest-dom/vitest'
 import React from 'react'
@@ -198,5 +199,71 @@ describe('WebhookLog', () => {
     )
     expect(screen.getByText(/No alert at this timestamp/i)).toBeInTheDocument()
     expect(screen.getByText('large_transfer')).toBeInTheDocument()
+  })
+
+  it('renders date range picker inputs', () => {
+    render(<WebhookLog alerts={[baseAlert]} network="testnet" />)
+    expect(screen.getByLabelText('Filter from date')).toBeInTheDocument()
+    expect(screen.getByLabelText('Filter to date')).toBeInTheDocument()
+  })
+
+  it('filters alerts to those on or after the from date', () => {
+    const jan15 = new Date('2024-01-15T12:00:00Z').getTime()
+    const jan20 = new Date('2024-01-20T12:00:00Z').getTime()
+    render(
+      <WebhookLog
+        alerts={[
+          { ...baseAlert, timestamp: jan15 },
+          { ...baseAlert, transaction_hash: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', timestamp: jan20 },
+        ]}
+        network="testnet"
+      />
+    )
+    fireEvent.change(screen.getByLabelText('Filter from date'), { target: { value: '2024-01-18' } })
+    expect(screen.getByText('1 of 2 alerts')).toBeInTheDocument()
+  })
+
+  it('filters alerts to those on or before the to date', () => {
+    const jan10 = new Date('2024-01-10T12:00:00Z').getTime()
+    const jan20 = new Date('2024-01-20T12:00:00Z').getTime()
+    render(
+      <WebhookLog
+        alerts={[
+          { ...baseAlert, timestamp: jan10 },
+          { ...baseAlert, transaction_hash: 'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc', timestamp: jan20 },
+        ]}
+        network="testnet"
+      />
+    )
+    fireEvent.change(screen.getByLabelText('Filter to date'), { target: { value: '2024-01-15' } })
+    expect(screen.getByText('1 of 2 alerts')).toBeInTheDocument()
+  })
+
+  it('shows a clear dates button only when a date filter is active', () => {
+    render(<WebhookLog alerts={[baseAlert]} network="testnet" />)
+    expect(screen.queryByLabelText('Clear date filter')).not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Filter from date'), { target: { value: '2024-01-01' } })
+    expect(screen.getByLabelText('Clear date filter')).toBeInTheDocument()
+  })
+
+  it('clears the date filter when the clear button is clicked', () => {
+    const jan15 = new Date('2024-01-15T12:00:00Z').getTime()
+    const jan20 = new Date('2024-01-20T12:00:00Z').getTime()
+    render(
+      <WebhookLog
+        alerts={[
+          { ...baseAlert, timestamp: jan15 },
+          { ...baseAlert, transaction_hash: 'dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd', timestamp: jan20 },
+        ]}
+        network="testnet"
+      />
+    )
+    fireEvent.change(screen.getByLabelText('Filter from date'), { target: { value: '2024-01-18' } })
+    expect(screen.getByText('1 of 2 alerts')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByLabelText('Clear date filter'))
+    expect(screen.getByText('2 of 2 alerts')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Clear date filter')).not.toBeInTheDocument()
   })
 })
