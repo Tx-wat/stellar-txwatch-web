@@ -85,6 +85,19 @@ export default function ContractListToolbar({
               placeholder="Search by label or contract ID"
               className="w-full rounded-lg border border-zinc-700 bg-zinc-900 py-2 pl-10 pr-3 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
             />
+            {isSearchPending && (
+              <span
+                data-testid="search-pending-indicator"
+                role="status"
+                aria-label="Searching"
+                className="pointer-events-none absolute inset-y-0 right-3 flex items-center"
+              >
+                <svg className="w-4 h-4 animate-spin text-zinc-500" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+              </span>
+            )}
           </div>
 
           {search && (
