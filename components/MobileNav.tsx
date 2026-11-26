@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 
 const links = [
   { href: '/dashboard', label: 'Dashboard' },
@@ -12,6 +13,7 @@ const links = [
 
 export default function MobileNav() {
   const [open, setOpen] = useState(false)
+  const pathname = usePathname()
 
   return (
     <div className="sm:hidden">
@@ -61,7 +63,12 @@ export default function MobileNav() {
                   <Link
                     key={l.href}
                     href={l.href}
-                    className="text-zinc-300 hover:text-zinc-100 transition-colors"
+                    aria-current={pathname === l.href ? 'page' : undefined}
+                    className={`transition-colors ${
+                      pathname === l.href
+                        ? 'text-zinc-100 font-semibold'
+                        : 'text-zinc-300 hover:text-zinc-100'
+                    }`}
                     onClick={() => setOpen(false)}
                   >
                     {l.label}

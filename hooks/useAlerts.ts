@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { AlertPayload } from '@/types'
 import { useStorageAdapter } from '@/lib/StorageContext'
+import { onAlertsChange } from '@/lib/storage'
 
 export function useAlerts(contractId: string | undefined) {
   const adapter = useStorageAdapter()
@@ -34,9 +35,14 @@ export function useTodayAlertCount() {
   useEffect(() => {
     const refresh = async () => setCount(await adapter.getTodayAlertCount())
     refresh()
-    return adapter.subscribe((change) => {
+    const unsubAdapter = adapter.subscribe((change) => {
       if (change === 'alerts') refresh()
     })
+    const unsubStorage = onAlertsChange(refresh)
+    return () => {
+      unsubAdapter()
+      unsubStorage()
+    }
   }, [adapter])
 
   return count

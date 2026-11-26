@@ -8,17 +8,21 @@
  */
 import '@testing-library/jest-dom/vitest'
 import React from 'react'
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import AlertRuleBadge from '@/components/AlertRuleBadge'
 import { AlertRuleType } from '@/types'
 
 const VARIANTS: Array<{ type: AlertRuleType; label: string; colorClass: string }> = [
-  { type: 'LargeTransfer', label: 'Large Transfer', colorClass: 'bg-orange-500/20' },
-  { type: 'AdminFunctionCalled', label: 'Admin Function', colorClass: 'bg-red-500/20' },
-  { type: 'AnyTransaction', label: 'Any Transaction', colorClass: 'bg-blue-500/20' },
-  { type: 'FunctionCalled', label: 'Function Called', colorClass: 'bg-cyan-500/20' },
-  { type: 'TransactionFailed', label: 'Tx Failed', colorClass: 'bg-rose-500/20' },
+  { type: 'LargeTransfer',       label: 'Large Transfer',      colorClass: 'bg-orange-500/20'  },
+  { type: 'AdminFunctionCalled', label: 'Admin Function',      colorClass: 'bg-red-500/20'     },
+  { type: 'AnyTransaction',      label: 'Any Transaction',     colorClass: 'bg-blue-500/20'    },
+  { type: 'FunctionCalled',      label: 'Function Called',     colorClass: 'bg-cyan-500/20'    },
+  { type: 'TransactionFailed',   label: 'Tx Failed',           colorClass: 'bg-rose-500/20'    },
+  { type: 'SorobanInvocation',   label: 'Soroban Invoke',      colorClass: 'bg-violet-500/20'  },
+  { type: 'InsufficientFunds',   label: 'Insufficient Funds',  colorClass: 'bg-yellow-500/20'  },
+  { type: 'SourceAccountMatch',  label: 'Source Account',      colorClass: 'bg-teal-500/20'    },
+  { type: 'TimeWindow',          label: 'Time Window',         colorClass: 'bg-sky-500/20'     },
 ]
 
 describe('AlertRuleBadge', () => {
@@ -59,24 +63,44 @@ describe('AlertRuleBadge', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('prefixes the tooltip with the rule name when provided', () => {
+    render(<AlertRuleBadge type="LargeTransfer" name="Treasury withdraw" />)
+    fireEvent.mouseEnter(screen.getByText('Large Transfer'))
+    expect(
+      screen.getByText('"Treasury withdraw" — Alert when a transfer exceeds the specified XLM threshold')
+    ).toBeInTheDocument()
+  })
+
   it('renders gracefully for an unknown rule type without throwing', () => {
     expect(() =>
       render(<AlertRuleBadge type={'Bogus' as AlertRuleType} />)
     ).not.toThrow()
   })
 
-  it('matches the expected markup for the default badge', () => {
+  it('renders the badge span with the expected color classes', () => {
     const { container } = render(<AlertRuleBadge type="AnyTransaction" />)
-    expect(container.firstChild).toMatchInlineSnapshot(`
-      <div
-        class="relative inline-block"
-      >
-        <span
-          class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border cursor-help bg-blue-500/20 text-blue-400 border-blue-500/30"
-        >
-          Any Transaction
-        </span>
-      </div>
-    `)
+    const badge = container.querySelector('span')
+    expect(badge).toHaveClass('bg-blue-500/20', 'text-blue-400', 'border-blue-500/30')
+    expect(badge).toHaveTextContent('Any Transaction')
+  })
+
+  it('shows the tooltip on keyboard focus and hides it on blur (accessibility)', () => {
+    render(<AlertRuleBadge type="AdminFunctionCalled" />)
+    const badge = screen.getByText('Admin Function')
+    expect(badge).toHaveAttribute('tabIndex', '0')
+    fireEvent.focus(badge)
+    expect(screen.getByText('Alert when admin-level functions are invoked')).toBeInTheDocument()
+    fireEvent.blur(badge)
+    expect(screen.queryByText('Alert when admin-level functions are invoked')).not.toBeInTheDocument()
+  })
+
+  it('links the tooltip to the badge via aria-describedby and role="tooltip"', () => {
+    render(<AlertRuleBadge type="FunctionCalled" />)
+    const badge = screen.getByText('Function Called')
+    fireEvent.focus(badge)
+    const describedBy = badge.getAttribute('aria-describedby')
+    expect(describedBy).toBeTruthy()
+    const tooltip = document.getElementById(describedBy!)
+    expect(tooltip).toHaveAttribute('role', 'tooltip')
   })
 })

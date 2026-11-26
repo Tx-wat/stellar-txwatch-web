@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { getNetworkDetails } from '@stellar/freighter-api'
 import { AlertRule, Network, WatchedContract } from '@/types'
 import { isValidContractId, isValidUrl, isValidAccountId } from '@/lib/stellar'
 import { saveContract, getContracts } from '@/lib/storage'
@@ -104,10 +105,13 @@ export default function NewContractPage() {
   const [signers, setSigners] = useState<string[]>([])
   const [signerInput, setSignerInput] = useState('')
   const [errors, setErrors] = useState<FormErrors>({})
+  // The review step sits between validation and the actual save (#660)
+  const [reviewing, setReviewing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [testStatus, setTestStatus] = useState<'idle' | 'sending' | 'ok' | 'error'>('idle')
   const [testError, setTestError] = useState<string | null>(null)
   const [testStatusCode, setTestStatusCode] = useState<number | null>(null)
+  const [testBodyPreview, setTestBodyPreview] = useState<string | null>(null)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [contractCheck, setContractCheck] = useState<'idle' | 'checking' | 'found' | 'not_found' | 'error'>('idle')
   const testAbortRef = useRef<AbortController | null>(null)
@@ -262,9 +266,8 @@ export default function NewContractPage() {
   }
 
   async function checkNetworkMismatch(selectedNetwork: Network) {
-    if (!window.freighter) return
     try {
-      const walletNetwork = await window.freighter?.getNetwork()
+      const { network: walletNetwork } = await getNetworkDetails()
       const networkMap: Record<string, string> = {
         testnet: 'TESTNET',
         mainnet: 'PUBLIC',
@@ -281,6 +284,12 @@ export default function NewContractPage() {
     } catch {
       setNetworkWarning(null)
     }
+  }
+
+  function handleReview() {
+    const e = validate()
+    if (Object.keys(e).length > 0) { setErrors(e); return }
+    setReviewing(true)
   }
 
   async function handleSave() {
@@ -336,8 +345,9 @@ export default function NewContractPage() {
     setTestStatus('sending')
     setTestError(null)
     setTestStatusCode(null)
+    setTestBodyPreview(null)
     try {
-      const { status, ok } = await sendTestWebhook(
+      const { status, ok, bodyPreview } = await sendTestWebhook(
         trimmedWebhookUrl,
         trimmedContractId,
         network,
@@ -345,6 +355,7 @@ export default function NewContractPage() {
         signers.length > 0 ? signers : undefined
       )
       setTestStatusCode(status)
+      setTestBodyPreview(bodyPreview)
       if (ok) {
         setTestStatus('ok')
       } else {
@@ -572,7 +583,6 @@ export default function NewContractPage() {
               const newNetwork = e.target.value as Network
               setNetwork(newNetwork)
               checkNetworkMismatch(newNetwork)
-              checkNetworkMismatch(newNetwork)
             }}
             className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-indigo-500 transition-colors"
           >
@@ -596,6 +606,11 @@ export default function NewContractPage() {
               placeholder="https://your-server.com/webhook"
               value={webhookUrl}
               onChange={(e) => {              setWebhookUrl(e.target.value); setErrors((prev) => ({ ...prev, webhook_url: undefined })); setTestStatus('idle'); setTestStatusCode(null) }}
+              onBlur={() => {
+                // Check the format as soon as the field loses focus (#656)
+                const url = webhookUrl.trim()
+                if (url && !isValidUrl(url)) setErrors((prev) => ({ ...prev, webhook_url: 'Must be a valid http/https URL' }))
+              }}
               className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
             />
             <Button
@@ -612,6 +627,14 @@ export default function NewContractPage() {
           {errors.webhook_url && <p className="mt-1 text-xs text-red-400">{errors.webhook_url}</p>}
           {testStatus === 'error' && testError && <p className="mt-1 text-xs text-red-400">{testError}</p>}
           {testStatus === 'ok' && <p className="mt-1 text-xs text-emerald-400">Test payload delivered — {testStatusCode} received</p>}
+          {(testStatus === 'ok' || testStatus === 'error') && testBodyPreview && (
+            <div className="mt-1.5 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2">
+              <p className="text-xs text-zinc-500 mb-1">
+                Response {testStatusCode !== null && <span className="font-mono">({testStatusCode})</span>}
+              </p>
+              <pre className="text-xs text-zinc-400 whitespace-pre-wrap break-all font-mono">{testBodyPreview}</pre>
+            </div>
+          )}
         </div>
 
         {/* Webhook Secret */}
@@ -660,15 +683,42 @@ export default function NewContractPage() {
           </p>
         )}
 
+        {reviewing && (
+          <section aria-label="Review contract" className="rounded-xl border border-zinc-700 bg-zinc-900 p-4 space-y-3 text-sm text-zinc-300">
+            <h2 className="font-semibold text-zinc-100">Review before registering</h2>
+            <dl className="grid gap-2 sm:grid-cols-[max-content_1fr]">
+              <dt className="text-zinc-500">Label</dt>
+              <dd>{label.trim()}</dd>
+              <dt className="text-zinc-500">Contract ID</dt>
+              <dd className="font-mono break-all">{contractId.trim()}</dd>
+              <dt className="text-zinc-500">Network</dt>
+              <dd>{network}</dd>
+              <dt className="text-zinc-500">Webhook URL</dt>
+              <dd className="break-all">{webhookUrl.trim()}</dd>
+              <dt className="text-zinc-500">Rules</dt>
+              <dd>{rules.length}</dd>
+            </dl>
+          </section>
+        )}
+
         {/* Actions */}
         <div className="flex items-center gap-3 pt-2">
+          {reviewing && (
+            <Button
+              onClick={() => setReviewing(false)}
+              variant="ghost"
+              size="lg"
+            >
+              Back
+            </Button>
+          )}
           <Button
-            onClick={handleSave}
+            onClick={reviewing ? handleSave : handleReview}
             loading={saving}
             variant="primary"
             size="lg"
           >
-            {saving ? 'Saving...' : 'Save Contract'}
+            {reviewing ? (saving ? 'Saving...' : 'Confirm registration') : 'Review'}
           </Button>
           <Button
             onClick={() => requestNavigation(null)}

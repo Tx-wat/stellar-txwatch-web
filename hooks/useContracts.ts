@@ -5,6 +5,7 @@ import { WatchedContract } from '@/types'
 import { getContracts, saveContract, deleteContract } from '@/lib/storage'
 import { checkContractExists } from '@/lib/stellar'
 import { useStorageAdapter } from '@/lib/useStorageAdapter'
+import { STORAGE_KEYS } from '@/lib/storageKeys'
 import {
   isApiConfigured,
   fetchContractsFromApi,
@@ -28,6 +29,12 @@ function delay(ms: number): Promise<void> {
 export type ExistenceResult = boolean | 'unknown'
 
 export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error'
+
+export interface SyncState {
+  status: SyncStatus
+  /** Unix ms timestamp of the most recent successful sync. Null until first success. */
+  lastSyncedAt: number | null
+}
 
 export async function checkContractsExistence(
   contracts: WatchedContract[]
@@ -66,6 +73,7 @@ export function useContracts() {
   const [missingIds, setMissingIds] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle')
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null)
 
   const refresh = useCallback(async () => {
     setContracts(await adapter.getContracts())
@@ -87,8 +95,10 @@ export function useContracts() {
       }
       setContracts(getContracts())
       setSyncStatus('synced')
+      setLastSyncedAt(Date.now())
     } catch {
       setSyncStatus('error')
+      setLastSyncedAt(Date.now())
     }
   }, [])
 
@@ -99,6 +109,21 @@ export function useContracts() {
     })
   }, [adapter, refresh])
 
+  // Other tabs write to localStorage directly; the storage event only fires
+  // in tabs that did not perform the write, so this picks up cross-tab edits.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    function handleStorageEvent(event: StorageEvent) {
+      if (event.key === STORAGE_KEYS.CONTRACTS) {
+        refresh()
+      }
+    }
+
+    window.addEventListener('storage', handleStorageEvent)
+    return () => window.removeEventListener('storage', handleStorageEvent)
+  }, [refresh])
+
   async function add(contract: WatchedContract): Promise<void> {
     saveContract(contract)
     await refresh()
@@ -108,6 +133,7 @@ export function useContracts() {
       try {
         await saveContractToApi(contract)
         setSyncStatus('synced')
+        setLastSyncedAt(Date.now())
       } catch {
         setSyncStatus('error')
       }
@@ -123,6 +149,7 @@ export function useContracts() {
       try {
         await deleteContractFromApi(id)
         setSyncStatus('synced')
+        setLastSyncedAt(Date.now())
       } catch {
         setSyncStatus('error')
       }
@@ -145,6 +172,7 @@ export function useContracts() {
     missingIds,
     loading,
     syncStatus,
+    lastSyncedAt,
     add,
     remove,
     update,

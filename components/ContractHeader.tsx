@@ -6,6 +6,7 @@ import { WatchedContract } from '@/types'
 import { truncateId, explorerContractUrl } from '@/lib/stellar'
 import NetworkBadge from '@/components/NetworkBadge'
 import CopyButton from '@/components/CopyButton'
+import ContractQrModal from '@/components/ContractQrModal'
 
 interface ContractHeaderProps {
   contract: WatchedContract
@@ -22,6 +23,7 @@ export default function ContractHeader({
 }: ContractHeaderProps) {
   const router = useRouter()
   const [showShareCopied, setShowShareCopied] = useState(false)
+  const [showQr, setShowQr] = useState(false)
 
   const handleShareLink = async () => {
     try {
@@ -61,6 +63,13 @@ export default function ContractHeader({
             {truncateId(contract.contract_id, 12)}
           </a>
           <CopyButton text={contract.contract_id} />
+          <button
+            type="button"
+            onClick={() => setShowQr(true)}
+            className="text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
+          >
+            QR code
+          </button>
         </div>
       </div>
 
@@ -92,6 +101,14 @@ export default function ContractHeader({
           Delete
         </button>
       </div>
+
+      {showQr && (
+        <ContractQrModal
+          value={contract.contract_id}
+          label={contract.label}
+          onClose={() => setShowQr(false)}
+        />
+      )}
     </div>
   )
 }

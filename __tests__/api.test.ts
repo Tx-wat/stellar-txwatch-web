@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { apiFetch, sendTestWebhook } from '@/lib/api'
+import { setApiKey, clearApiKey } from '@/lib/storage'
 
 describe('apiFetch', () => {
   beforeEach(() => {
@@ -52,11 +53,34 @@ describe('apiFetch', () => {
     await expect(apiFetch('/test')).rejects.toThrow('HTTP 500')
   })
 
-  it('throws a network-offline error when fetch rejects with TypeError', async () => {
-    const fetchMock = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))
+  it('attaches an Authorization header when an API key is stored', async () => {
+    clearApiKey()
+    setApiKey('secret-key')
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({}),
+    })
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(apiFetch('/test')).rejects.toThrow('Network offline')
+    await apiFetch('/test')
+
+    const call = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect(call[1].headers['Authorization']).toBe('Bearer secret-key')
+    clearApiKey()
+  })
+
+  it('omits the Authorization header when no API key is stored', async () => {
+    clearApiKey()
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({}),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await apiFetch('/test')
+
+    const call = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect(call[1].headers['Authorization']).toBeUndefined()
   })
 })
 
@@ -65,12 +89,16 @@ describe('sendTestWebhook', () => {
     vi.restoreAllMocks()
   })
 
-  it('resolves without error on success (200) and includes network parameter in payload', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 })
+  it('resolves with status/ok/bodyPreview on success (200) and includes network parameter in payload', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve('{"received":true}'),
+    })
     vi.stubGlobal('fetch', fetchMock)
 
     const result = await sendTestWebhook('https://example.com/webhook', 'CBCDEF12345', 'mainnet')
-    expect(result).toMatchObject({ ok: true, status: 200 })
+    expect(result).toEqual({ status: 200, ok: true, bodyPreview: '{"received":true}' })
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const [calledUrl, options] = fetchMock.mock.calls[0]
@@ -85,16 +113,29 @@ describe('sendTestWebhook', () => {
     expect(body.horizon_link).toContain('transactions/test')
   })
 
-  it('throws "Webhook returned 500" on HTTP 500 error', async () => {
+  it('resolves with ok: false and the status/body on an HTTP error response', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: false,
       status: 500,
+      text: () => Promise.resolve('Internal Server Error'),
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(
-      sendTestWebhook('https://example.com/webhook', 'CBCDEF12345')
-    ).rejects.toThrow('Webhook returned 500')
+    const result = await sendTestWebhook('https://example.com/webhook', 'CBCDEF12345')
+    expect(result).toEqual({ status: 500, ok: false, bodyPreview: 'Internal Server Error' })
+  })
+
+  it('truncates the body preview to 200 characters', async () => {
+    const longBody = 'x'.repeat(500)
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve(longBody),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await sendTestWebhook('https://example.com/webhook', 'CBCDEF12345')
+    expect(result.bodyPreview).toHaveLength(200)
   })
 
   it('throws "Webhook request timed out" on AbortError timeout', async () => {

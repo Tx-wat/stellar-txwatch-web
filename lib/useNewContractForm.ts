@@ -34,6 +34,7 @@ export function useNewContractForm() {
   >('idle')
   const [testError, setTestError] = useState<string | null>(null)
   const [testStatusCode, setTestStatusCode] = useState<number | null>(null)
+  const [testBodyPreview, setTestBodyPreview] = useState<string | null>(null)
   const [toast, setToast] = useState<
     { message: string; type: 'success' | 'error' } | null
   >(null)
@@ -164,9 +165,11 @@ export function useNewContractForm() {
     setTestStatus('sending')
     setTestError(null)
     setTestStatusCode(null)
+    setTestBodyPreview(null)
     try {
-      const { status, ok } = await sendTestWebhook(trimmedWebhookUrl, trimmedContractId, network, controller.signal)
+      const { status, ok, bodyPreview } = await sendTestWebhook(trimmedWebhookUrl, trimmedContractId, network, controller.signal)
       setTestStatusCode(status)
+      setTestBodyPreview(bodyPreview)
       if (ok) {
         setTestStatus('ok')
       } else {
@@ -201,6 +204,8 @@ export function useNewContractForm() {
     setTestError,
     testStatusCode,
     setTestStatusCode,
+    testBodyPreview,
+    setTestBodyPreview,
     toast,
     setToast,
     networkWarning,
