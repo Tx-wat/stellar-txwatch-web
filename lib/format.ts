@@ -48,7 +48,67 @@ export function formatRuleSummary(rule: AlertRule): string {
       return rule.function_name || 'function'
     case 'AdminFunctionCalled':
       return rule.function_names?.join(', ') || 'admin functions'
+    case 'SourceAccountMatch':
+      return rule.source_account ? `source: ${rule.source_account.slice(0, 8)}…` : 'source account'
+    case 'TimeWindow': {
+      const parts: string[] = []
+      if (rule.hours_utc?.length) parts.push(`hours: ${rule.hours_utc.join(',')}`)
+      if (rule.weekdays?.length) parts.push(`days: ${rule.weekdays.join(',')}`)
+      if (rule.wrap_rule) parts.push(`wraps: ${rule.wrap_rule}`)
+      return parts.join(' · ') || 'time window'
+    }
     default:
       return ''
   }
+}
+
+/**
+ * Serialises an array of AlertRule objects to a TOML snippet using the
+ * [[rules]] array-of-tables format expected by stellar-txwatch-core.
+ *
+ * Example output:
+ * ```toml
+ * [[rules]]
+ * type = "AnyTransaction"
+ *
+ * [[rules]]
+ * type = "LargeTransfer"
+ * threshold_xlm = 10000.0
+ * ```
+ */
+export function exportRulesToToml(rules: AlertRule[]): string {
+  if (rules.length === 0) return '# No rules configured\n'
+
+  return rules
+    .map((rule) => {
+      const lines: string[] = ['[[rules]]', `type = "${rule.type}"`]
+
+      if (rule.name) {
+        lines.push(`name = "${rule.name.replace(/"/g, '\\"')}"`)
+      }
+
+      if (rule.type === 'LargeTransfer') {
+        if (rule.asset) {
+          lines.push(`asset = "${rule.asset}"`)
+          if (rule.threshold != null) {
+            lines.push(`threshold = ${rule.threshold}`)
+          }
+        } else if (rule.threshold_xlm != null) {
+          lines.push(`threshold_xlm = ${rule.threshold_xlm}`)
+        }
+      }
+
+      if (rule.type === 'FunctionCalled' && rule.function_name) {
+        lines.push(`function_name = "${rule.function_name}"`)
+      }
+
+      if (rule.type === 'AdminFunctionCalled' && rule.function_names?.length) {
+        const names = rule.function_names.map((n) => `"${n}"`).join(', ')
+        lines.push(`function_names = [${names}]`)
+      }
+
+      return lines.join('\n')
+    })
+    .join('\n\n')
+    .concat('\n')
 }

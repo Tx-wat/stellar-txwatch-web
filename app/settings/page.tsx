@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { getApiKey, setApiKey, clearApiKey, getStorageUsage } from '@/lib/storage'
+import { getApiKey, setApiKey, clearApiKey, getSettings, saveSettings } from '@/lib/storage'
 import { testApiConnection } from '@/lib/api'
+import { EXPLORERS, ExplorerId } from '@/lib/stellar'
 import Toast from '@/components/Toast'
 
 type TestStatus = 'idle' | 'testing' | 'ok' | 'error'
@@ -20,21 +21,19 @@ export default function SettingsPage() {
   const [testMessage, setTestMessage] = useState<string | null>(null)
   const testAbortRef = useRef<AbortController | null>(null)
 
-  const [storageUsed, setStorageUsed] = useState(0)
-  const [storageQuota, setStorageQuota] = useState(1)
+  const [explorer, setExplorerState] = useState<ExplorerId>('stellar-expert')
 
   const apiConfigured = !!process.env.NEXT_PUBLIC_API_URL
 
-  // Hydrate stored key on client mount
+  // Hydrate stored key and settings on client mount
   useEffect(() => {
     const stored = getApiKey()
     if (stored) {
       setApiKeyState(stored)
       setInputKey(stored)
     }
-    const { usedBytes, quotaBytes } = getStorageUsage()
-    setStorageUsed(usedBytes)
-    setStorageQuota(quotaBytes)
+    const settings = getSettings()
+    setExplorerState(settings.explorer)
     setMounted(true)
   }, [])
 
@@ -99,6 +98,12 @@ export default function SettingsPage() {
       setTestStatus('error')
       setTestMessage(err instanceof Error ? err.message : 'Connection failed')
     }
+  }
+
+  function handleSaveExplorer(id: ExplorerId) {
+    setExplorerState(id)
+    saveSettings({ explorer: id })
+    setToast({ message: 'Explorer preference saved', type: 'success' })
   }
 
   if (!mounted) return null
@@ -217,6 +222,33 @@ export default function SettingsPage() {
           )}
         </div>
 
+        {/* Explorer Preference card */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold text-zinc-100">Explorer Preference</h2>
+            <p className="text-sm text-zinc-500 mt-1">
+              Choose which block explorer opens when you click transaction and contract links.
+            </p>
+          </div>
+          <div className="space-y-2">
+            {EXPLORERS.map((e) => (
+              <button
+                key={e.id}
+                type="button"
+                onClick={() => handleSaveExplorer(e.id)}
+                className={`w-full text-left rounded-lg border px-4 py-3 transition-colors ${
+                  explorer === e.id
+                    ? 'border-indigo-500 bg-indigo-500/10 text-zinc-100'
+                    : 'border-zinc-700 hover:border-zinc-500 text-zinc-300'
+                }`}
+              >
+                <p className="text-sm font-medium">{e.name}</p>
+                <p className="text-xs text-zinc-500 mt-0.5">{e.description}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Test Connection card */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4">
           <div>
@@ -267,54 +299,51 @@ export default function SettingsPage() {
           )}
         </div>
 
-        {/* Storage Usage card */}
-        {(() => {
-          const usedKB = Math.round(storageUsed / 1024)
-          const totalKB = Math.round(storageQuota / 1024)
-          const pct = storageQuota > 0 ? Math.min(100, (storageUsed / storageQuota) * 100) : 0
-          const isWarning = pct >= 80
-          return (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4">
-              <div>
-                <h2 className="text-lg font-semibold text-zinc-100">Storage Usage</h2>
-                <p className="text-sm text-zinc-500 mt-1">
-                  How much of your browser&apos;s localStorage quota this app is using.
-                </p>
-              </div>
+        {/* Sound Notification card */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold text-zinc-100">Sound Notifications</h2>
+            <p className="text-sm text-zinc-500 mt-1">
+              Play a short audio tone when a new alert arrives via WebSocket.
+            </p>
+          </div>
+          <label className="inline-flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={soundEnabled}
+              onChange={(e) => {
+                setSoundEnabled(e.target.checked)
+                saveSettings({ soundNotification: e.target.checked })
+              }}
+              className="rounded border-zinc-700 bg-zinc-800 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+              aria-label="Enable sound notifications"
+            />
+            <span className="text-sm text-zinc-300">Enable sound notifications</span>
+          </label>
+        </div>
 
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className={isWarning ? 'text-amber-400' : 'text-zinc-400'}>
-                    {usedKB} KB used
-                  </span>
-                  <span className="text-zinc-500">{totalKB} KB total</span>
-                </div>
-
-                <div
-                  role="progressbar"
-                  aria-valuenow={Math.round(pct)}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-label="Storage usage"
-                  className="h-2 w-full rounded-full bg-zinc-800 overflow-hidden"
-                >
-                  <div
-                    className={`h-full rounded-full transition-all ${
-                      isWarning ? 'bg-amber-500' : 'bg-indigo-500'
-                    }`}
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-
-                {isWarning && (
-                  <p className="text-xs text-amber-400">
-                    ⚠ Storage is above 80% capacity. Consider clearing old alert history.
-                  </p>
-                )}
-              </div>
-            </div>
-          )
-        })()}
+        {/* Push Notification card */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold text-zinc-100">Browser Push Notifications</h2>
+            <p className="text-sm text-zinc-500 mt-1">
+              Send a browser notification when a new alert arrives via WebSocket. Your browser will request permission on the first alert.
+            </p>
+          </div>
+          <label className="inline-flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={pushEnabled}
+              onChange={(e) => {
+                setPushEnabled(e.target.checked)
+                saveSettings({ pushNotification: e.target.checked })
+              }}
+              className="rounded border-zinc-700 bg-zinc-800 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+              aria-label="Enable browser push notifications"
+            />
+            <span className="text-sm text-zinc-300">Enable browser push notifications</span>
+          </label>
+        </div>
       </div>
     </>
   )
