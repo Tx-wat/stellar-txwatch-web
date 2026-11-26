@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { WatchedContract, Network } from '@/types'
 import { getContracts, deleteContract, saveContract, getTodayAlertCount } from '@/lib/storage'
 import { STORAGE_KEYS } from '@/lib/storageKeys'
+import { importContractsFromCsv, type CsvImportResult } from '@/lib/contractCsv'
 import { useContractListState } from '@/hooks/useContractListState'
 import { useLastAlertTimes } from '@/hooks/useAlerts'
 import { useRecentlyViewed } from '@/hooks/useRecentlyViewed'
@@ -23,136 +24,8 @@ const NETWORK_LABELS: Record<Network, string> = {
   futurenet: 'Futurenet',
 }
 
-const VALID_NETWORKS: Network[] = ['mainnet', 'testnet', 'futurenet']
-
 const UNGROUPED_KEY = '__ungrouped__'
 const UNGROUPED_LABEL = 'Ungrouped'
-
-interface CsvRowError {
-  line: number
-  message: string
-}
-
-interface CsvImportResult {
-  imported: number
-  skipped: number
-  errors: CsvRowError[]
-}
-
-function isValidWebhookUrl(value: string): boolean {
-  if (!value) return true
-  try {
-    const url = new URL(value)
-    return url.protocol === 'http:' || url.protocol === 'https:'
-  } catch {
-    return false
-  }
-}
-
-function parseCsvLine(line: string): string[] {
-  const cells: string[] = []
-  let current = ''
-  let inQuotes = false
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i]
-    if (inQuotes) {
-      if (char === '"') {
-        if (line[i + 1] === '"') {
-          current += '"'
-          i++
-        } else {
-          inQuotes = false
-        }
-      } else {
-        current += char
-      }
-    } else if (char === '"') {
-      inQuotes = true
-    } else if (char === ',') {
-      cells.push(current)
-      current = ''
-    } else {
-      current += char
-    }
-  }
-  cells.push(current)
-  return cells.map((cell) => cell.trim())
-}
-
-function importContractsFromCsv(text: string): CsvImportResult {
-  const errors: CsvRowError[] = []
-  let imported = 0
-  let skipped = 0
-
-  const lines = text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-
-  if (lines.length === 0) {
-    return { imported: 0, skipped: 0, errors: [{ line: 0, message: 'CSV file is empty' }] }
-  }
-
-  const header = parseCsvLine(lines[0]).map((cell) => cell.toLowerCase())
-  const expected = ['contract_id', 'label', 'network', 'webhook_url']
-  const hasHeader = header.includes('contract_id')
-  const dataLines = hasHeader ? lines.slice(1) : lines
-  const startLine = hasHeader ? 2 : 1
-
-  if (hasHeader) {
-    const missing = expected.filter((col) => !header.includes(col))
-    if (missing.length > 0) {
-      return {
-        imported: 0,
-        skipped: 0,
-        errors: [{ line: 1, message: `Missing column(s): ${missing.join(', ')}` }],
-      }
-    }
-  }
-
-  const colIndex = (name: string) => (hasHeader ? header.indexOf(name) : expected.indexOf(name))
-
-  dataLines.forEach((line, idx) => {
-    const lineNumber = startLine + idx
-    const cells = parseCsvLine(line)
-    const contractId = cells[colIndex('contract_id')] ?? ''
-    const label = cells[colIndex('label')] ?? ''
-    const network = (cells[colIndex('network')] ?? '').toLowerCase()
-    const webhookUrl = cells[colIndex('webhook_url')] ?? ''
-
-    const rowErrors: string[] = []
-    if (!contractId) rowErrors.push('contract_id is required')
-    if (!network) {
-      rowErrors.push('network is required')
-    } else if (!VALID_NETWORKS.includes(network as Network)) {
-      rowErrors.push(`invalid network "${network}"`)
-    }
-    if (!isValidWebhookUrl(webhookUrl)) {
-      rowErrors.push('invalid webhook_url')
-    }
-
-    if (rowErrors.length > 0) {
-      skipped++
-      errors.push({ line: lineNumber, message: rowErrors.join('; ') })
-      return
-    }
-
-    const now = Date.now()
-    saveContract({
-      id: crypto.randomUUID(),
-      contract_id: contractId,
-      label: label || contractId,
-      network: network as Network,
-      rules: [],
-      webhook_url: webhookUrl,
-      created_at: now,
-      updated_at: now,
-    })
-    imported++
-  })
-
-  return { imported, skipped, errors }
-}
 
 const CONTRACT_CARD_SELECTOR = '[data-contract-card="true"]'
 
