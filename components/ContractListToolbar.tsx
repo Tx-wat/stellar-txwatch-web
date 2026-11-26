@@ -233,6 +233,9 @@ export default function ContractListToolbar({
             </svg>
             <span className="hidden sm:inline">Add Contract</span>
             <span className="sm:hidden">Add</span>
+            <kbd className="hidden lg:inline rounded border border-indigo-400/40 bg-indigo-500/30 px-1.5 py-0.5 font-mono text-[11px] font-normal text-indigo-100">
+              {NEW_CONTRACT_SHORTCUT_LABEL}
+            </kbd>
           </Link>
         </div>
       </div>

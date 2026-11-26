@@ -360,6 +360,7 @@ export default function ContractsPage() {
         <EmptyState
           title="No contracts yet"
           description="Add a contract to start monitoring its activity, or import a CSV to register many at once."
+          shortcutHint={NEW_CONTRACT_SHORTCUT_LABEL}
           action={
             <Link
               href="/contracts/new"
